@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.BusinessCenter
 import androidx.compose.material.icons.filled.CalendarToday
@@ -63,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -141,17 +141,13 @@ fun ReferenceTripCard(
     val amountDisplay = String.format(Locale.US, "$%.2f", amountValue)
 
     // Date & Time formatters
-    val dateDetailFormat = remember { SimpleDateFormat("EEE, d MMM yyyy", Locale.US) }
     val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.US) }
-
-    val dateStr = remember(trip.startDate) { dateDetailFormat.format(Date(trip.startDate)) }
+    val dateFormat = remember { SimpleDateFormat("EEE, d MMM yyyy", Locale.US) }
+    val dateStr = remember(trip.startDate) { dateFormat.format(Date(trip.startDate)) }
     val startTimeStr = remember(trip.startDate) { timeFormat.format(Date(trip.startDate)) }
     val endTimeStr = remember(trip.endDate) { timeFormat.format(Date(trip.endDate)) }
-
-    // Duration calculation
     val durationMinutes = remember(trip.startDate, trip.endDate) {
-        val diffMs = trip.endDate - trip.startDate
-        (diffMs / 60000L).coerceAtLeast(1L)
+        ((trip.endDate - trip.startDate) / 60000L).coerceAtLeast(1L)
     }
     val durationStr = remember(durationMinutes) {
         val hours = durationMinutes / 60
@@ -264,6 +260,7 @@ fun ReferenceTripCard(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(614.dp)
                 .offset { IntOffset(offsetX.roundToInt(), 0) }
                 .pointerInput(trip.id) {
                     detectHorizontalDragGestures(
@@ -307,57 +304,65 @@ fun ReferenceTripCard(
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // MAP VIEW: Beautiful vector map matching the reference image (Yarra River, Northcote, Fairfield, Kew, Richmond)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(165.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
+                        .height(96.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                         .clickable { onOpenDetail?.invoke() }
                 ) {
                     ReferenceMapSnapshotCanvas(modifier = Modifier.fillMaxSize())
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // HERO STATS ROW: Huge 24.8 km + "✓ Completed" status pill
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = distanceDisplay,
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color(0xFF0F172A),
-                        letterSpacing = (-0.5).sp
-                    )
-
-                    // "✓ Completed" pill
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = distanceDisplay,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color(0xFF0F172A),
+                            letterSpacing = (-0.5).sp,
+                            lineHeight = 24.sp
+                        )
+                        Text(
+                            text = amountDisplay,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF64748B),
+                            modifier = Modifier.padding(bottom = 1.dp)
+                        )
+                    }
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = Color(0xFFEFF6FF),
                         border = BorderStroke(1.dp, Color(0xFFBFDBFE))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
                                 tint = Color(0xFF2563EB),
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = "Completed",
-                                fontSize = 12.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF1E40AF)
                             )
@@ -365,43 +370,26 @@ fun ReferenceTripCard(
                     }
                 }
 
-                // Subtitle Amount: "$18.60"
-                Text(
-                    text = amountDisplay,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF64748B)
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
                 HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // ROUTE TIMELINE: Start (Point A) -> Destination (Point B)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Left Timeline Graphics
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 2.dp)
                     ) {
-                        // Start Blue Dot
                         Box(
                             modifier = Modifier
-                                .size(14.dp)
+                                .size(10.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF2563EB))
                         )
-
-                        // Vertical Dotted Line
                         Canvas(
                             modifier = Modifier
                                 .width(2.dp)
-                                .height(46.dp)
+                                .height(64.dp)
                         ) {
                             drawLine(
                                 color = Color(0xFF94A3B8),
@@ -411,157 +399,87 @@ fun ReferenceTripCard(
                                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f)
                             )
                         }
-
-                        // Destination Dark Blue Pin
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Destination",
                             tint = Color(0xFF2563EB),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-
-                    // Right Address Details
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(20.dp)
                     ) {
-                        // Start Details
                         Column {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = "Start",
-                                    fontSize = 14.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
+                                    color = Color(0xFF0F172A),
+                                    lineHeight = 14.sp
                                 )
                                 Text(
                                     text = startTimeStr,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFF94A3B8)
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF94A3B8),
+                                    lineHeight = 13.sp
                                 )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = startAddress,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1E293B)
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF334155),
+                                lineHeight = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = startCity,
-                                fontSize = 13.sp,
-                                color = Color(0xFF64748B)
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B),
+                                lineHeight = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-
-                        // Destination Details
                         Column {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = "Destination",
-                                    fontSize = 14.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0F172A)
+                                    color = Color(0xFF0F172A),
+                                    lineHeight = 14.sp
                                 )
                                 Text(
                                     text = endTimeStr,
-                                    fontSize = 13.sp,
-                                    color = Color(0xFF94A3B8)
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF94A3B8),
+                                    lineHeight = 13.sp
                                 )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = endAddress,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF1E293B)
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF334155),
+                                lineHeight = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = endCity,
-                                fontSize = 13.sp,
-                                color = Color(0xFF64748B)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // DURATION & DATE SPLIT SECTION
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Duration
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccessTime,
-                            contentDescription = "Duration",
-                            tint = Color(0xFF64748B),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Duration",
-                                fontSize = 11.5.sp,
-                                color = Color(0xFF94A3B8)
-                            )
-                            Text(
-                                text = durationStr,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
-                            )
-                        }
-                    }
-
-                    // Vertical Separator
-                    VerticalDivider(
-                        color = Color(0xFFE2E8F0),
-                        thickness = 1.dp,
-                        modifier = Modifier.height(34.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Date
-                    Row(
-                        modifier = Modifier.weight(1.2f),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarToday,
-                            contentDescription = "Date",
-                            tint = Color(0xFF64748B),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "Date",
-                                fontSize = 11.5.sp,
-                                color = Color(0xFF94A3B8)
-                            )
-                            Text(
-                                text = dateStr,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A),
+                                fontSize = 11.sp,
+                                color = Color(0xFF64748B),
+                                lineHeight = 13.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -569,32 +487,74 @@ fun ReferenceTripCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = "Duration",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = durationStr,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A),
+                            lineHeight = 16.sp
+                        )
+                    }
+                    VerticalDivider(
+                        color = Color(0xFFE2E8F0),
+                        thickness = 1.dp,
+                        modifier = Modifier.height(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Row(
+                        modifier = Modifier.weight(1.3f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Date",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = dateStr,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A),
+                            lineHeight = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
 
                 HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
 
-                // ACTION ROWS WITH CHEVRONS: Add tags, Vehicle, Write a note
-                // 1. Add tags
                 ActionRowItem(
                     icon = Icons.Default.LocalOffer,
                     title = "Add tags",
                     value = currentTags.ifBlank { null },
                     onClick = { showTagDialog = true }
                 )
-
-                HorizontalDivider(color = Color(0xFFF8FAFC), thickness = 1.dp)
-
-                // 2. Vehicle
                 ActionRowItem(
                     icon = Icons.Default.DirectionsCar,
                     title = "Vehicle",
                     value = currentVehicle.ifBlank { "Select vehicle" },
                     onClick = { showVehicleDialog = true }
                 )
-
-                HorizontalDivider(color = Color(0xFFF8FAFC), thickness = 1.dp)
-
-                // 3. Write a note
                 ActionRowItem(
                     icon = Icons.Default.EditNote,
                     title = "Write a note",
@@ -602,18 +562,14 @@ fun ReferenceTripCard(
                     onClick = { showNoteDialog = true }
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // PERSONAL & BUSINESS BUTTONS (Below Write a note)
                 val isBusinessSelected = trip.type == "Business"
                 val isPersonalSelected = trip.type == "Personal"
-
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = Color(0xFFF1F5F9),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(36.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -621,15 +577,12 @@ fun ReferenceTripCard(
                             .padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Personal Segment
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent
-                                )
+                                .background(if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent)
                                 .clickable {
                                     val updated = trip.copy(
                                         vehicle = currentVehicle,
@@ -658,8 +611,6 @@ fun ReferenceTripCard(
                                 )
                             }
                         }
-
-                        // Business Segment
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -667,7 +618,7 @@ fun ReferenceTripCard(
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(
                                     if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) {
-                                        Color(0xFF2563EB) // Same app signature royal blue
+                                        Color(0xFF2563EB)
                                     } else {
                                         Color.Transparent
                                     }
@@ -703,13 +654,8 @@ fun ReferenceTripCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
                 HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // BOTTOM ROW: Swipe Hint & Delete Trash Icon
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -722,11 +668,9 @@ fun ReferenceTripCard(
                         color = Color(0xFF94A3B8),
                         modifier = Modifier.weight(1f)
                     )
-
-                    // Bottom Delete Trash Icon
                     IconButton(
                         onClick = { onDelete(trip) },
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
@@ -739,7 +683,6 @@ fun ReferenceTripCard(
             }
         }
     }
-
     // Note Editing Dialog
     if (showNoteDialog) {
         var noteInput by remember { mutableStateOf(currentNote) }
@@ -841,12 +784,9 @@ fun ReferenceTripCard(
     }
 }
 
-/**
- * Standard Action Row Item matching the reference design: Icon, Title, optional value, Chevron.
- */
 @Composable
 private fun ActionRowItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     title: String,
     value: String?,
     onClick: () -> Unit
@@ -855,7 +795,7 @@ private fun ActionRowItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -867,16 +807,15 @@ private fun ActionRowItem(
                 imageVector = icon,
                 contentDescription = title,
                 tint = Color(0xFF64748B),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(16.dp)
             )
             Text(
                 text = title,
-                fontSize = 14.5.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color(0xFF1E293B)
             )
         }
-
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)

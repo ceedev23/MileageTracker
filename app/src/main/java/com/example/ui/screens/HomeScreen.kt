@@ -42,7 +42,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BusinessCenter
@@ -475,21 +474,14 @@ fun HomeScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                // Route Icon in solid blue circle matching redesigned app icon
-                                Box(
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_launcher_asset),
+                                    contentDescription = "App logo",
                                     modifier = Modifier
                                         .size(if (isCompactHeight) 34.dp else 40.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF2563EB)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.AltRoute,
-                                        contentDescription = "Mileage Route",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(if (isCompactHeight) 19.dp else 23.dp)
-                                    )
-                                }
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
 
                                 Spacer(modifier = Modifier.height(2.dp))
 
@@ -672,13 +664,7 @@ fun HomeScreen(
                     }
 
                     // 2. Recent trips listed in the reference format
-                    val tripsToShow = remember(unclassifiedTrips, trips) {
-                        if (unclassifiedTrips.isNotEmpty()) {
-                            unclassifiedTrips
-                        } else {
-                            trips.take(3)
-                        }
-                    }
+                    val tripsToShow = unclassifiedTrips
 
                     if (tripsToShow.isNotEmpty()) {
                         Column(
