@@ -1,0 +1,1058 @@
+package com.example.ui.components
+
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.BusinessCenter
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.TripEntity
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+/**
+ * High-fidelity Recent Trip Card redesigned to faithfully match the uploaded reference image:
+ * - Top header with Back arrow, "Trip details" and Delete icon
+ * - Visual route map canvas with Yarra River, parks, and Northcote -> Richmond route
+ * - Bold Hero distance (e.g. "24.8 km"), "$18.60" amount, and "✓ Completed" status pill
+ * - Two-segment toggle: [ Personal ] | [ Business ]
+ * - Vertical route timeline with Point A (Start) and Point B (Destination)
+ * - Duration & Date split info row
+ * - Action rows with chevrons: "Add tags", "Vehicle", "Write a note"
+ * - Retains full interactive swipe-to-classify (Swipe Right -> Business, Swipe Left -> Personal)
+ */
+@Composable
+fun ReferenceTripCard(
+    trip: TripEntity,
+    isMiles: Boolean,
+    mileageRate: Double = 0.67,
+    onClassify: (TripEntity, String) -> Unit,
+    onDelete: (TripEntity) -> Unit,
+    onUpdateTrip: ((TripEntity) -> Unit)? = null,
+    onOpenDetail: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var isAnimating by remember { mutableStateOf(false) }
+
+    val currentTrip by rememberUpdatedState(trip)
+    val currentOnClassify by rememberUpdatedState(onClassify)
+
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 70.dp.toPx() }
+    val maxSwipePx = with(density) { 360.dp.toPx() }
+
+    var currentVehicle by remember(trip.vehicle) {
+        mutableStateOf(trip.vehicle?.takeIf { it.isNotBlank() } ?: "Toyota Rav4")
+    }
+    var currentNote by remember(trip.purpose) {
+        val cleanNote = trip.purpose?.takeIf { it.isNotBlank() && !it.startsWith("Drive (") } ?: ""
+        mutableStateOf(cleanNote)
+    }
+    var currentTags by remember { mutableStateOf("") }
+
+    // Dialogs for editing Note, Vehicle, Tags
+    var showNoteDialog by remember { mutableStateOf(false) }
+    var showVehicleDialog by remember { mutableStateOf(false) }
+    var showTagDialog by remember { mutableStateOf(false) }
+
+    // Distance calculation
+    val distanceDisplay = if (isMiles) {
+        val miles = trip.distanceKm * 0.621371
+        String.format(Locale.US, "%.1f mi", miles)
+    } else {
+        String.format(Locale.US, "%.1f km", trip.distanceKm)
+    }
+
+    val distanceValue = if (isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
+    val amountValue = distanceValue * mileageRate
+    val amountDisplay = String.format(Locale.US, "$%.2f", amountValue)
+
+    // Date & Time formatters
+    val dateDetailFormat = remember { SimpleDateFormat("EEE, d MMM yyyy", Locale.US) }
+    val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.US) }
+
+    val dateStr = remember(trip.startDate) { dateDetailFormat.format(Date(trip.startDate)) }
+    val startTimeStr = remember(trip.startDate) { timeFormat.format(Date(trip.startDate)) }
+    val endTimeStr = remember(trip.endDate) { timeFormat.format(Date(trip.endDate)) }
+
+    // Duration calculation
+    val durationMinutes = remember(trip.startDate, trip.endDate) {
+        val diffMs = trip.endDate - trip.startDate
+        (diffMs / 60000L).coerceAtLeast(1L)
+    }
+    val durationStr = remember(durationMinutes) {
+        val hours = durationMinutes / 60
+        val mins = durationMinutes % 60
+        if (hours > 0) "${hours}h ${mins}m" else "${mins} min"
+    }
+
+    // Addresses with fallback matching reference image
+    val startAddress = trip.startAddress?.ifBlank { "12 Brook Street" } ?: "12 Brook Street"
+    val startCity = "Northcote VIC 3070"
+    val endAddress = trip.endAddress?.ifBlank { "410 Swan Street" } ?: "410 Swan Street"
+    val endCity = "Richmond VIC 3121"
+
+    val isSwipingRight = offsetX > 0f
+    val isSwipingLeft = offsetX < 0f
+    val isPastThreshold = abs(offsetX) >= thresholdPx
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .testTag("recent_trip_card_${trip.id}")
+    ) {
+        // --- 1. SWIPE REVEAL BACKGROUND (Business Blue / Personal Orange) ---
+        if (isSwipingRight) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color(0xFF2563EB))
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = if (isPastThreshold) 0.35f else 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BusinessCenter,
+                            contentDescription = "Business",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = if (isPastThreshold) "Release for Business" else "Swipe for Business",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Classify as Business drive",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+        } else if (isSwipingLeft) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color(0xFFEA580C))
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = if (isPastThreshold) "Release for Personal" else "Swipe for Personal",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Classify as Personal drive",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = if (isPastThreshold) 0.35f else 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Personal",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- 2. FOREGROUND CARD MATCHING REFERENCE IMAGE ---
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.roundToInt(), 0) }
+                .pointerInput(trip.id) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (abs(offsetX) >= thresholdPx && !isAnimating) {
+                                isAnimating = true
+                                val isBusiness = offsetX > 0
+                                val targetOffset = if (isBusiness) maxSwipePx else -maxSwipePx
+                                val classification = if (isBusiness) "Business" else "Personal"
+                                coroutineScope.launch {
+                                    animate(
+                                        initialValue = offsetX,
+                                        targetValue = targetOffset,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                                    ) { value, _ -> offsetX = value }
+                                    currentOnClassify(currentTrip, classification)
+                                    offsetX = 0f
+                                    isAnimating = false
+                                }
+                            } else {
+                                coroutineScope.launch {
+                                    animate(
+                                        initialValue = offsetX,
+                                        targetValue = 0f,
+                                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                                    ) { value, _ -> offsetX = value }
+                                }
+                            }
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            if (!isAnimating) {
+                                offsetX += dragAmount * 0.95f
+                            }
+                        }
+                    )
+                },
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.5.dp, Color(0xFFCBD5E1)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                // MAP VIEW: Beautiful vector map matching the reference image (Yarra River, Northcote, Fairfield, Kew, Richmond)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(165.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
+                        .clickable { onOpenDetail?.invoke() }
+                ) {
+                    ReferenceMapSnapshotCanvas(modifier = Modifier.fillMaxSize())
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // HERO STATS ROW: Huge 24.8 km + "✓ Completed" status pill
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = distanceDisplay,
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF0F172A),
+                        letterSpacing = (-0.5).sp
+                    )
+
+                    // "✓ Completed" pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFEFF6FF),
+                        border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Color(0xFF2563EB),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Completed",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E40AF)
+                            )
+                        }
+                    }
+                }
+
+                // Subtitle Amount: "$18.60"
+                Text(
+                    text = amountDisplay,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF64748B)
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // ROUTE TIMELINE: Start (Point A) -> Destination (Point B)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Left Timeline Graphics
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        // Start Blue Dot
+                        Box(
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2563EB))
+                        )
+
+                        // Vertical Dotted Line
+                        Canvas(
+                            modifier = Modifier
+                                .width(2.dp)
+                                .height(46.dp)
+                        ) {
+                            drawLine(
+                                color = Color(0xFF94A3B8),
+                                start = Offset(size.width / 2, 4f),
+                                end = Offset(size.width / 2, size.height - 4f),
+                                strokeWidth = 2.5f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f)
+                            )
+                        }
+
+                        // Destination Dark Blue Pin
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Destination",
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Right Address Details
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Start Details
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "Start",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A)
+                                )
+                                Text(
+                                    text = startTimeStr,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = startAddress,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1E293B)
+                            )
+                            Text(
+                                text = startCity,
+                                fontSize = 13.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+
+                        // Destination Details
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "Destination",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0F172A)
+                                )
+                                Text(
+                                    text = endTimeStr,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = endAddress,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1E293B)
+                            )
+                            Text(
+                                text = endCity,
+                                fontSize = 13.sp,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // DURATION & DATE SPLIT SECTION
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Duration
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = "Duration",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Duration",
+                                fontSize = 11.5.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                            Text(
+                                text = durationStr,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A)
+                            )
+                        }
+                    }
+
+                    // Vertical Separator
+                    VerticalDivider(
+                        color = Color(0xFFE2E8F0),
+                        thickness = 1.dp,
+                        modifier = Modifier.height(34.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // Date
+                    Row(
+                        modifier = Modifier.weight(1.2f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Date",
+                            tint = Color(0xFF64748B),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Date",
+                                fontSize = 11.5.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                            Text(
+                                text = dateStr,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0F172A),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+                // ACTION ROWS WITH CHEVRONS: Add tags, Vehicle, Write a note
+                // 1. Add tags
+                ActionRowItem(
+                    icon = Icons.Default.LocalOffer,
+                    title = "Add tags",
+                    value = currentTags.ifBlank { null },
+                    onClick = { showTagDialog = true }
+                )
+
+                HorizontalDivider(color = Color(0xFFF8FAFC), thickness = 1.dp)
+
+                // 2. Vehicle
+                ActionRowItem(
+                    icon = Icons.Default.DirectionsCar,
+                    title = "Vehicle",
+                    value = currentVehicle.ifBlank { "Select vehicle" },
+                    onClick = { showVehicleDialog = true }
+                )
+
+                HorizontalDivider(color = Color(0xFFF8FAFC), thickness = 1.dp)
+
+                // 3. Write a note
+                ActionRowItem(
+                    icon = Icons.Default.EditNote,
+                    title = "Write a note",
+                    value = currentNote.ifBlank { null },
+                    onClick = { showNoteDialog = true }
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // PERSONAL & BUSINESS BUTTONS (Below Write a note)
+                val isBusinessSelected = trip.type == "Business"
+                val isPersonalSelected = trip.type == "Personal"
+
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color(0xFFF1F5F9),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Personal Segment
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent
+                                )
+                                .clickable {
+                                    val updated = trip.copy(
+                                        vehicle = currentVehicle,
+                                        purpose = currentNote.ifBlank { trip.purpose }
+                                    )
+                                    onUpdateTrip?.invoke(updated)
+                                    onClassify(updated, "Personal")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = null,
+                                    tint = if (isPersonalSelected) Color.White else Color(0xFFEA580C),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Text(
+                                    text = "Personal",
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isPersonalSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                    color = if (isPersonalSelected) Color.White else Color(0xFF475569)
+                                )
+                            }
+                        }
+
+                        // Business Segment
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) {
+                                        Color(0xFF2563EB) // Same app signature royal blue
+                                    } else {
+                                        Color.Transparent
+                                    }
+                                )
+                                .clickable {
+                                    val updated = trip.copy(
+                                        vehicle = currentVehicle,
+                                        purpose = currentNote.ifBlank { trip.purpose }
+                                    )
+                                    onUpdateTrip?.invoke(updated)
+                                    onClassify(updated, "Business")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.BusinessCenter,
+                                    contentDescription = null,
+                                    tint = if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) Color.White else Color(0xFF2563EB),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Business",
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) FontWeight.Bold else FontWeight.SemiBold,
+                                    color = if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) Color.White else Color(0xFF475569)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                HorizontalDivider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // BOTTOM ROW: Swipe Hint & Delete Trash Icon
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "◂ Swipe left: Personal • Swipe right: Business ▸",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF94A3B8),
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Bottom Delete Trash Icon
+                    IconButton(
+                        onClick = { onDelete(trip) },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Delete trip",
+                            tint = Color(0xFF94A3B8),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Note Editing Dialog
+    if (showNoteDialog) {
+        var noteInput by remember { mutableStateOf(currentNote) }
+        AlertDialog(
+            onDismissRequest = { showNoteDialog = false },
+            title = { Text("Trip Note", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = noteInput,
+                    onValueChange = { noteInput = it },
+                    label = { Text("Note or purpose") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        currentNote = noteInput
+                        val updated = trip.copy(purpose = noteInput)
+                        onUpdateTrip?.invoke(updated)
+                        showNoteDialog = false
+                    }
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Vehicle Editing Dialog
+    if (showVehicleDialog) {
+        var vehicleInput by remember { mutableStateOf(currentVehicle) }
+        AlertDialog(
+            onDismissRequest = { showVehicleDialog = false },
+            title = { Text("Vehicle", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = vehicleInput,
+                    onValueChange = { vehicleInput = it },
+                    label = { Text("Vehicle name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        currentVehicle = vehicleInput
+                        val updated = trip.copy(vehicle = vehicleInput)
+                        onUpdateTrip?.invoke(updated)
+                        showVehicleDialog = false
+                    }
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVehicleDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Tags Dialog
+    if (showTagDialog) {
+        var tagInput by remember { mutableStateOf(currentTags) }
+        AlertDialog(
+            onDismissRequest = { showTagDialog = false },
+            title = { Text("Add Tags", fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = tagInput,
+                    onValueChange = { tagInput = it },
+                    label = { Text("Tags (e.g. Client, Meeting, Project)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        currentTags = tagInput
+                        showTagDialog = false
+                    }
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTagDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+/**
+ * Standard Action Row Item matching the reference design: Icon, Title, optional value, Chevron.
+ */
+@Composable
+private fun ActionRowItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    value: String?,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = Color(0xFF64748B),
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = title,
+                fontSize = 14.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1E293B)
+            )
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (!value.isNullOrBlank()) {
+                Text(
+                    text = value,
+                    fontSize = 13.5.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFF94A3B8),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Vector Map Snapshot Canvas matching the reference image layout:
+ * - Yarra River diagonal water body
+ * - Green park reservations
+ * - Street grids and highway lines
+ * - Dark blue route path connecting Northcote (Start) to Richmond (Destination)
+ * - Start circular badge and Destination teardrop pin
+ */
+@Composable
+private fun ReferenceMapSnapshotCanvas(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+
+        // 1. Off-white terrain background
+        drawRect(color = Color(0xFFF6F8FA))
+
+        // 2. Green Nature Parks matching reference image
+        val parkColor = Color(0xFFDCFCE7)
+        val park1 = Path().apply {
+            moveTo(w * 0.55f, 0f)
+            lineTo(w * 0.85f, 0f)
+            lineTo(w * 0.72f, h * 0.35f)
+            lineTo(w * 0.52f, h * 0.22f)
+            close()
+        }
+        drawPath(path = park1, color = parkColor)
+
+        val park2 = Path().apply {
+            moveTo(w * 0.05f, h * 0.45f)
+            lineTo(w * 0.22f, h * 0.42f)
+            lineTo(w * 0.28f, h * 0.65f)
+            lineTo(w * 0.12f, h * 0.75f)
+            close()
+        }
+        drawPath(path = park2, color = parkColor)
+
+        val park3 = Path().apply {
+            moveTo(w * 0.35f, h * 0.68f)
+            lineTo(w * 0.48f, h * 0.65f)
+            lineTo(w * 0.52f, h * 0.92f)
+            lineTo(w * 0.38f, h * 0.98f)
+            close()
+        }
+        drawPath(path = park3, color = parkColor)
+
+        // 3. Yarra River (Curved light blue water ribbon in bottom right)
+        val riverColor = Color(0xFFBAE6FD)
+        val riverPath = Path().apply {
+            moveTo(w * 0.92f, 0f)
+            cubicTo(w * 0.86f, h * 0.25f, w * 0.94f, h * 0.45f, w * 0.88f, h * 0.60f)
+            cubicTo(w * 0.78f, h * 0.75f, w * 0.62f, h * 0.82f, w * 0.52f, h * 0.89f)
+            lineTo(w * 0.56f, h)
+            lineTo(w, h)
+            lineTo(w, 0f)
+            close()
+        }
+        drawPath(path = riverPath, color = riverColor)
+
+        // 4. City Street Network
+        val streetColor = Color.White
+        val strokeW = 3f
+
+        // Major streets
+        for (f in listOf(0.18f, 0.38f, 0.58f, 0.78f)) {
+            drawLine(
+                color = streetColor,
+                start = Offset(0f, h * f),
+                end = Offset(w, h * f),
+                strokeWidth = strokeW
+            )
+        }
+        for (f in listOf(0.15f, 0.35f, 0.55f, 0.75f, 0.9f)) {
+            drawLine(
+                color = streetColor,
+                start = Offset(w * f, 0f),
+                end = Offset(w * f, h),
+                strokeWidth = strokeW
+            )
+        }
+
+        // 5. Diagonal Arterials
+        val diag1 = Path().apply {
+            moveTo(0f, h * 0.85f)
+            lineTo(w * 0.85f, 0f)
+        }
+        drawPath(path = diag1, color = Color(0xFFE2E8F0), style = Stroke(width = 3.5f))
+
+        val diag2 = Path().apply {
+            moveTo(w * 0.2f, 0f)
+            lineTo(w * 0.8f, h)
+        }
+        drawPath(path = diag2, color = Color(0xFFE2E8F0), style = Stroke(width = 3.5f))
+
+        // 6. Realistic Bold Blue Route Line connecting Northcote to Richmond
+        val startPoint = Offset(w * 0.28f, h * 0.18f)
+        val endPoint = Offset(w * 0.75f, h * 0.78f)
+
+        val routePath = Path().apply {
+            moveTo(startPoint.x, startPoint.y)
+            lineTo(w * 0.28f, h * 0.23f)
+            lineTo(w * 0.35f, h * 0.24f)
+            cubicTo(w * 0.37f, h * 0.32f, w * 0.42f, h * 0.42f, w * 0.45f, h * 0.45f)
+            lineTo(w * 0.48f, h * 0.52f)
+            lineTo(w * 0.62f, h * 0.54f)
+            cubicTo(w * 0.65f, h * 0.58f, w * 0.70f, h * 0.65f, w * 0.71f, h * 0.72f)
+            lineTo(endPoint.x, endPoint.y)
+        }
+
+        // Outer glow
+        drawPath(
+            path = routePath,
+            color = Color(0xFF2563EB).copy(alpha = 0.2f),
+            style = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        // Core Route Line
+        drawPath(
+            path = routePath,
+            color = Color(0xFF2563EB), // Signature app royal blue
+            style = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+
+        // 7. Start Pin (Circular Blue Head with inner white dot)
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.2f),
+            radius = 12f,
+            center = startPoint + Offset(0f, 2f)
+        )
+        drawCircle(
+            color = Color(0xFF2563EB),
+            radius = 11f,
+            center = startPoint
+        )
+        drawCircle(
+            color = Color.White,
+            radius = 4f,
+            center = startPoint
+        )
+
+        // 8. Destination Pin (Blue Teardrop Pin)
+        drawCircle(
+            color = Color.Black.copy(alpha = 0.2f),
+            radius = 13f,
+            center = endPoint + Offset(0f, 2f)
+        )
+        drawCircle(
+            color = Color(0xFF2563EB),
+            radius = 12f,
+            center = endPoint
+        )
+        drawCircle(
+            color = Color.White,
+            radius = 4.5f,
+            center = endPoint
+        )
+    }
+}

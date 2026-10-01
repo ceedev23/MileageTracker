@@ -1,0 +1,6 @@
+{
+  "name": "MileageTracker",
+  "description": "Driversnote-style mileage tracking app with automatic trip detection, swipe classification, and gas receipt photo logging with total expense tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
