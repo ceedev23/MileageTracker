@@ -37,6 +37,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -275,7 +276,8 @@ fun ReceiptsScreen(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MileageBlue,
                                 contentColor = Color.White
-                            )
+                            ),
+                            elevation = null
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CameraAlt,
@@ -346,7 +348,8 @@ fun ReceiptsScreen(
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MileageBlue,
                                         contentColor = Color.White
-                                    )
+                                    ),
+                                    elevation = null
                                 ) {
                                     Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -391,11 +394,13 @@ fun ReceiptsScreen(
                 .testTag("scan_receipt_fab"),
             containerColor = MileageBlue,
             contentColor = Color.White,
+            elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
             shape = CircleShape
         ) {
             Icon(
                 imageVector = Icons.Default.AddAPhoto,
                 contentDescription = "Take Picture of Receipt",
+                tint = Color.White,
                 modifier = Modifier.size(24.dp)
             )
         }

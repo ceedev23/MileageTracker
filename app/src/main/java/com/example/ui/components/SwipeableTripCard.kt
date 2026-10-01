@@ -661,6 +661,7 @@ fun SwipeableTripCard(
                                     containerColor = MileageBlue,
                                     contentColor = Color.White
                                 ),
+                                elevation = null,
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
                                     .weight(1f)
@@ -669,10 +670,11 @@ fun SwipeableTripCard(
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = null,
+                                    tint = Color.White,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Edit Trip", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Text("Edit Trip", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
 
                             OutlinedButton(

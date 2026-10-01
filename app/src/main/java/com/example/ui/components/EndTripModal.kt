@@ -338,7 +338,11 @@ fun EndTripBottomSheet(
                         onClassify(trip, "Business")
                         onDismiss()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MileageBlue),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MileageBlue,
+                        contentColor = Color.White
+                    ),
+                    elevation = null,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)

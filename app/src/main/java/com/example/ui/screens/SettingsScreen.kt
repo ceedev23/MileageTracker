@@ -77,6 +77,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
+    val userProfile by viewModel.userProfile.collectAsState()
 
     var showClearDialog by remember { mutableStateOf(false) }
     var rateInput by remember(settings.reimbursementRate) {
@@ -129,6 +130,115 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
+        }
+
+        // Account & Profile Section
+        val profile = userProfile
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("settings_account_card"),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (profile?.isGuest == false) MileageBlue else Color(0xFF64748B)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val initial = profile?.name?.firstOrNull()?.uppercase() ?: "G"
+                            Text(
+                                text = initial,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        Column {
+                            Text(
+                                text = profile?.name ?: "Guest Driver",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SlateTextPrimary
+                            )
+                            Text(
+                                text = profile?.email ?: "Not signed in",
+                                fontSize = 12.5.sp,
+                                color = SlateTextSecondary
+                            )
+                        }
+                    }
+
+                    if (profile != null && !profile.isGuest) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFEFF6FF),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+                        ) {
+                            Text(
+                                text = "Pro Plan",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MileageBlue,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (profile != null && !profile.isGuest) {
+                        OutlinedButton(
+                            onClick = { viewModel.showAuthScreen() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Switch Account", fontSize = 12.5.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.signOut() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
+                        ) {
+                            Text("Sign Out", fontSize = 12.5.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.showAuthScreen() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MileageBlue,
+                                contentColor = Color.White
+                            ),
+                            elevation = null
+                        ) {
+                            Text("Sign In or Create Account", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+            }
         }
 
         // Automatic Detection Section
@@ -462,9 +572,13 @@ fun SettingsScreen(
                         onClick = { showClearDialog = true },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = StopRed)
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = StopRed,
+                            contentColor = Color.White
+                        ),
+                        elevation = null
                     ) {
-                        Text("Clear All Trips", fontSize = 13.sp)
+                        Text("Clear All Trips", fontSize = 13.sp, color = Color.White)
                     }
                 }
             }
@@ -484,9 +598,13 @@ fun SettingsScreen(
                         viewModel.clearAllTrips()
                         showClearDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = StopRed)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StopRed,
+                        contentColor = Color.White
+                    ),
+                    elevation = null
                 ) {
-                    Text("Delete Everything")
+                    Text("Delete Everything", color = Color.White)
                 }
             },
             dismissButton = {

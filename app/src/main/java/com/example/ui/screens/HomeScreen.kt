@@ -354,10 +354,14 @@ fun HomeScreen(
                                     )
                                 }
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                     Button(
                                         onClick = { viewModel.recordDestinationStopAndStartNewTrip(context) },
-                                        colors = ButtonDefaults.buttonColors(containerColor = MileageBlue),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MileageBlue,
+                                            contentColor = Color.White
+                                        ),
+                                        elevation = null,
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier
                                             .height(28.dp)
@@ -611,42 +615,13 @@ fun HomeScreen(
 
                 // 3. RECENT TRIPS SECTION (Optimized for Ended Trip after stopping)
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Recent trips",
-                            fontSize = if (isCompactHeight) 16.sp else 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .clickable { viewModel.selectTab(AppTab.TRIPS) }
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                text = "View all",
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF2563EB)
-                            )
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = "View all trips",
-                                tint = Color(0xFF2563EB),
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = "Recent trips",
+                        fontSize = if (isCompactHeight) 16.sp else 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A),
+                        modifier = Modifier.padding(horizontal = 2.dp)
+                    )
 
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -669,7 +644,7 @@ fun HomeScreen(
                     if (tripsToShow.isNotEmpty()) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             if (unclassifiedTrips.isNotEmpty()) {
                                 Row(
@@ -937,7 +912,11 @@ fun LiveDriveHomeCard(
             ) {
                 Button(
                     onClick = onStopAndSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFDC2626),
+                        contentColor = Color.White
+                    ),
+                    elevation = null,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .weight(1f)
@@ -1221,7 +1200,11 @@ fun CompactSwipeableHomeTripCard(
                 ) {
                     Button(
                         onClick = { onClassify(trip, "Business") },
-                        colors = ButtonDefaults.buttonColors(containerColor = MileageBlue),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MileageBlue,
+                            contentColor = Color.White
+                        ),
+                        elevation = null,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .weight(1f)

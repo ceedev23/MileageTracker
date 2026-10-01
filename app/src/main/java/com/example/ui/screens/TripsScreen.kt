@@ -23,13 +23,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -80,6 +83,7 @@ fun TripsScreen(
 
     var tripToEdit by remember { mutableStateOf<TripEntity?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var tripToDelete by remember { mutableStateOf<TripEntity?>(null) }
 
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
@@ -109,10 +113,11 @@ fun TripsScreen(
                 },
                 containerColor = MileageBlue,
                 contentColor = Color.White,
+                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
                 shape = CircleShape,
                 modifier = Modifier.testTag("add_trip_fab")
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Manual Trip")
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Manual Trip", tint = Color.White)
             }
         }
     ) { innerPadding ->
@@ -267,6 +272,7 @@ fun TripsScreen(
                                         containerColor = MileageBlue,
                                         contentColor = Color.White
                                     ),
+                                    elevation = null,
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Text("Seed Sample Trips", color = Color.White, fontWeight = FontWeight.Bold)
@@ -293,7 +299,7 @@ fun TripsScreen(
                                     tripToEdit = t
                                     showEditDialog = true
                                 },
-                                onDelete = { t -> viewModel.deleteTrip(t) }
+                                onDelete = { t -> tripToDelete = t }
                             )
                         }
                     }
@@ -320,6 +326,48 @@ fun TripsScreen(
             onSave = { updated ->
                 viewModel.saveTrip(updated)
                 showEditDialog = false
+            }
+        )
+    }
+
+    // Delete Confirmation Dialog
+    if (tripToDelete != null) {
+        val target = tripToDelete!!
+        val distText = if (isMiles) {
+            String.format(Locale.getDefault(), "%.1f mi", target.distanceKm * 0.621371)
+        } else {
+            String.format(Locale.getDefault(), "%.1f km", target.distanceKm)
+        }
+        AlertDialog(
+            onDismissRequest = { tripToDelete = null },
+            title = {
+                Text(
+                    text = "Delete Trip?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete this $distText trip? This action cannot be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteTrip(target)
+                        tripToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = Color(0xFFEF4444)
+                    )
+                ) {
+                    Text("Delete", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { tripToDelete = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }

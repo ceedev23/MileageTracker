@@ -601,6 +601,7 @@ fun ReceiptScanDialog(
                             disabledContainerColor = MileageBlue.copy(alpha = 0.5f),
                             disabledContentColor = Color.White.copy(alpha = 0.7f)
                         ),
+                        elevation = null,
                         enabled = !scanState.isScanningOrExtracting && (totalAmountInput.toDoubleOrNull() != null || merchantInput.isNotBlank())
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))

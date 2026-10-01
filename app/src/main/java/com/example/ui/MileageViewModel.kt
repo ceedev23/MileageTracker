@@ -68,6 +68,12 @@ data class ReceiptScanUiState(
     val errorMessage: String? = null
 )
 
+data class UserProfile(
+    val name: String,
+    val email: String,
+    val isGuest: Boolean = false
+)
+
 class MileageViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: TripRepository
     private val gasReceiptRepository: GasReceiptRepository
@@ -93,6 +99,58 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     private val _justCompletedTrip = MutableStateFlow<TripEntity?>(null)
     val justCompletedTrip: StateFlow<TripEntity?> = _justCompletedTrip.asStateFlow()
+
+    private val _userProfile = MutableStateFlow<UserProfile?>(null)
+    val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
+
+    private val _isAuthPromptVisible = MutableStateFlow<Boolean>(true)
+    val isAuthPromptVisible: StateFlow<Boolean> = _isAuthPromptVisible.asStateFlow()
+
+    fun signIn(email: String, name: String? = null) {
+        val cleanName = name?.takeIf { it.isNotBlank() }
+            ?: email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+        _userProfile.value = UserProfile(
+            name = cleanName,
+            email = email,
+            isGuest = false
+        )
+        _isAuthPromptVisible.value = false
+    }
+
+    fun signUp(name: String, email: String) {
+        _userProfile.value = UserProfile(
+            name = name.ifBlank { "User" },
+            email = email,
+            isGuest = false
+        )
+        _isAuthPromptVisible.value = false
+    }
+
+    fun continueAsGuest() {
+        _userProfile.value = UserProfile(
+            name = "Guest Driver",
+            email = "guest@mileage.app",
+            isGuest = true
+        )
+        _isAuthPromptVisible.value = false
+    }
+
+    fun signOut() {
+        _userProfile.value = null
+        _isAuthPromptVisible.value = true
+    }
+
+    fun showAuthScreen() {
+        _isAuthPromptVisible.value = true
+    }
+
+    fun dismissAuthScreen() {
+        if (_userProfile.value == null) {
+            continueAsGuest()
+        } else {
+            _isAuthPromptVisible.value = false
+        }
+    }
 
     fun dismissJustCompletedTrip() {
         _justCompletedTrip.value = null

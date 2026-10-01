@@ -68,6 +68,7 @@ import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.components.TripEditDialog
+import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ReceiptsScreen
 import com.example.ui.screens.ReportScreen
@@ -106,6 +107,17 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
 
   var showQuickActionsSheet by remember { mutableStateOf(false) }
   var showManualTripDialog by remember { mutableStateOf(false) }
+  val userProfile by viewModel.userProfile.collectAsState()
+  val isAuthPromptVisible by viewModel.isAuthPromptVisible.collectAsState()
+
+  if (isAuthPromptVisible) {
+    AuthScreen(
+      viewModel = viewModel,
+      onDismiss = { viewModel.dismissAuthScreen() },
+      canDismiss = userProfile != null
+    )
+    return
+  }
 
   BackHandler(enabled = currentTab != AppTab.HOME) {
     viewModel.selectTab(AppTab.HOME)

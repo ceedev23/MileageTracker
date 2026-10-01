@@ -232,7 +232,8 @@ fun TripEditDialog(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MileageBlue,
                     contentColor = Color.White
-                )
+                ),
+                elevation = null
             ) {
                 Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
             }

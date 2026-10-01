@@ -321,7 +321,6 @@ fun GoogleMapView(
                 onClick = { isDarkMap = !isDarkMap },
                 modifier = Modifier
                     .size(40.dp)
-                    .shadow(4.dp, CircleShape)
                     .clip(CircleShape)
                     .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
                     .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
@@ -339,7 +338,6 @@ fun GoogleMapView(
                 onClick = { zoomScale = (zoomScale * 1.3f).coerceAtMost(4.0f) },
                 modifier = Modifier
                     .size(40.dp)
-                    .shadow(4.dp, CircleShape)
                     .clip(CircleShape)
                     .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
                     .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
@@ -357,7 +355,6 @@ fun GoogleMapView(
                 onClick = { zoomScale = (zoomScale / 1.3f).coerceAtLeast(0.5f) },
                 modifier = Modifier
                     .size(40.dp)
-                    .shadow(4.dp, CircleShape)
                     .clip(CircleShape)
                     .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
                     .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
@@ -378,7 +375,6 @@ fun GoogleMapView(
                 },
                 modifier = Modifier
                     .size(40.dp)
-                    .shadow(4.dp, CircleShape)
                     .clip(CircleShape)
                     .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
                     .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)

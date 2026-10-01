@@ -429,7 +429,8 @@ fun ReportScreen(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MileageBlue,
                             contentColor = Color.White
-                        )
+                        ),
+                        elevation = null
                     ) {
                         Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -473,7 +474,8 @@ fun ReportScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MileageBlue,
                         contentColor = Color.White
-                    )
+                    ),
+                    elevation = null
                 ) {
                     Text("Share", color = Color.White, fontWeight = FontWeight.Bold)
                 }
