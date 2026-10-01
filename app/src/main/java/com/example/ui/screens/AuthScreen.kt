@@ -228,6 +228,30 @@ private fun WelcomeLandingView(
                     Spacer(modifier = Modifier.height(28.dp))
                 }
 
+                // App Brand Logo & Name
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .padding(bottom = 10.dp)
+                        .testTag("welcome_app_logo")
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_asset),
+                        contentDescription = "App logo",
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                    Text(
+                        text = "MileageTracker",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = NavyDark
+                    )
+                }
+
                 Text(
                     text = "HELLO",
                     fontSize = 44.sp,
@@ -387,20 +411,56 @@ private fun SignInFormView(
                     contentScale = ContentScale.Crop
                 )
 
-                // Back Button
-                IconButton(
-                    onClick = onBack,
+                // Top Header Bar with Back Button & App Logo Badge
+                Row(
                     modifier = Modifier
-                        .padding(start = 16.dp, top = 8.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.8f))
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = NavyDark
-                    )
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.85f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = NavyDark
+                        )
+                    }
+
+                    // App Logo Chip Badge
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.92f),
+                        border = BorderStroke(1.dp, Color.White),
+                        modifier = Modifier.testTag("auth_top_app_logo")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_launcher_asset),
+                                contentDescription = "App logo",
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                            Text(
+                                text = "MileageTracker",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NavyDark
+                            )
+                        }
+                    }
                 }
             }
 
@@ -418,10 +478,37 @@ private fun SignInFormView(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 28.dp, vertical = 24.dp),
+                        .padding(horizontal = 28.dp, vertical = 22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    // App Logo & Screen Title Header
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_asset),
+                            contentDescription = "MileageTracker Logo",
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .testTag("auth_screen_app_logo"),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Sign In",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NavyDark
+                        )
+                        Text(
+                            text = "Access your mileage and tax records",
+                            fontSize = 12.5.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
                     // Error message
                     AnimatedVisibility(visible = errorMessage != null) {
                         Surface(
@@ -797,19 +884,56 @@ private fun SignUpFormView(
                     contentScale = ContentScale.Crop
                 )
 
-                IconButton(
-                    onClick = onBack,
+                // Top Header Bar with Back Button & App Logo Badge
+                Row(
                     modifier = Modifier
-                        .padding(start = 16.dp, top = 8.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.8f))
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = NavyDark
-                    )
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.85f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = NavyDark
+                        )
+                    }
+
+                    // App Logo Chip Badge
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.92f),
+                        border = BorderStroke(1.dp, Color.White),
+                        modifier = Modifier.testTag("auth_signup_top_app_logo")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_launcher_asset),
+                                contentDescription = "App logo",
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                            Text(
+                                text = "MileageTracker",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NavyDark
+                            )
+                        }
+                    }
                 }
             }
 
@@ -827,10 +951,37 @@ private fun SignUpFormView(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 28.dp, vertical = 22.dp),
+                        .padding(horizontal = 28.dp, vertical = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(13.dp)
                 ) {
+                    // App Logo & Screen Title Header
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_asset),
+                            contentDescription = "MileageTracker Logo",
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .testTag("auth_screen_app_logo"),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Create Account",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NavyDark
+                        )
+                        Text(
+                            text = "Track drives, log receipts & claim deductions",
+                            fontSize = 12.5.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
                     AnimatedVisibility(visible = errorMessage != null) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),

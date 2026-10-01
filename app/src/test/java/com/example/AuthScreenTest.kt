@@ -145,4 +145,21 @@ class AuthScreenTest {
         assertTrue(profile!!.isGuest)
         assertFalse(viewModel.isAuthPromptVisible.value)
     }
+
+    @Test
+    fun testAppLogoDisplayedOnSignInAndSignUp() {
+        // Sign In Step
+        composeTestRule.setContent {
+            AuthScreen(
+                viewModel = viewModel,
+                onDismiss = {},
+                canDismiss = false,
+                initialStep = AuthStep.SIGN_IN
+            )
+        }
+
+        composeTestRule.onNodeWithTag("auth_screen_app_logo").assertExists()
+        composeTestRule.onNodeWithTag("auth_top_app_logo").assertExists()
+    }
 }
+
