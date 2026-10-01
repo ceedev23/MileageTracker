@@ -287,6 +287,7 @@ fun TripsScreen(
                             SwipeableTripCard(
                                 trip = trip,
                                 isMiles = isMiles,
+                                reimbursementRate = settings.reimbursementRate,
                                 onClassify = { t, type -> viewModel.classifyTrip(t, type) },
                                 onEdit = { t ->
                                     tripToEdit = t
