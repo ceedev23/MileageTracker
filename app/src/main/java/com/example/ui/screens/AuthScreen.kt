@@ -11,6 +11,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -401,14 +402,16 @@ private fun SignInFormView(
                     .weight(0.38f)
                     .background(topHeaderGradient)
             ) {
-                // Background image illustration
+                // App Logo Header (replacing car image)
                 Image(
-                    painter = painterResource(id = R.drawable.img_auth_hero),
-                    contentDescription = "Car and city skyline",
+                    painter = painterResource(id = R.drawable.ic_launcher_asset),
+                    contentDescription = "App logo",
                     modifier = Modifier
-                        .fillMaxSize()
-                        .offset(y = 10.dp),
-                    contentScale = ContentScale.Crop
+                        .align(Alignment.Center)
+                        .size(108.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, Color.White, CircleShape),
+                    contentScale = ContentScale.Fit
                 )
 
                 // Top Header Bar with Back Button & App Logo Badge
@@ -875,13 +878,16 @@ private fun SignUpFormView(
                     .weight(0.32f)
                     .background(topHeaderGradient)
             ) {
+                // App Logo Header (replacing car image)
                 Image(
-                    painter = painterResource(id = R.drawable.img_auth_hero),
-                    contentDescription = "Car and city skyline",
+                    painter = painterResource(id = R.drawable.ic_launcher_asset),
+                    contentDescription = "App logo",
                     modifier = Modifier
-                        .fillMaxSize()
-                        .offset(y = 10.dp),
-                    contentScale = ContentScale.Crop
+                        .align(Alignment.Center)
+                        .size(108.dp)
+                        .clip(CircleShape)
+                        .border(3.dp, Color.White, CircleShape),
+                    contentScale = ContentScale.Fit
                 )
 
                 // Top Header Bar with Back Button & App Logo Badge
