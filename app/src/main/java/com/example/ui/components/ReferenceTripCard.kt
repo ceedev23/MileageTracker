@@ -38,10 +38,6 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -581,25 +577,21 @@ fun ReferenceTripCard(
                             .padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
-                            onClick = {
-                                val updated = trip.copy(
-                                    vehicle = currentVehicle,
-                                    purpose = currentNote.ifBlank { trip.purpose }
-                                )
-                                onClassify(updated, "Personal")
-                            },
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxHeight()
-                                .testTag("classify_personal_${trip.id}"),
-                            shape = RoundedCornerShape(20.dp),
-                            elevation = null,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent,
-                                contentColor = if (isPersonalSelected) Color.White else Color(0xFF475569)
-                            ),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent)
+                                .clickable {
+                                    val updated = trip.copy(
+                                        vehicle = currentVehicle,
+                                        purpose = currentNote.ifBlank { trip.purpose }
+                                    )
+                                    onUpdateTrip?.invoke(updated)
+                                    onClassify(updated, "Personal")
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -619,26 +611,27 @@ fun ReferenceTripCard(
                                 )
                             }
                         }
-
-                        Button(
-                            onClick = {
-                                val updated = trip.copy(
-                                    vehicle = currentVehicle,
-                                    purpose = currentNote.ifBlank { trip.purpose }
-                                )
-                                onClassify(updated, "Business")
-                            },
+                        Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .fillMaxHeight()
-                                .testTag("classify_business_${trip.id}"),
-                            shape = RoundedCornerShape(20.dp),
-                            elevation = null,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) Color(0xFF2563EB) else Color.Transparent,
-                                contentColor = if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) Color.White else Color(0xFF2563EB)
-                            ),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isBusinessSelected || (!isPersonalSelected && !isBusinessSelected)) {
+                                        Color(0xFF2563EB)
+                                    } else {
+                                        Color.Transparent
+                                    }
+                                )
+                                .clickable {
+                                    val updated = trip.copy(
+                                        vehicle = currentVehicle,
+                                        purpose = currentNote.ifBlank { trip.purpose }
+                                    )
+                                    onUpdateTrip?.invoke(updated)
+                                    onClassify(updated, "Business")
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,

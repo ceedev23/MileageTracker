@@ -228,12 +228,6 @@ object TrackingManager {
         }
     }
 
-    fun resetForTesting() {
-        stopTimer()
-        tripDetector?.reset()
-        _trackingState.value = LiveTrackingState()
-    }
-
     fun recordDestinationStopAndStartNewTrip(context: Context) {
         init(context)
         val detector = tripDetector ?: return
