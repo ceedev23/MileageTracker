@@ -22,9 +22,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
+import com.github.takahirom.roborazzi.captureRoboImage
+import androidx.compose.ui.test.onRoot
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [34])
 class AuthScreenTest {
 
     @get:Rule
@@ -160,6 +165,45 @@ class AuthScreenTest {
 
         composeTestRule.onNodeWithTag("auth_screen_app_logo").assertExists()
         composeTestRule.onNodeWithTag("auth_top_app_logo").assertExists()
+    }
+
+    @Test
+    fun captureWelcomeScreenshot() {
+        composeTestRule.setContent {
+            AuthScreen(
+                viewModel = viewModel,
+                onDismiss = {},
+                canDismiss = false,
+                initialStep = AuthStep.WELCOME
+            )
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/welcome.png")
+    }
+
+    @Test
+    fun captureSignInScreenshot() {
+        composeTestRule.setContent {
+            AuthScreen(
+                viewModel = viewModel,
+                onDismiss = {},
+                canDismiss = false,
+                initialStep = AuthStep.SIGN_IN
+            )
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/signin.png")
+    }
+
+    @Test
+    fun captureSignUpScreenshot() {
+        composeTestRule.setContent {
+            AuthScreen(
+                viewModel = viewModel,
+                onDismiss = {},
+                canDismiss = false,
+                initialStep = AuthStep.SIGN_UP
+            )
+        }
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/signup.png")
     }
 }
 

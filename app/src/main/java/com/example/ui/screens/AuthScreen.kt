@@ -56,11 +56,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.ScaleFactor
+import kotlin.math.max
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -87,6 +90,18 @@ private val SkyBlueLight = Color(0xFFCDE4FE)
 private val SkyBlueMid = Color(0xFFB1D7FE)
 private val SkyBlueDeeper = Color(0xFF7CB8F6)
 private val InputBg = Color(0xFFF1F5F9)
+
+private val ZoomedCrop = object : ContentScale {
+    override fun computeScaleFactor(
+        srcSize: androidx.compose.ui.geometry.Size,
+        dstSize: androidx.compose.ui.geometry.Size
+    ): ScaleFactor {
+        val widthScale = dstSize.width / srcSize.width
+        val heightScale = dstSize.height / srcSize.height
+        val scale = max(widthScale, heightScale) * 1.45f
+        return ScaleFactor(scale, scale)
+    }
+}
 
 /**
  * Onboarding and Auth Screen faithfully matching the provided UI design & flow:
@@ -287,7 +302,7 @@ private fun WelcomeLandingView(
                         .fillMaxWidth(0.95f)
                         .clip(RoundedCornerShape(24.dp))
                         .shadow(12.dp, RoundedCornerShape(24.dp)),
-                    contentScale = ContentScale.Crop
+                    contentScale = ZoomedCrop
                 )
             }
 
@@ -333,7 +348,6 @@ private fun WelcomeLandingView(
                         containerColor = Color.White,
                         contentColor = MileageBlue
                     ),
-                    border = BorderStroke(1.5.dp, MileageBlue),
                     elevation = null
                 ) {
                     Text(
@@ -400,18 +414,15 @@ private fun SignInFormView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(0.38f)
+                    .clipToBounds()
                     .background(topHeaderGradient)
             ) {
-                // App Logo Header (replacing car image)
+                // Background image illustration
                 Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_asset),
-                    contentDescription = "App logo",
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(108.dp)
-                        .clip(CircleShape)
-                        .border(3.dp, Color.White, CircleShape),
-                    contentScale = ContentScale.Fit
+                    painter = painterResource(id = R.drawable.img_auth_hero),
+                    contentDescription = "Car and city skyline",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ZoomedCrop
                 )
 
                 // Top Header Bar with Back Button & App Logo Badge
@@ -876,18 +887,15 @@ private fun SignUpFormView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(0.32f)
+                    .clipToBounds()
                     .background(topHeaderGradient)
             ) {
-                // App Logo Header (replacing car image)
+                // Background image illustration
                 Image(
-                    painter = painterResource(id = R.drawable.ic_launcher_asset),
-                    contentDescription = "App logo",
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(108.dp)
-                        .clip(CircleShape)
-                        .border(3.dp, Color.White, CircleShape),
-                    contentScale = ContentScale.Fit
+                    painter = painterResource(id = R.drawable.img_auth_hero),
+                    contentDescription = "Car and city skyline",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ZoomedCrop
                 )
 
                 // Top Header Bar with Back Button & App Logo Badge
