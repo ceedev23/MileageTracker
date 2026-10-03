@@ -53,7 +53,7 @@ class HomeScreenMovingModeTest {
 
         // Standard idle elements exist
         composeTestRule.onNodeWithTag("home_screen").assertExists()
-        composeTestRule.onNodeWithTag("home_start_drive_button").assertExists()
+        composeTestRule.onNodeWithTag("home_start_drive_button").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_profile_avatar").assertExists()
         // Driving mode layout is not active
         composeTestRule.onNodeWithTag("home_screen_driving_mode").assertDoesNotExist()

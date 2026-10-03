@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -324,7 +323,7 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 8.dp else 12.dp)
                 ) {
-                    // 1. TOP HEADER: "Good evening" / "Your driving" + Start Live Drive Button + Profile Avatar
+                    // 1. TOP HEADER: "Good evening" / "Your driving" + Profile Avatar
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -347,54 +346,21 @@ fun HomeScreen(
                                 )
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(avatarSize)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEFF6FF))
+                                    .clickable { viewModel.selectTab(AppTab.SETTINGS) }
+                                    .testTag("home_profile_avatar"),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Button(
-                                    onClick = { viewModel.startManualTracking(context) },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MileageBlue,
-                                        contentColor = Color.White
-                                    ),
-                                    elevation = null,
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier
-                                        .height(if (isCompactHeight) 34.dp else 38.dp)
-                                        .testTag("home_start_drive_button")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Start Live Drive",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Start Drive",
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                }
-
-                                // Profile Avatar Button
-                                Box(
-                                    modifier = Modifier
-                                        .size(avatarSize)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFFEFF6FF))
-                                        .clickable { viewModel.selectTab(AppTab.SETTINGS) }
-                                        .testTag("home_profile_avatar"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = "Profile",
-                                        tint = Color(0xFF3B82F6),
-                                        modifier = Modifier.size(if (isCompactHeight) 22.dp else 24.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile",
+                                    tint = Color(0xFF3B82F6),
+                                    modifier = Modifier.size(if (isCompactHeight) 22.dp else 24.dp)
+                                )
                             }
                         }
                     }
@@ -792,7 +758,7 @@ fun HomeScreen(
 
 /**
  * Driving Mode layout displayed on the Home Screen when the user starts driving.
- * ONLY the trips are shown (active trip in progress, plus unclassified trips waiting to be classified).
+ * ONLY the trips are shown, using the reference trip card layout for each unclassified trip.
  * Once classified, each trip is removed from the home screen.
  */
 @Composable
@@ -902,26 +868,22 @@ fun DrivingModeHomeScreen(
             }
         }
 
-        // 2. Active live drive card if currently tracking
-        if (trackingState.isTracking) {
-            LiveDriveHomeCard(
-                trackingState = trackingState,
-                isMiles = isMiles,
-                pulseAlpha = pulseAlpha,
-                isCompact = isCompactHeight,
-                onStopAndSave = onStopAndSave,
-                onStopAndNext = onStopAndNext
-            )
-        }
-
-        // 3. Unclassified Trips Section: ONLY shown until classified!
+        // 2. Unclassified Trips Section in the reference card format: ONLY shown until classified!
         // Once classified, each trip is immediately removed from the home screen.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("home_driving_trips_section"),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            Text(
+                text = "Recent trips",
+                fontSize = if (isCompactHeight) 16.sp else 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A),
+                modifier = Modifier.padding(horizontal = 2.dp)
+            )
+
             if (unclassifiedTrips.isNotEmpty()) {
                 Row(
                     modifier = Modifier
@@ -935,31 +897,32 @@ fun DrivingModeHomeScreen(
                         color = Color(0xFFEFF6FF)
                     ) {
                         Text(
-                            text = "${unclassifiedTrips.size} ${if (unclassifiedTrips.size == 1) "trip" else "trips"} to classify",
-                            fontSize = 12.sp,
+                            text = "${unclassifiedTrips.size} ${if (unclassifiedTrips.size == 1) "trip" else "trips"} to review",
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF2563EB),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
                     }
 
                     Text(
-                        text = "Classify to remove",
-                        fontSize = 11.5.sp,
+                        text = "Review and classify below",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B)
                     )
                 }
 
-                // Render each unclassified trip
                 unclassifiedTrips.forEach { trip ->
                     key(trip.id) {
-                        CompactSwipeableHomeTripCard(
+                        ReferenceTripCard(
                             trip = trip,
                             isMiles = isMiles,
-                            isCompact = isCompactHeight,
-                            onOpenDetail = { onOpenDetail(trip) },
-                            onClassify = onClassify
+                            mileageRate = settings.reimbursementRate,
+                            onClassify = onClassify,
+                            onDelete = onDelete,
+                            onUpdateTrip = onUpdateTrip,
+                            onOpenDetail = { onOpenDetail(trip) }
                         )
                     }
                 }
