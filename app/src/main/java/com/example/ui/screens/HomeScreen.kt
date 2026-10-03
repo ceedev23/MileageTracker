@@ -45,6 +45,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BusinessCenter
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
@@ -95,6 +96,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.R
 import com.example.data.TripEntity
+import com.example.service.DetectorState
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.components.EndTripBottomSheet
@@ -243,6 +245,12 @@ fun HomeScreen(
         trips.filter { it.type == null || it.type.isEmpty() || it.type == "Unclassified" }
     }
 
+    // Movement detection state: true when tracking is active or movement is detected
+    val isDriverMoving = trackingState.isTracking ||
+            trackingState.detectorState == DetectorState.MOVING ||
+            trackingState.detectorState == DetectorState.RECORDING ||
+            trackingState.speedKmh > 3.0f
+
     // Pulse animation for driving indicator
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -269,137 +277,127 @@ fun HomeScreen(
         val avatarSize = if (isCompactHeight) 38.dp else 42.dp
 
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFFAFAFC))
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = if (isCompactHeight) 8.dp else 12.dp)
-                    .testTag("home_screen"),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 8.dp else 12.dp)
-            ) {
-                // 1. TOP HEADER: "Good evening" / "Your driving" + Profile Avatar
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = greetingText,
-                                fontSize = if (isCompactHeight) 13.sp else 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF64748B)
+            if (isDriverMoving) {
+                // When moving / driving: ONLY the trips should be on the home screen!
+                // Shows the driving banner, active live drive card (if tracking), and unclassified trips waiting for classification.
+                // Once classified, each trip is removed from the home screen.
+                DrivingModeHomeScreen(
+                    trackingState = trackingState,
+                    unclassifiedTrips = unclassifiedTrips,
+                    isMiles = isMiles,
+                    unitLabel = unitLabel,
+                    settings = settings,
+                    pulseAlpha = pulseAlpha,
+                    isCompactHeight = isCompactHeight,
+                    hasLocationPermission = hasLocationPermission,
+                    onRequestPermission = {
+                        permissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
                             )
-                            Text(
-                                text = "Your driving",
-                                fontSize = titleFontSize,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color(0xFF0F172A),
-                                letterSpacing = (-0.5).sp
-                            )
-                        }
-
-                        // Profile Avatar Button
-                        Box(
-                            modifier = Modifier
-                                .size(avatarSize)
-                                .clip(CircleShape)
-                                .background(Color(0xFFEFF6FF))
-                                .clickable { viewModel.selectTab(AppTab.SETTINGS) }
-                                .testTag("home_profile_avatar"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = "Profile",
-                                tint = Color(0xFF3B82F6),
-                                modifier = Modifier.size(if (isCompactHeight) 22.dp else 24.dp)
-                            )
-                        }
-                    }
-
-                    // Live Drive Pill / Compact Banner (if currently tracking)
-                    if (trackingState.isTracking) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Surface(
+                        )
+                    },
+                    onClassify = { targetTrip, classification ->
+                        viewModel.classifyTrip(targetTrip, classification)
+                    },
+                    onDelete = { targetTrip ->
+                        viewModel.deleteTrip(targetTrip)
+                    },
+                    onUpdateTrip = { updatedTrip ->
+                        viewModel.updateTrip(updatedTrip)
+                    },
+                    onOpenDetail = { trip ->
+                        viewModel.showCompletedTrip(trip)
+                    },
+                    onStopAndSave = { viewModel.stopManualTracking(context) },
+                    onStopAndNext = { viewModel.recordDestinationStopAndStartNewTrip(context) }
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFFFAFAFC))
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = if (isCompactHeight) 8.dp else 12.dp)
+                        .testTag("home_screen"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 8.dp else 12.dp)
+                ) {
+                    // 1. TOP HEADER: "Good evening" / "Your driving" + Start Live Drive Button + Profile Avatar
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFEFF6FF),
-                            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            Column {
+                                Text(
+                                    text = greetingText,
+                                    fontSize = if (isCompactHeight) 13.sp else 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color(0xFF64748B)
+                                )
+                                Text(
+                                    text = "Your driving",
+                                    fontSize = titleFontSize,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF0F172A),
+                                    letterSpacing = (-0.5).sp
+                                )
+                            }
+
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .alpha(pulseAlpha)
-                                            .background(MileageBlue)
+                                Button(
+                                    onClick = { viewModel.startManualTracking(context) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MileageBlue,
+                                        contentColor = Color.White
+                                    ),
+                                    elevation = null,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier
+                                        .height(if (isCompactHeight) 34.dp else 38.dp)
+                                        .testTag("home_start_drive_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Start Live Drive",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Text(
-                                        text = "Driving: ${String.format(Locale.US, "%.1f", if (isMiles) trackingState.distanceKm * 0.621371 else trackingState.distanceKm)} $unitLabel",
-                                        fontWeight = FontWeight.Bold,
+                                        text = "Start Drive",
                                         fontSize = 12.5.sp,
-                                        color = Color(0xFF1E3A8A)
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
                                     )
                                 }
 
-                                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Button(
-                                        onClick = { viewModel.recordDestinationStopAndStartNewTrip(context) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MileageBlue,
-                                            contentColor = Color.White
-                                        ),
-                                        elevation = null,
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier
-                                            .height(28.dp)
-                                            .testTag("home_stop_destination_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Flag,
-                                            contentDescription = "Stop",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(3.dp))
-                                        Text("Stop & Next", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                    }
-
-                                    OutlinedButton(
-                                        onClick = { viewModel.stopManualTracking(context) },
-                                        shape = RoundedCornerShape(8.dp),
-                                        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
-                                        modifier = Modifier
-                                            .height(28.dp)
-                                            .testTag("home_finish_drive_button")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Stop,
-                                            contentDescription = "Finish",
-                                            tint = Color(0xFFDC2626),
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text("End", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
-                                    }
+                                // Profile Avatar Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(avatarSize)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFEFF6FF))
+                                        .clickable { viewModel.selectTab(AppTab.SETTINGS) }
+                                        .testTag("home_profile_avatar"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Profile",
+                                        tint = Color(0xFF3B82F6),
+                                        modifier = Modifier.size(if (isCompactHeight) 22.dp else 24.dp)
+                                    )
                                 }
                             }
                         }
                     }
-                }
 
                 // 2. MAIN "YOUR DRIVING" CARD WITH CENTRAL DIAL & ANNUAL GOAL
                 // Hidden when there are trips to be classified, returns once user has classified them.
@@ -719,16 +717,15 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = if (trips.isEmpty()) "Your trips will appear here" else "All trips classified! ✓",
+                                text = "Your trips will appear here",
                                 fontSize = if (isCompactHeight) 14.5.sp else 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (trips.isEmpty()) Color(0xFF0F172A) else Color(0xFF2563EB),
+                                color = Color(0xFF0F172A),
                                 textAlign = TextAlign.Center
                             )
 
                             Text(
-                                text = if (trips.isEmpty()) "Drive as usual. Trips are recorded automatically."
-                                else "All your recorded trips have been classified.",
+                                text = "Drive as usual. Trips are recorded automatically.",
                                 fontSize = if (isCompactHeight) 11.5.sp else 12.5.sp,
                                 color = Color(0xFF64748B),
                                 textAlign = TextAlign.Center
@@ -774,6 +771,7 @@ fun HomeScreen(
                     }
                 }
             }
+        }
 
             // Undo Classification Toast at bottom
             if (undoAction != null) {
@@ -785,6 +783,250 @@ fun HomeScreen(
                     UndoToast(
                         action = undoAction,
                         onUndo = { viewModel.undoClassification() }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Driving Mode layout displayed on the Home Screen when the user starts driving.
+ * ONLY the trips are shown (active trip in progress, plus unclassified trips waiting to be classified).
+ * Once classified, each trip is removed from the home screen.
+ */
+@Composable
+fun DrivingModeHomeScreen(
+    trackingState: com.example.service.LiveTrackingState,
+    unclassifiedTrips: List<TripEntity>,
+    isMiles: Boolean,
+    unitLabel: String,
+    settings: com.example.data.MileageSettings,
+    pulseAlpha: Float,
+    isCompactHeight: Boolean,
+    hasLocationPermission: Boolean,
+    onRequestPermission: () -> Unit,
+    onClassify: (TripEntity, String) -> Unit,
+    onDelete: (TripEntity) -> Unit,
+    onUpdateTrip: (TripEntity) -> Unit,
+    onOpenDetail: (TripEntity) -> Unit,
+    onStopAndSave: () -> Unit,
+    onStopAndNext: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFFFAFAFC))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = if (isCompactHeight) 10.dp else 14.dp)
+            .testTag("home_screen_driving_mode"),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 1. Sleek, minimal Driving Status Header (unobtrusive so trips remain the only focus)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("home_driving_mode_banner"),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .alpha(pulseAlpha)
+                            .background(Color(0xFF2563EB))
+                    )
+                    Column {
+                        Text(
+                            text = "DRIVING IN PROGRESS",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF1E3A8A),
+                            letterSpacing = 0.5.sp
+                        )
+                        val displaySpeed = if (isMiles) trackingState.speedKmh * 0.621371f else trackingState.speedKmh
+                        val speedText = if (trackingState.speedKmh > 1f) "${displaySpeed.toInt()} $unitLabel/h" else "Active GPS"
+                        Text(
+                            text = "$speedText • Trips waiting for review",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(
+                        onClick = onStopAndSave,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFFDC2626)
+                        ),
+                        modifier = Modifier
+                            .height(32.dp)
+                            .testTag("home_finish_drive_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Finish Drive",
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Finish",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFDC2626)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Active live drive card if currently tracking
+        if (trackingState.isTracking) {
+            LiveDriveHomeCard(
+                trackingState = trackingState,
+                isMiles = isMiles,
+                pulseAlpha = pulseAlpha,
+                isCompact = isCompactHeight,
+                onStopAndSave = onStopAndSave,
+                onStopAndNext = onStopAndNext
+            )
+        }
+
+        // 3. Unclassified Trips Section: ONLY shown until classified!
+        // Once classified, each trip is immediately removed from the home screen.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("home_driving_trips_section"),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (unclassifiedTrips.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFEFF6FF)
+                    ) {
+                        Text(
+                            text = "${unclassifiedTrips.size} ${if (unclassifiedTrips.size == 1) "trip" else "trips"} to classify",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2563EB),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Classify to remove",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF64748B)
+                    )
+                }
+
+                // Render each unclassified trip
+                unclassifiedTrips.forEach { trip ->
+                    key(trip.id) {
+                        CompactSwipeableHomeTripCard(
+                            trip = trip,
+                            isMiles = isMiles,
+                            isCompact = isCompactHeight,
+                            onOpenDetail = { onOpenDetail(trip) },
+                            onClassify = onClassify
+                        )
+                    }
+                }
+            } else {
+                // When all trips are classified while moving
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFF0FDF4),
+                    border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("home_all_trips_classified_banner")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF16A34A),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "All trips classified ✓",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF15803D)
+                            )
+                            Text(
+                                text = "Focus on the road. Trips will appear here until classified.",
+                                fontSize = 12.sp,
+                                color = Color(0xFF4B5563)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Location permission request banner if not granted
+        if (!hasLocationPermission) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onRequestPermission() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Location required",
+                        tint = Color(0xFFD97706),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tap to grant location permission for tracking",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF92400E)
                     )
                 }
             }

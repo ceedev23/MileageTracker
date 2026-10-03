@@ -101,6 +101,7 @@ object TrackingManager {
                 stopTimer()
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = false,
+                    detectorState = DetectorState.IDLE,
                     distanceKm = 0.0,
                     speedKmh = 0f,
                     elapsedSeconds = 0L,
@@ -112,6 +113,7 @@ object TrackingManager {
                 stopTimer()
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = false,
+                    detectorState = DetectorState.IDLE,
                     distanceKm = 0.0,
                     speedKmh = 0f,
                     elapsedSeconds = 0L,
@@ -203,6 +205,7 @@ object TrackingManager {
             detector?.reset()
             _trackingState.value = _trackingState.value.copy(
                 isTracking = false,
+                detectorState = DetectorState.IDLE,
                 distanceKm = 0.0,
                 speedKmh = 0f,
                 elapsedSeconds = 0L,
@@ -226,6 +229,12 @@ object TrackingManager {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun resetForTesting() {
+        stopTimer()
+        tripDetector?.reset()
+        _trackingState.value = LiveTrackingState()
     }
 
     fun recordDestinationStopAndStartNewTrip(context: Context) {
@@ -256,9 +265,11 @@ object TrackingManager {
         tripDetector?.processPoint(point)
         val isTracking = _trackingState.value.isTracking
         val trip = tripDetector?.currentTrip
+        val currentDetectorState = tripDetector?.state ?: DetectorState.IDLE
 
         if (isTracking || trip != null) {
             _trackingState.value = _trackingState.value.copy(
+                detectorState = currentDetectorState,
                 distanceKm = trip?.distanceKm ?: _trackingState.value.distanceKm,
                 speedKmh = point.speedKmh,
                 path = trip?.points?.toList() ?: (_trackingState.value.path + point)
@@ -266,6 +277,7 @@ object TrackingManager {
         } else {
             // Idle movement monitoring telemetry update
             _trackingState.value = _trackingState.value.copy(
+                detectorState = currentDetectorState,
                 speedKmh = point.speedKmh,
                 path = listOf(point)
             )

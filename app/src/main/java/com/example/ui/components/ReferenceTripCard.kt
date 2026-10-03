@@ -583,6 +583,7 @@ fun ReferenceTripCard(
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent)
+                                .testTag("classify_personal_${trip.id}")
                                 .clickable {
                                     val updated = trip.copy(
                                         vehicle = currentVehicle,
@@ -623,6 +624,7 @@ fun ReferenceTripCard(
                                         Color.Transparent
                                     }
                                 )
+                                .testTag("classify_business_${trip.id}")
                                 .clickable {
                                     val updated = trip.copy(
                                         vehicle = currentVehicle,
