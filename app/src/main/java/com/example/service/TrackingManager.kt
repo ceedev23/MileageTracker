@@ -30,7 +30,23 @@ data class LiveTrackingState(
     val speedKmh: Float = 0f,
     val elapsedSeconds: Long = 0L,
     val path: List<LatLngPoint> = emptyList(),
-    val statusMessage: String = "Ready to track"
+    val statusMessage: String = "Ready to track",
+    val startAddress: String? = null,
+    val tripStartedAtMs: Long = 0L
+) {
+    fun showsLiveDrive(): Boolean =
+        isTracking ||
+            detectorState == DetectorState.MOVING ||
+            detectorState == DetectorState.RECORDING ||
+            speedKmh > 3f
+}
+
+/** Choices made on the live tracking screen, applied when the trip is saved. */
+data class ActiveTripDraft(
+    val category: String? = null,
+    val vehicle: String = "",
+    val note: String = "",
+    val startPlaceName: String? = null
 )
 
 object TrackingManager {
@@ -43,6 +59,8 @@ object TrackingManager {
     private var tripDetector: TripDetector? = null
     private var appContext: Context? = null
     private var startTimeMs: Long = 0L
+    private var activeDraft = ActiveTripDraft()
+    private var startGeocodeStarted = false
 
     var onTripSavedCallback: ((TripEntity) -> Unit)? = null
 
@@ -55,13 +73,18 @@ object TrackingManager {
             dwellMinutes = 5,
             onTripStarted = { trip ->
                 startTimeMs = trip.startTime
+                val existingStart = _trackingState.value.startAddress
+                if (existingStart == null) startGeocodeStarted = false
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = true,
                     detectorState = DetectorState.RECORDING,
                     distanceKm = trip.distanceKm,
                     path = trip.points.toList(),
-                    statusMessage = "Driving detected - Recording Trip"
+                    statusMessage = "Driving detected - Recording Trip",
+                    startAddress = existingStart,
+                    tripStartedAtMs = trip.startTime
                 )
+                if (existingStart == null) maybeGeocodeStart(trip.points.firstOrNull())
                 startTimer()
             },
             onTripUpdated = { trip ->
@@ -73,23 +96,28 @@ object TrackingManager {
             },
             onTripEnded = { trip ->
                 val ctx = appContext
+                val draft = activeDraft
+                val liveStart = _trackingState.value.startAddress
                 scope.launch {
                     val pathJson = serializePoints(trip.points)
                     val (startAddr, endAddr) = if (ctx != null && trip.points.isNotEmpty()) {
                         reverseGeocodeTrip(ctx, trip.points.first(), trip.points.last())
                     } else {
-                        Pair("Trip Origin", "Trip Destination")
+                        Pair(liveStart ?: "Trip Origin", "Trip Destination")
                     }
 
+                    val namedStart = draft.startPlaceName?.takeIf { it.isNotBlank() }
                     val entity = TripEntity(
                         startDate = trip.startTime,
                         endDate = trip.endTime,
                         distanceKm = trip.distanceKm,
-                        type = null, // unclassified by default
-                        startAddress = startAddr,
+                        type = draft.category,
+                        startAddress = namedStart ?: startAddr,
                         endAddress = endAddr,
-                        purpose = "Drive (${String.format("%.1f", trip.distanceKm)} km)",
-                        vehicle = "Primary Vehicle",
+                        purpose = draft.note.ifBlank {
+                            "Drive (${String.format("%.1f", trip.distanceKm)} km)"
+                        },
+                        vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
                         pathJson = pathJson
                     )
                     val insertedId = db.tripDao().insertTrip(entity)
@@ -99,6 +127,7 @@ object TrackingManager {
                     }
                 }
                 stopTimer()
+                clearLiveTripExtras()
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = false,
                     detectorState = DetectorState.IDLE,
@@ -106,11 +135,14 @@ object TrackingManager {
                     speedKmh = 0f,
                     elapsedSeconds = 0L,
                     path = emptyList(),
+                    startAddress = null,
+                    tripStartedAtMs = 0L,
                     statusMessage = "Trip saved (${String.format("%.1f", trip.distanceKm)} km)"
                 )
             },
             onTripDiscarded = { trip ->
                 stopTimer()
+                clearLiveTripExtras()
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = false,
                     detectorState = DetectorState.IDLE,
@@ -118,6 +150,8 @@ object TrackingManager {
                     speedKmh = 0f,
                     elapsedSeconds = 0L,
                     path = emptyList(),
+                    startAddress = null,
+                    tripStartedAtMs = 0L,
                     statusMessage = "Short movement discarded (< 0.25 km)"
                 )
             }
@@ -168,6 +202,7 @@ object TrackingManager {
         startTimeMs = System.currentTimeMillis()
         val detector = tripDetector ?: return
         detector.startManualRecording()
+        startGeocodeStarted = false
         _trackingState.value = _trackingState.value.copy(
             isTracking = true,
             detectorState = DetectorState.RECORDING,
@@ -175,6 +210,8 @@ object TrackingManager {
             speedKmh = 0f,
             elapsedSeconds = 0L,
             path = emptyList(),
+            startAddress = null,
+            tripStartedAtMs = startTimeMs,
             statusMessage = "Manual trip recording active"
         )
         startTimer()
@@ -203,6 +240,7 @@ object TrackingManager {
             detector.endTrip()
         } else {
             detector?.reset()
+            clearLiveTripExtras()
             _trackingState.value = _trackingState.value.copy(
                 isTracking = false,
                 detectorState = DetectorState.IDLE,
@@ -210,6 +248,8 @@ object TrackingManager {
                 speedKmh = 0f,
                 elapsedSeconds = 0L,
                 path = emptyList(),
+                startAddress = null,
+                tripStartedAtMs = 0L,
                 statusMessage = if (_trackingState.value.isMonitoringMovement) {
                     "Auto-detection active: Monitoring movement"
                 } else {
@@ -231,9 +271,14 @@ object TrackingManager {
         }
     }
 
+    fun updateActiveDraft(draft: ActiveTripDraft) {
+        activeDraft = draft
+    }
+
     fun resetForTesting() {
         stopTimer()
         tripDetector?.reset()
+        clearLiveTripExtras()
         _trackingState.value = LiveTrackingState()
     }
 
@@ -244,12 +289,17 @@ object TrackingManager {
         val currentDetectorState = tripDetector?.state ?: DetectorState.IDLE
 
         if (isTracking || trip != null) {
+            val startedAt = _trackingState.value.tripStartedAtMs.takeIf { it > 0L }
+                ?: trip?.startTime
+                ?: point.timestamp
             _trackingState.value = _trackingState.value.copy(
                 detectorState = currentDetectorState,
                 distanceKm = trip?.distanceKm ?: _trackingState.value.distanceKm,
                 speedKmh = point.speedKmh,
-                path = trip?.points?.toList() ?: (_trackingState.value.path + point)
+                path = trip?.points?.toList() ?: (_trackingState.value.path + point),
+                tripStartedAtMs = startedAt
             )
+            maybeGeocodeStart(trip?.points?.firstOrNull() ?: point)
         } else {
             // Idle movement monitoring telemetry update
             _trackingState.value = _trackingState.value.copy(
@@ -280,6 +330,23 @@ object TrackingManager {
     private fun stopTimer() {
         timerJob?.cancel()
         timerJob = null
+    }
+
+    private fun clearLiveTripExtras() {
+        activeDraft = ActiveTripDraft()
+        startGeocodeStarted = false
+    }
+
+    private fun maybeGeocodeStart(point: LatLngPoint?) {
+        if (point == null || startGeocodeStarted || _trackingState.value.startAddress != null) return
+        val ctx = appContext ?: return
+        startGeocodeStarted = true
+        scope.launch {
+            val addr = withContext(Dispatchers.IO) { geocodePoint(ctx, point) }
+            if (!addr.isNullOrBlank() && (_trackingState.value.isTracking || _trackingState.value.showsLiveDrive())) {
+                _trackingState.value = _trackingState.value.copy(startAddress = addr)
+            }
+        }
     }
 
     private fun serializePoints(points: List<LatLngPoint>): String {

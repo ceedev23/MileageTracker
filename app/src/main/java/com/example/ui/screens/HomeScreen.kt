@@ -1,7 +1,6 @@
 ﻿package com.example.ui.screens
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,7 +37,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
@@ -74,17 +72,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.R
 import com.example.data.TripEntity
-import com.example.service.DetectorState
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.components.EndTripBottomSheet
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.components.ReferenceTripCard
 import com.example.ui.components.UndoToast
-import com.example.ui.theme.MileageBlue
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 @Composable
@@ -218,11 +212,7 @@ fun HomeScreen(
         trips.filter { it.type == null || it.type.isEmpty() || it.type == "Unclassified" }
     }
 
-    // Movement detection state: true when tracking is active or movement is detected
-    val isDriverMoving = trackingState.isTracking ||
-            trackingState.detectorState == DetectorState.MOVING ||
-            trackingState.detectorState == DetectorState.RECORDING ||
-            trackingState.speedKmh > 3.0f
+    val isDriverMoving = trackingState.showsLiveDrive()
 
     // Pulse animation for driving indicator
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
@@ -251,35 +241,15 @@ fun HomeScreen(
 
         Box(modifier = Modifier.fillMaxSize()) {
             if (isDriverMoving) {
-                // When moving / driving: ONLY the trips should be on the home screen.
-                // Once classified, each trip is removed from the home screen.
-                DrivingModeHomeScreen(
-                    unclassifiedTrips = unclassifiedTrips,
+                LiveDriveScreen(
                     trackingState = trackingState,
                     isMiles = isMiles,
-                    pulseAlpha = pulseAlpha,
-                    settings = settings,
-                    isCompactHeight = isCompactHeight,
-                    hasLocationPermission = hasLocationPermission,
-                    onRequestPermission = {
-                        permissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            )
-                        )
-                    },
-                    onClassify = { targetTrip, classification ->
-                        viewModel.classifyTrip(targetTrip, classification)
-                    },
-                    onDelete = { targetTrip ->
-                        viewModel.deleteTrip(targetTrip)
-                    },
-                    onUpdateTrip = { updatedTrip ->
-                        viewModel.updateTrip(updatedTrip)
-                    },
-                    onOpenDetail = { trip ->
-                        viewModel.showCompletedTrip(trip)
+                    reimbursementRate = settings.reimbursementRate,
+                    vehicleName = settings.vehicleName,
+                    onVehicleChange = { viewModel.setVehicleName(it) },
+                    onStop = { viewModel.stopManualTracking(context) },
+                    onDraftChange = { category, vehicle, note, startPlaceName ->
+                        viewModel.updateActiveTripDraft(category, vehicle, note, startPlaceName)
                     }
                 )
             } else {
@@ -713,285 +683,3 @@ fun HomeScreen(
     }
 }
 
-/**
- * Driving Mode layout displayed on the Home Screen when the user starts driving.
- * ONLY the trips are shown, using the reference trip card layout for each unclassified trip.
- * Once classified, each trip is removed from the home screen.
- */
-@Composable
-fun DrivingModeHomeScreen(
-    unclassifiedTrips: List<TripEntity>,
-    trackingState: com.example.service.LiveTrackingState,
-    isMiles: Boolean,
-    pulseAlpha: Float,
-    settings: com.example.data.MileageSettings,
-    isCompactHeight: Boolean,
-    hasLocationPermission: Boolean,
-    onRequestPermission: () -> Unit,
-    onClassify: (TripEntity, String) -> Unit,
-    onDelete: (TripEntity) -> Unit,
-    onUpdateTrip: (TripEntity) -> Unit,
-    onOpenDetail: (TripEntity) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFFFAFAFC))
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = if (isCompactHeight) 10.dp else 14.dp)
-            .testTag("home_screen_driving_mode"),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Unclassified trips in the reference card format: ONLY shown until classified.
-        // Once classified, each trip is immediately removed from the home screen.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("home_driving_trips_section"),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (trackingState.isTracking) {
-                LiveDriveHomeCard(
-                    trackingState = trackingState,
-                    isMiles = isMiles,
-                    pulseAlpha = pulseAlpha,
-                    isCompact = isCompactHeight
-                )
-            }
-
-            Text(
-                text = "Recent trips",
-                fontSize = if (isCompactHeight) 16.sp else 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF0F172A),
-                modifier = Modifier.padding(horizontal = 2.dp)
-            )
-
-            if (unclassifiedTrips.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color(0xFFEFF6FF)
-                    ) {
-                        Text(
-                            text = "${unclassifiedTrips.size} ${if (unclassifiedTrips.size == 1) "trip" else "trips"} to review",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2563EB),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
-
-                    Text(
-                        text = "Review and classify below",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF64748B)
-                    )
-                }
-
-                unclassifiedTrips.forEach { trip ->
-                    key(trip.id) {
-                        ReferenceTripCard(
-                            trip = trip,
-                            isMiles = isMiles,
-                            mileageRate = settings.reimbursementRate,
-                            onClassify = onClassify,
-                            onDelete = onDelete,
-                            onUpdateTrip = onUpdateTrip,
-                            onOpenDetail = { onOpenDetail(trip) }
-                        )
-                    }
-                }
-            } else {
-                // When all trips are classified while moving
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF0FDF4),
-                    border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("home_all_trips_classified_banner")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF16A34A),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Column {
-                            Text(
-                                text = "All trips classified ✓",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF15803D)
-                            )
-                            Text(
-                                text = "Focus on the road. Trips will appear here until classified.",
-                                fontSize = 12.sp,
-                                color = Color(0xFF4B5563)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Location permission request banner if not granted
-        if (!hasLocationPermission) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onRequestPermission() }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocationOn,
-                        contentDescription = "Location required",
-                        tint = Color(0xFFD97706),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Tap to grant location permission for tracking",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color(0xFF92400E)
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Live Drive card displayed under Recent trips on the Home Screen while tracking is active.
- */
-@Composable
-fun LiveDriveHomeCard(
-    trackingState: com.example.service.LiveTrackingState,
-    isMiles: Boolean,
-    pulseAlpha: Float,
-    isCompact: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val unitLabel = if (isMiles) "mi" else "km"
-    val displayDistance = if (isMiles) trackingState.distanceKm * 0.621371 else trackingState.distanceKm
-    val hours = trackingState.elapsedSeconds / 3600
-    val minutes = (trackingState.elapsedSeconds % 3600) / 60
-    val seconds = trackingState.elapsedSeconds % 60
-    val elapsedStr = if (hours > 0) {
-        String.format(java.util.Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
-    } else {
-        String.format(java.util.Locale.US, "%02d:%02d", minutes, seconds)
-    }
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .testTag("home_active_live_trip_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-        border = BorderStroke(1.5.dp, Color(0xFF93C5FD)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = if (isCompact) 10.dp else 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Live status header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .alpha(pulseAlpha)
-                            .background(Color(0xFF2563EB))
-                    )
-                    Text(
-                        text = "Trip in progress",
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1E40AF)
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White
-                ) {
-                    Text(
-                        text = "⏱ $elapsedStr",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF1E40AF),
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
-                    )
-                }
-            }
-
-            // Distance & Speed
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = String.format(java.util.Locale.US, "%.2f", displayDistance),
-                        fontSize = if (isCompact) 26.sp else 30.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color(0xFF0F172A),
-                        lineHeight = if (isCompact) 26.sp else 30.sp
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = unitLabel,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF64748B),
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
-                }
-
-                if (trackingState.speedKmh > 0f) {
-                    val displaySpeed = if (isMiles) trackingState.speedKmh * 0.621371f else trackingState.speedKmh
-                    Text(
-                        text = "${String.format(java.util.Locale.US, "%.0f", displaySpeed)} ${if (isMiles) "mph" else "km/h"}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2563EB)
-                    )
-                }
-            }
-        }
-    }
-}

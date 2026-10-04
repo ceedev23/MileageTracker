@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -42,6 +43,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -122,9 +124,17 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
     viewModel.selectTab(AppTab.HOME)
   }
 
+  val showLiveDrive = currentTab == AppTab.HOME && trackingState.showsLiveDrive()
+
   Scaffold(
     modifier = Modifier.fillMaxSize(),
+    contentWindowInsets = if (showLiveDrive) {
+      WindowInsets(0, 0, 0, 0)
+    } else {
+      ScaffoldDefaults.contentWindowInsets
+    },
     bottomBar = {
+      if (!showLiveDrive) {
       val navItemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MileageBlue,
         selectedTextColor = MileageBlue,
@@ -263,6 +273,7 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
           colors = navItemColors,
           modifier = Modifier.testTag("nav_tab_settings")
         )
+      }
       }
     }
   ) { innerPadding ->

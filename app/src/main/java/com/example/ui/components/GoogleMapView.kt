@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -82,6 +83,8 @@ fun GoogleMapView(
     distanceKm: Double = 0.0,
     isMiles: Boolean = false,
     hasLocationPermission: Boolean = true,
+    showChrome: Boolean = true,
+    routeColor: Color = MileageBlue,
     modifier: Modifier = Modifier
 ) {
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
@@ -105,10 +108,12 @@ fun GoogleMapView(
         zoomScale = 1.0f
     }
 
+    val mapShape = if (showChrome) RoundedCornerShape(24.dp) else RoundedCornerShape(0.dp)
+
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(24.dp))
-            .border(1.dp, LightBorder, RoundedCornerShape(24.dp))
+            .clip(mapShape)
+            .then(if (showChrome) Modifier.border(1.dp, LightBorder, mapShape) else Modifier)
             .background(Color(0xFFF1F5F9))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
@@ -150,46 +155,61 @@ fun GoogleMapView(
                         }
                     }
 
-                    // Soft Cyan/Blue glow
+                    val routeWidth = if (showChrome) 8f else 14f
+                    // Soft glow under the route
                     drawPath(
                         path = path,
-                        color = MileageBlue.copy(alpha = 0.28f),
+                        color = routeColor.copy(alpha = 0.28f),
                         style = Stroke(
-                            width = 18f * zoomScale.coerceIn(0.8f, 1.6f),
+                            width = (routeWidth + 10f) * zoomScale.coerceIn(0.8f, 1.6f),
                             cap = StrokeCap.Round,
                             join = StrokeJoin.Round
                         )
                     )
 
-                    // Sharp vibrant route
+                    // Sharp route
                     drawPath(
                         path = path,
-                        color = MileageBlue,
+                        color = routeColor,
                         style = Stroke(
-                            width = 8f * zoomScale.coerceIn(0.8f, 1.6f),
+                            width = routeWidth * zoomScale.coerceIn(0.8f, 1.6f),
                             cap = StrokeCap.Round,
                             join = StrokeJoin.Round
                         )
                     )
                 }
 
-                // 4. Start Point Pin (Purple/Violet)
+                // 4. Start Point Pin
                 val startPos = projectedPoints.first()
-                drawCircle(
-                    color = Color.Black.copy(alpha = 0.2f),
-                    radius = 14f,
-                    center = startPos + Offset(0f, 4f)
-                )
-                drawCircle(
-                    color = PurpleAccent,
-                    radius = 12f,
-                    center = startPos
-                )
-                drawCircle(
-                    color = Color.White,
-                    radius = 5f,
-                    center = startPos
-                )
+                if (!showChrome) {
+                    drawCircle(color = Color.White, radius = 18f, center = startPos)
+                    drawCircle(color = routeColor, radius = 15f, center = startPos)
+                    val labelPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.WHITE
+                        textAlign = android.graphics.Paint.Align.CENTER
+                        isFakeBoldText = true
+                        isAntiAlias = true
+                        textSize = 13f * density
+                    }
+                    val baseline = startPos.y - (labelPaint.ascent() + labelPaint.descent()) / 2f
+                    drawContext.canvas.nativeCanvas.drawText("A", startPos.x, baseline, labelPaint)
+                } else {
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.2f),
+                        radius = 14f,
+                        center = startPos + Offset(0f, 4f)
+                    )
+                    drawCircle(
+                        color = PurpleAccent,
+                        radius = 12f,
+                        center = startPos
+                    )
+                    drawCircle(
+                        color = Color.White,
+                        radius = 5f,
+                        center = startPos
+                    )
+                }
 
                 // 5. Current Vehicle Marker (Live vs Stationary)
                 val latestPos = projectedPoints.last()
@@ -200,12 +220,12 @@ fun GoogleMapView(
                     val alpha = (1f - pulseProgress).coerceIn(0f, 1f)
 
                     drawCircle(
-                        color = MileageBlue.copy(alpha = alpha * 0.45f),
+                        color = routeColor.copy(alpha = alpha * 0.45f),
                         radius = currentRadius,
                         center = latestPos
                     )
                     drawCircle(
-                        color = MileageBlue.copy(alpha = alpha * 0.8f),
+                        color = routeColor.copy(alpha = alpha * 0.8f),
                         radius = currentRadius,
                         center = latestPos,
                         style = Stroke(width = 2.5f)
@@ -213,7 +233,7 @@ fun GoogleMapView(
 
                     // Outer vehicle glow
                     drawCircle(
-                        color = MileageBlue,
+                        color = routeColor,
                         radius = 16f,
                         center = latestPos
                     )
@@ -225,7 +245,7 @@ fun GoogleMapView(
                     )
                     // Center core
                     drawCircle(
-                        color = MileageBlue,
+                        color = routeColor,
                         radius = 4f,
                         center = latestPos
                     )
@@ -267,6 +287,7 @@ fun GoogleMapView(
             }
         }
 
+        if (showChrome) {
         // Top Left Status Badge (Pristine White Pill with soft shadow)
         Surface(
             modifier = Modifier
@@ -451,6 +472,7 @@ fun GoogleMapView(
                     }
                 }
             }
+        }
         }
     }
 }

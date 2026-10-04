@@ -16,6 +16,7 @@ import com.example.data.MileageSettings
 import com.example.data.SettingsManager
 import com.example.data.TripEntity
 import com.example.data.TripRepository
+import com.example.service.ActiveTripDraft
 import com.example.service.ExtractedReceiptData
 import com.example.service.ExtractionResult
 import com.example.service.LiveTrackingState
@@ -254,6 +255,22 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     fun stopManualTracking(context: Context) {
         TrackingManager.stopManualTracking(context)
+    }
+
+    fun updateActiveTripDraft(
+        category: String?,
+        vehicle: String,
+        note: String,
+        startPlaceName: String?
+    ) {
+        TrackingManager.updateActiveDraft(
+            ActiveTripDraft(
+                category = category,
+                vehicle = vehicle,
+                note = note,
+                startPlaceName = startPlaceName
+            )
+        )
     }
 
     fun startMovementMonitoring(context: Context) {

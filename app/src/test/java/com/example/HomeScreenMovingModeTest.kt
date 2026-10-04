@@ -3,11 +3,10 @@ package com.example
 import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
-import com.example.data.TripEntity
 import com.example.service.TrackingManager
 import com.example.ui.MileageViewModel
 import com.example.ui.screens.HomeScreen
@@ -61,58 +60,26 @@ class HomeScreenMovingModeTest {
     }
 
     @Test
-    fun testMovingModeShowsOnlyTripsAndRemovesWhenClassified() {
-        // Seed one unclassified trip directly into Room
-        val unclassified = TripEntity(
-            startDate = System.currentTimeMillis() - 600000L,
-            endDate = System.currentTimeMillis(),
-            distanceKm = 5.2,
-            type = null,
-            startAddress = "742 Evergreen Terrace",
-            endAddress = "Springfield Plaza"
-        )
-        val insertedId = runBlocking {
-            AppDatabase.getDatabase(app).tripDao().insertTrip(unclassified)
-        }
-
-        // Start manual tracking (driver starts moving)
+    fun testMovingModeShowsLiveTrackingScreen() {
         viewModel.startManualTracking(app)
 
         composeTestRule.setContent {
             HomeScreen(viewModel = viewModel)
         }
-        composeTestRule.waitUntil(timeoutMillis = 5000) {
-            org.robolectric.shadows.ShadowLooper.idleMainLooper()
-            viewModel.trips.value.any { it.id == insertedId }
-        }
         composeTestRule.waitForIdle()
 
-        // Driving mode is now active
         composeTestRule.onNodeWithTag("home_screen_driving_mode").assertExists()
-        composeTestRule.onNodeWithTag("home_driving_mode_banner").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("home_driving_trips_section").assertExists()
-        composeTestRule.onNodeWithTag("home_active_live_trip_card").assertExists()
+        composeTestRule.onNodeWithTag("home_tracking_banner").assertExists()
+        composeTestRule.onNodeWithTag("home_tracking_stats").assertExists()
+        composeTestRule.onNodeWithText("Tracking is starting").assertExists()
+        composeTestRule.onNodeWithText("Personal").assertExists()
+        composeTestRule.onNodeWithText("Business").assertExists()
+        composeTestRule.onNodeWithTag("home_tracking_stop").assertExists()
 
-        // Non-trip overview elements are completely removed
         composeTestRule.onNodeWithTag("home_total_driven_dial").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_profile_avatar").assertDoesNotExist()
-
-        // Unclassified trip is visible with classification options
-        composeTestRule.onNodeWithTag("classify_business_$insertedId").assertExists()
-
-        // Tap Business classification button
-        composeTestRule.onNodeWithTag("classify_business_$insertedId").performScrollTo().performClick()
-        composeTestRule.waitForIdle()
-
-        // Verify the trip is classified in Room and removed from the home screen
-        composeTestRule.waitUntil(timeoutMillis = 5000) {
-            org.robolectric.shadows.ShadowLooper.idleMainLooper()
-            viewModel.trips.value.none { it.id == insertedId && it.type == null }
-        }
-        composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithTag("classify_business_$insertedId").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("home_all_trips_classified_banner").assertExists()
+        composeTestRule.onNodeWithTag("home_active_live_trip_card").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("home_all_trips_classified_banner").assertDoesNotExist()
     }
 
     @Test
@@ -127,8 +94,7 @@ class HomeScreenMovingModeTest {
 
         composeTestRule.onNodeWithTag("home_screen_driving_mode").assertExists()
 
-        // Stop tracking
-        viewModel.stopManualTracking(app)
+        composeTestRule.onNodeWithTag("home_tracking_stop").performClick()
         composeTestRule.waitForIdle()
 
         // Standard dashboard is restored
