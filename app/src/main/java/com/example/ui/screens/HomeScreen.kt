@@ -47,12 +47,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BusinessCenter
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -277,16 +275,12 @@ fun HomeScreen(
 
         Box(modifier = Modifier.fillMaxSize()) {
             if (isDriverMoving) {
-                // When moving / driving: ONLY the trips should be on the home screen!
-                // Shows the driving banner, active live drive card (if tracking), and unclassified trips waiting for classification.
+                // When moving / driving: ONLY the trips should be on the home screen.
                 // Once classified, each trip is removed from the home screen.
                 DrivingModeHomeScreen(
-                    trackingState = trackingState,
                     unclassifiedTrips = unclassifiedTrips,
                     isMiles = isMiles,
-                    unitLabel = unitLabel,
                     settings = settings,
-                    pulseAlpha = pulseAlpha,
                     isCompactHeight = isCompactHeight,
                     hasLocationPermission = hasLocationPermission,
                     onRequestPermission = {
@@ -308,9 +302,7 @@ fun HomeScreen(
                     },
                     onOpenDetail = { trip ->
                         viewModel.showCompletedTrip(trip)
-                    },
-                    onStopAndSave = { viewModel.stopManualTracking(context) },
-                    onStopAndNext = { viewModel.recordDestinationStopAndStartNewTrip(context) }
+                    }
                 )
             } else {
                 Column(
@@ -595,9 +587,7 @@ fun HomeScreen(
                             trackingState = trackingState,
                             isMiles = isMiles,
                             pulseAlpha = pulseAlpha,
-                            isCompact = isCompactHeight,
-                            onStopAndSave = { viewModel.stopManualTracking(context) },
-                            onStopAndNext = { viewModel.recordDestinationStopAndStartNewTrip(context) }
+                            isCompact = isCompactHeight
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
@@ -763,12 +753,9 @@ fun HomeScreen(
  */
 @Composable
 fun DrivingModeHomeScreen(
-    trackingState: com.example.service.LiveTrackingState,
     unclassifiedTrips: List<TripEntity>,
     isMiles: Boolean,
-    unitLabel: String,
     settings: com.example.data.MileageSettings,
-    pulseAlpha: Float,
     isCompactHeight: Boolean,
     hasLocationPermission: Boolean,
     onRequestPermission: () -> Unit,
@@ -776,8 +763,6 @@ fun DrivingModeHomeScreen(
     onDelete: (TripEntity) -> Unit,
     onUpdateTrip: (TripEntity) -> Unit,
     onOpenDetail: (TripEntity) -> Unit,
-    onStopAndSave: () -> Unit,
-    onStopAndNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -790,85 +775,7 @@ fun DrivingModeHomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // 1. Sleek, minimal Driving Status Header (unobtrusive so trips remain the only focus)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("home_driving_mode_banner"),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .alpha(pulseAlpha)
-                            .background(Color(0xFF2563EB))
-                    )
-                    Column {
-                        Text(
-                            text = "DRIVING IN PROGRESS",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1E3A8A),
-                            letterSpacing = 0.5.sp
-                        )
-                        val displaySpeed = if (isMiles) trackingState.speedKmh * 0.621371f else trackingState.speedKmh
-                        val speedText = if (trackingState.speedKmh > 1f) "${displaySpeed.toInt()} $unitLabel/h" else "Active GPS"
-                        Text(
-                            text = "$speedText • Trips waiting for review",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF64748B)
-                        )
-                    }
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(
-                        onClick = onStopAndSave,
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color(0xFFFCA5A5)),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color.White,
-                            contentColor = Color(0xFFDC2626)
-                        ),
-                        modifier = Modifier
-                            .height(32.dp)
-                            .testTag("home_finish_drive_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Finish Drive",
-                            tint = Color(0xFFDC2626),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "Finish",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFDC2626)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 2. Unclassified Trips Section in the reference card format: ONLY shown until classified!
+        // Unclassified trips in the reference card format: ONLY shown until classified.
         // Once classified, each trip is immediately removed from the home screen.
         Column(
             modifier = Modifier
@@ -1006,8 +913,6 @@ fun LiveDriveHomeCard(
     isMiles: Boolean,
     pulseAlpha: Float,
     isCompact: Boolean,
-    onStopAndSave: () -> Unit,
-    onStopAndNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val unitLabel = if (isMiles) "mi" else "km"
@@ -1107,55 +1012,6 @@ fun LiveDriveHomeCard(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2563EB)
                     )
-                }
-            }
-
-            // Stop / Finish buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = onStopAndSave,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFDC2626),
-                        contentColor = Color.White
-                    ),
-                    elevation = null,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(if (isCompact) 34.dp else 38.dp)
-                        .testTag("home_active_trip_finish_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = "Finish and Save",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Finish Drive", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                }
-
-                OutlinedButton(
-                    onClick = onStopAndNext,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, Color(0xFF93C5FD)),
-                    colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White, contentColor = Color(0xFF2563EB)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(if (isCompact) 34.dp else 38.dp)
-                        .testTag("home_active_trip_stop_next_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Flag,
-                        contentDescription = "Stop and Next",
-                        tint = Color(0xFF2563EB),
-                        modifier = Modifier.size(15.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Stop & Next", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
                 }
             }
         }

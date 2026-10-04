@@ -88,7 +88,7 @@ class HomeScreenMovingModeTest {
 
         // Driving mode is now active
         composeTestRule.onNodeWithTag("home_screen_driving_mode").assertExists()
-        composeTestRule.onNodeWithTag("home_driving_mode_banner").assertExists()
+        composeTestRule.onNodeWithTag("home_driving_mode_banner").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_driving_trips_section").assertExists()
         composeTestRule.onNodeWithTag("home_active_live_trip_card").assertExists()
 
