@@ -107,15 +107,15 @@ class TripDetector(
         }
     }
 
-    fun startManualRecording(initialPoint: LatLngPoint? = null): ActiveTrip {
+    fun startManualRecording(): ActiveTrip {
         val now = System.currentTimeMillis()
         val trip = ActiveTrip(
             id = now,
             startTime = now,
             endTime = now,
             distanceKm = 0.0,
-            points = if (initialPoint != null) mutableListOf(initialPoint) else mutableListOf(),
-            lastPoint = initialPoint
+            points = mutableListOf(),
+            lastPoint = null
         )
         currentTrip = trip
         state = DetectorState.RECORDING
@@ -138,12 +138,6 @@ class TripDetector(
         movingSince = null
         stoppedSince = null
         return trip
-    }
-
-    fun recordStopAtDestination(currentLocation: LatLngPoint? = null): ActiveTrip? {
-        val completed = endTrip()
-        startManualRecording(currentLocation)
-        return completed
     }
 
     fun reset() {

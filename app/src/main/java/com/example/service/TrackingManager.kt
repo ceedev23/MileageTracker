@@ -237,30 +237,6 @@ object TrackingManager {
         _trackingState.value = LiveTrackingState()
     }
 
-    fun recordDestinationStopAndStartNewTrip(context: Context) {
-        init(context)
-        val detector = tripDetector ?: return
-        val currentTrip = detector.currentTrip
-        val lastPoint = currentTrip?.lastPoint ?: currentTrip?.points?.lastOrNull()
-
-        // End and save the completed leg
-        detector.endTrip()
-
-        // Immediately start recording the new trip leg from this stop
-        startTimeMs = System.currentTimeMillis()
-        detector.startManualRecording(lastPoint)
-        _trackingState.value = _trackingState.value.copy(
-            isTracking = true,
-            detectorState = DetectorState.RECORDING,
-            distanceKm = 0.0,
-            speedKmh = 0f,
-            elapsedSeconds = 0L,
-            path = if (lastPoint != null) listOf(lastPoint) else emptyList(),
-            statusMessage = "Destination stop recorded. New trip started."
-        )
-        startTimer()
-    }
-
     fun processGpsPoint(point: LatLngPoint) {
         tripDetector?.processPoint(point)
         val isTracking = _trackingState.value.isTracking

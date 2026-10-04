@@ -4,9 +4,6 @@ import kotlinx.coroutines.flow.Flow
 
 class TripRepository(private val tripDao: TripDao) {
     val allTrips: Flow<List<TripEntity>> = tripDao.getAllTrips()
-    val unclassifiedTrips: Flow<List<TripEntity>> = tripDao.getUnclassifiedTrips()
-
-    suspend fun getTripById(id: Long): TripEntity? = tripDao.getTripById(id)
 
     suspend fun insertTrip(trip: TripEntity): Long = tripDao.insertTrip(trip)
 
@@ -15,8 +12,6 @@ class TripRepository(private val tripDao: TripDao) {
     suspend fun updateTrip(trip: TripEntity) = tripDao.updateTrip(trip)
 
     suspend fun deleteTrip(trip: TripEntity) = tripDao.deleteTrip(trip)
-
-    suspend fun deleteTripById(id: Long) = tripDao.deleteTripById(id)
 
     suspend fun clearAll() = tripDao.clearAllTrips()
 }

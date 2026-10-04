@@ -256,54 +256,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         TrackingManager.stopManualTracking(context)
     }
 
-    fun recordDestinationStopAndStartNewTrip(context: Context) {
-        TrackingManager.recordDestinationStopAndStartNewTrip(context)
-    }
-
-    private var simulatedTripCount = 0
-
-    fun addSimulatedUnclassifiedTrip(
-        distanceKm: Double? = null,
-        startAddr: String? = null,
-        endAddr: String? = null
-    ) {
-        val sampleRoutes = listOf(
-            Triple(6.4, "450 Market St, Downtown", "820 Silicon Way, Tech Park"),
-            Triple(14.8, "1200 Grand Ave, City Center", "55 Airport Blvd, Terminal 2"),
-            Triple(4.2, "742 Evergreen Terrace", "Central Medical Plaza, Suite 400"),
-            Triple(9.5, "Westside Logistics Hub", "Marina Harbor, Pier 9"),
-            Triple(3.6, "Main St Coworking", "The Roasted Bean Cafe")
-        )
-        val sample = sampleRoutes[simulatedTripCount % sampleRoutes.size]
-        simulatedTripCount++
-
-        val dist = distanceKm ?: sample.first
-        val start = startAddr ?: sample.second
-        val end = endAddr ?: sample.third
-
-        viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val durationMinutes = (dist * 2.5).toLong().coerceIn(10, 45)
-            val entity = TripEntity(
-                startDate = now - durationMinutes * 60 * 1000L,
-                endDate = now,
-                distanceKm = dist,
-                type = null, // unclassified so it appears directly on the home screen
-                startAddress = start,
-                endAddress = end,
-                purpose = "Drive (${String.format(java.util.Locale.US, "%.1f", dist)} km)",
-                vehicle = settings.value.vehicleName
-            )
-            repository.insertTrip(entity)
-        }
-    }
-
     fun startMovementMonitoring(context: Context) {
         TrackingManager.startMovementMonitoring(context)
-    }
-
-    fun stopMovementMonitoring(context: Context) {
-        TrackingManager.stopMovementMonitoring(context)
     }
 
     fun setAutoDetect(enabled: Boolean) {

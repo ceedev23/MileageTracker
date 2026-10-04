@@ -4,12 +4,9 @@ import androidx.compose.ui.graphics.Color
 
 // Primary brand colors (Vibrant Royal / Electric Blue from the design screenshots)
 val MileageBlue = Color(0xFF3B72FF) // Vibrant Royal Blue (#3B72FF)
-val MileageBlueDark = Color(0xFF1D4ED8) // Deep Blue
 val MileageBlueLight = Color(0xFF60A5FA) // Ice Blue
 val MileageBlueContainer = Color(0xFFEEF2FF) // Soft Lavender/Ice Blue Pill Container (#EEF2FF)
 
-// Accent Cyan & Purple from gradient path in screenshots
-val CyanAccent = Color(0xFF06B6D4) // Vibrant Cyan (#06B6D4)
 val PurpleAccent = Color(0xFF4F46E5) // Electric Indigo / Purple (#4F46E5)
 
 // Classification colors (Vibrant & crisp for light backgrounds)
@@ -28,7 +25,6 @@ val UnclassifiedBg = Color(0xFFF3E8FF)
 val DriveGreen = Color(0xFF2563EB) // Royal Blue
 val DriveGreenLight = Color(0xFFEFF6FF) // Soft Blue Container
 val StopRed = Color(0xFFEF4444) // Bright Red
-val StopRedLight = Color(0xFFFEE2E2) // Soft Rose Container
 
 // Surfaces & Backgrounds (Default Light Theme from screenshots)
 val LightBackground = Color(0xFFF8FAFC) // Crisp modern off-white background (#F8FAFC)
@@ -42,17 +38,8 @@ val TextSecondary = Color(0xFF64748B) // Medium Slate secondary text (#64748B)
 val TextMuted = Color(0xFF94A3B8) // Light Slate hint text (#94A3B8)
 
 // Compatibility aliases
-val SlateBackground = LightBackground
-val SlateSurface = LightSurface
 val SlateSurfaceVariant = LightSurfaceVariant
 val SlateBorder = LightBorder
-val SlateBorderSubtle = LightBorderSubtle
 val SlateTextPrimary = TextPrimary
 val SlateTextSecondary = TextSecondary
 val SlateTextMuted = TextMuted
-
-val DarkBg = LightBackground
-val DarkSurface = LightSurface
-val DarkBorder = LightBorder
-val DarkTextPrimary = TextPrimary
-val DarkTextSecondary = TextSecondary

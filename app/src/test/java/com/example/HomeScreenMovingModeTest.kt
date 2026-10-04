@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.data.TripEntity
@@ -100,7 +101,7 @@ class HomeScreenMovingModeTest {
         composeTestRule.onNodeWithTag("classify_business_$insertedId").assertExists()
 
         // Tap Business classification button
-        composeTestRule.onNodeWithTag("classify_business_$insertedId").performClick()
+        composeTestRule.onNodeWithTag("classify_business_$insertedId").performScrollTo().performClick()
         composeTestRule.waitForIdle()
 
         // Verify the trip is classified in Room and removed from the home screen

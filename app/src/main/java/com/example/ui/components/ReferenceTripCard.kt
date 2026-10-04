@@ -59,11 +59,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -84,7 +81,7 @@ import kotlin.math.roundToInt
 /**
  * High-fidelity Recent Trip Card redesigned to faithfully match the uploaded reference image:
  * - Top header with Back arrow, "Trip details" and Delete icon
- * - Visual route map canvas with Yarra River, parks, and Northcote -> Richmond route
+ * - Real map of the recorded route
  * - Bold Hero distance (e.g. "24.8 km"), "$18.60" amount, and "✓ Completed" status pill
  * - Two-segment toggle: [ Personal ] | [ Business ]
  * - Vertical route timeline with Point A (Start) and Point B (Destination)
@@ -311,12 +308,17 @@ fun ReferenceTripCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(96.dp)
+                        .height(150.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                         .clickable { onOpenDetail?.invoke() }
                 ) {
-                    ReferenceMapSnapshotCanvas(modifier = Modifier.fillMaxSize())
+                    RealTripMap(
+                        pathJson = trip.pathJson,
+                        startAddress = trip.startAddress,
+                        endAddress = trip.endAddress,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
 
                 Row(
@@ -589,7 +591,6 @@ fun ReferenceTripCard(
                                         vehicle = currentVehicle,
                                         purpose = currentNote.ifBlank { trip.purpose }
                                     )
-                                    onUpdateTrip?.invoke(updated)
                                     onClassify(updated, "Personal")
                                 },
                             contentAlignment = Alignment.Center
@@ -630,7 +631,6 @@ fun ReferenceTripCard(
                                         vehicle = currentVehicle,
                                         purpose = currentNote.ifBlank { trip.purpose }
                                     )
-                                    onUpdateTrip?.invoke(updated)
                                     onClassify(updated, "Business")
                                 },
                             contentAlignment = Alignment.Center
@@ -839,161 +839,3 @@ private fun ActionRowItem(
     }
 }
 
-/**
- * Vector Map Snapshot Canvas matching the reference image layout:
- * - Yarra River diagonal water body
- * - Green park reservations
- * - Street grids and highway lines
- * - Dark blue route path connecting Northcote (Start) to Richmond (Destination)
- * - Start circular badge and Destination teardrop pin
- */
-@Composable
-private fun ReferenceMapSnapshotCanvas(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-
-        // 1. Off-white terrain background
-        drawRect(color = Color(0xFFF6F8FA))
-
-        // 2. Green Nature Parks matching reference image
-        val parkColor = Color(0xFFDCFCE7)
-        val park1 = Path().apply {
-            moveTo(w * 0.55f, 0f)
-            lineTo(w * 0.85f, 0f)
-            lineTo(w * 0.72f, h * 0.35f)
-            lineTo(w * 0.52f, h * 0.22f)
-            close()
-        }
-        drawPath(path = park1, color = parkColor)
-
-        val park2 = Path().apply {
-            moveTo(w * 0.05f, h * 0.45f)
-            lineTo(w * 0.22f, h * 0.42f)
-            lineTo(w * 0.28f, h * 0.65f)
-            lineTo(w * 0.12f, h * 0.75f)
-            close()
-        }
-        drawPath(path = park2, color = parkColor)
-
-        val park3 = Path().apply {
-            moveTo(w * 0.35f, h * 0.68f)
-            lineTo(w * 0.48f, h * 0.65f)
-            lineTo(w * 0.52f, h * 0.92f)
-            lineTo(w * 0.38f, h * 0.98f)
-            close()
-        }
-        drawPath(path = park3, color = parkColor)
-
-        // 3. Yarra River (Curved light blue water ribbon in bottom right)
-        val riverColor = Color(0xFFBAE6FD)
-        val riverPath = Path().apply {
-            moveTo(w * 0.92f, 0f)
-            cubicTo(w * 0.86f, h * 0.25f, w * 0.94f, h * 0.45f, w * 0.88f, h * 0.60f)
-            cubicTo(w * 0.78f, h * 0.75f, w * 0.62f, h * 0.82f, w * 0.52f, h * 0.89f)
-            lineTo(w * 0.56f, h)
-            lineTo(w, h)
-            lineTo(w, 0f)
-            close()
-        }
-        drawPath(path = riverPath, color = riverColor)
-
-        // 4. City Street Network
-        val streetColor = Color.White
-        val strokeW = 3f
-
-        // Major streets
-        for (f in listOf(0.18f, 0.38f, 0.58f, 0.78f)) {
-            drawLine(
-                color = streetColor,
-                start = Offset(0f, h * f),
-                end = Offset(w, h * f),
-                strokeWidth = strokeW
-            )
-        }
-        for (f in listOf(0.15f, 0.35f, 0.55f, 0.75f, 0.9f)) {
-            drawLine(
-                color = streetColor,
-                start = Offset(w * f, 0f),
-                end = Offset(w * f, h),
-                strokeWidth = strokeW
-            )
-        }
-
-        // 5. Diagonal Arterials
-        val diag1 = Path().apply {
-            moveTo(0f, h * 0.85f)
-            lineTo(w * 0.85f, 0f)
-        }
-        drawPath(path = diag1, color = Color(0xFFE2E8F0), style = Stroke(width = 3.5f))
-
-        val diag2 = Path().apply {
-            moveTo(w * 0.2f, 0f)
-            lineTo(w * 0.8f, h)
-        }
-        drawPath(path = diag2, color = Color(0xFFE2E8F0), style = Stroke(width = 3.5f))
-
-        // 6. Realistic Bold Blue Route Line connecting Northcote to Richmond
-        val startPoint = Offset(w * 0.28f, h * 0.18f)
-        val endPoint = Offset(w * 0.75f, h * 0.78f)
-
-        val routePath = Path().apply {
-            moveTo(startPoint.x, startPoint.y)
-            lineTo(w * 0.28f, h * 0.23f)
-            lineTo(w * 0.35f, h * 0.24f)
-            cubicTo(w * 0.37f, h * 0.32f, w * 0.42f, h * 0.42f, w * 0.45f, h * 0.45f)
-            lineTo(w * 0.48f, h * 0.52f)
-            lineTo(w * 0.62f, h * 0.54f)
-            cubicTo(w * 0.65f, h * 0.58f, w * 0.70f, h * 0.65f, w * 0.71f, h * 0.72f)
-            lineTo(endPoint.x, endPoint.y)
-        }
-
-        // Outer glow
-        drawPath(
-            path = routePath,
-            color = Color(0xFF2563EB).copy(alpha = 0.2f),
-            style = Stroke(width = 10f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
-
-        // Core Route Line
-        drawPath(
-            path = routePath,
-            color = Color(0xFF2563EB), // Signature app royal blue
-            style = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
-
-        // 7. Start Pin (Circular Blue Head with inner white dot)
-        drawCircle(
-            color = Color.Black.copy(alpha = 0.2f),
-            radius = 12f,
-            center = startPoint + Offset(0f, 2f)
-        )
-        drawCircle(
-            color = Color(0xFF2563EB),
-            radius = 11f,
-            center = startPoint
-        )
-        drawCircle(
-            color = Color.White,
-            radius = 4f,
-            center = startPoint
-        )
-
-        // 8. Destination Pin (Blue Teardrop Pin)
-        drawCircle(
-            color = Color.Black.copy(alpha = 0.2f),
-            radius = 13f,
-            center = endPoint + Offset(0f, 2f)
-        )
-        drawCircle(
-            color = Color(0xFF2563EB),
-            radius = 12f,
-            center = endPoint
-        )
-        drawCircle(
-            color = Color.White,
-            radius = 4.5f,
-            center = endPoint
-        )
-    }
-}

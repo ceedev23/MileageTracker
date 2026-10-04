@@ -23,9 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Remove
@@ -47,7 +44,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -61,7 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LatLngPoint
-import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.DriveGreen
 import com.example.ui.theme.LightBorder
 import com.example.ui.theme.LightSurface
@@ -72,8 +67,6 @@ import com.example.ui.theme.StopRed
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import java.util.Locale
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Modern vector-rendered GPS Map and Route Visualizer.
@@ -91,7 +84,6 @@ fun GoogleMapView(
     hasLocationPermission: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    var isDarkMap by remember { mutableStateOf(false) }
     var zoomScale by remember { mutableFloatStateOf(1.0f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -117,7 +109,7 @@ fun GoogleMapView(
         modifier = modifier
             .clip(RoundedCornerShape(24.dp))
             .border(1.dp, LightBorder, RoundedCornerShape(24.dp))
-            .background(if (isDarkMap) Color(0xFF0F172A) else Color(0xFFF1F5F9))
+            .background(Color(0xFFF1F5F9))
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
                     panOffset += pan
@@ -136,8 +128,7 @@ fun GoogleMapView(
                 width = width,
                 height = height,
                 center = center,
-                zoom = zoomScale,
-                isDark = isDarkMap
+                zoom = zoomScale
             )
 
             // 2. Project Lat/Lng points into canvas space
@@ -162,7 +153,7 @@ fun GoogleMapView(
                     // Soft Cyan/Blue glow
                     drawPath(
                         path = path,
-                        color = CyanAccent.copy(alpha = if (isDarkMap) 0.5f else 0.35f),
+                        color = MileageBlue.copy(alpha = 0.28f),
                         style = Stroke(
                             width = 18f * zoomScale.coerceIn(0.8f, 1.6f),
                             cap = StrokeCap.Round,
@@ -173,7 +164,7 @@ fun GoogleMapView(
                     // Sharp vibrant route
                     drawPath(
                         path = path,
-                        color = if (isDarkMap) Color(0xFF38BDF8) else MileageBlue,
+                        color = MileageBlue,
                         style = Stroke(
                             width = 8f * zoomScale.coerceIn(0.8f, 1.6f),
                             cap = StrokeCap.Round,
@@ -209,12 +200,12 @@ fun GoogleMapView(
                     val alpha = (1f - pulseProgress).coerceIn(0f, 1f)
 
                     drawCircle(
-                        color = (if (isDarkMap) CyanAccent else MileageBlue).copy(alpha = alpha * 0.45f),
+                        color = MileageBlue.copy(alpha = alpha * 0.45f),
                         radius = currentRadius,
                         center = latestPos
                     )
                     drawCircle(
-                        color = (if (isDarkMap) CyanAccent else MileageBlue).copy(alpha = alpha * 0.8f),
+                        color = MileageBlue.copy(alpha = alpha * 0.8f),
                         radius = currentRadius,
                         center = latestPos,
                         style = Stroke(width = 2.5f)
@@ -222,7 +213,7 @@ fun GoogleMapView(
 
                     // Outer vehicle glow
                     drawCircle(
-                        color = (if (isDarkMap) CyanAccent else MileageBlue),
+                        color = MileageBlue,
                         radius = 16f,
                         center = latestPos
                     )
@@ -234,7 +225,7 @@ fun GoogleMapView(
                     )
                     // Center core
                     drawCircle(
-                        color = if (isDarkMap) Color(0xFF0F172A) else MileageBlue,
+                        color = MileageBlue,
                         radius = 4f,
                         center = latestPos
                     )
@@ -283,10 +274,10 @@ fun GoogleMapView(
                 .padding(14.dp)
                 .shadow(6.dp, RoundedCornerShape(20.dp)),
             shape = RoundedCornerShape(20.dp),
-            color = if (isDarkMap) Color(0xFF1E293B) else LightSurface,
+            color = LightSurface,
             border = androidx.compose.foundation.BorderStroke(
                 1.dp,
-                if (isDarkMap) Color(0xFF334155) else LightBorder
+                LightBorder
             )
         ) {
             Row(
@@ -303,7 +294,7 @@ fun GoogleMapView(
                     text = if (isLive) "LIVE GPS ROUTE" else "GPS MAP VIEW",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isLive) DriveGreen else (if (isDarkMap) Color.White else TextPrimary),
+                    color = if (isLive) DriveGreen else (TextPrimary),
                     letterSpacing = 0.5.sp
                 )
             }
@@ -316,36 +307,19 @@ fun GoogleMapView(
                 .padding(14.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Street / Dark Mode Toggle
-            IconButton(
-                onClick = { isDarkMap = !isDarkMap },
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
-                    .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
-            ) {
-                Icon(
-                    imageVector = if (isDarkMap) Icons.Default.LightMode else Icons.Default.DarkMode,
-                    contentDescription = "Toggle Map Theme",
-                    tint = if (isDarkMap) Color(0xFFFBBF24) else TextSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
             // Zoom In
             IconButton(
                 onClick = { zoomScale = (zoomScale * 1.3f).coerceAtMost(4.0f) },
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
-                    .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
+                    .background(LightSurface)
+                    .border(1.dp, LightBorder, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Zoom In",
-                    tint = if (isDarkMap) Color.White else TextPrimary,
+                    tint = TextPrimary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -356,13 +330,13 @@ fun GoogleMapView(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
-                    .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
+                    .background(LightSurface)
+                    .border(1.dp, LightBorder, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.Remove,
                     contentDescription = "Zoom Out",
-                    tint = if (isDarkMap) Color.White else TextPrimary,
+                    tint = TextPrimary,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -376,8 +350,8 @@ fun GoogleMapView(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (isDarkMap) Color(0xFF1E293B) else LightSurface)
-                    .border(1.dp, if (isDarkMap) Color(0xFF334155) else LightBorder, CircleShape)
+                    .background(LightSurface)
+                    .border(1.dp, LightBorder, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.MyLocation,
@@ -406,10 +380,10 @@ fun GoogleMapView(
                     .fillMaxWidth()
                     .shadow(10.dp, RoundedCornerShape(18.dp)),
                 shape = RoundedCornerShape(18.dp),
-                color = if (isDarkMap) Color(0xFF1E293B) else LightSurface,
+                color = LightSurface,
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
-                    if (isDarkMap) Color(0xFF334155) else LightBorder
+                    LightBorder
                 )
             ) {
                 Row(
@@ -442,14 +416,14 @@ fun GoogleMapView(
                                 text = "CURRENT SPEED",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isDarkMap) Color(0xFF94A3B8) else TextSecondary,
+                                color = TextSecondary,
                                 letterSpacing = 0.5.sp
                             )
                             Text(
                                 text = "${spd.toInt()} $spdUnit",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isDarkMap) Color.White else TextPrimary
+                                color = TextPrimary
                             )
                         }
                     }
@@ -457,7 +431,7 @@ fun GoogleMapView(
                     Box(
                         modifier = Modifier
                             .size(width = 1.dp, height = 30.dp)
-                            .background(if (isDarkMap) Color(0xFF334155) else LightBorder)
+                            .background(LightBorder)
                     )
 
                     Column(horizontalAlignment = Alignment.End) {
@@ -465,14 +439,14 @@ fun GoogleMapView(
                             text = "TRIP DISTANCE",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isDarkMap) Color(0xFF94A3B8) else TextSecondary,
+                            color = TextSecondary,
                             letterSpacing = 0.5.sp
                         )
                         Text(
                             text = String.format(Locale.getDefault(), "%.1f %s", dist, unit),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isDarkMap) CyanAccent else MileageBlue
+                            color = MileageBlue
                         )
                     }
                 }
@@ -488,14 +462,13 @@ private fun DrawScope.drawMapBase(
     width: Float,
     height: Float,
     center: Offset,
-    zoom: Float,
-    isDark: Boolean
+    zoom: Float
 ) {
-    val roadColor = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
-    val roadBorder = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
-    val highwayColor = if (isDark) Color(0xFF2E384D) else Color(0xFFF1F5F9)
-    val parkColor = if (isDark) Color(0xFF142E28) else Color(0xFFE2F2E9)
-    val waterColor = if (isDark) Color(0xFF0F2B48) else Color(0xFFDBEAFE)
+    val roadColor = Color(0xFFFFFFFF)
+    val roadBorder = Color(0xFFE2E8F0)
+    val highwayColor = Color(0xFFF1F5F9)
+    val parkColor = Color(0xFFE2F2E9)
+    val waterColor = Color(0xFFDBEAFE)
 
     // Draw stylized water body curve on canvas corner
     val waterPath = Path().apply {
@@ -579,7 +552,7 @@ private fun DrawScope.drawMapBase(
     )
     // Expressway dashed median
     drawLine(
-        color = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1),
+        color = Color(0xFFCBD5E1),
         start = Offset(0f, height * 0.85f),
         end = Offset(width, height * 0.25f),
         strokeWidth = 2f,

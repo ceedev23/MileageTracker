@@ -1,4 +1,4 @@
-package com.example.ui.screens
+﻿package com.example.ui.screens
 
 import android.Manifest
 import android.content.Context
@@ -11,19 +11,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -35,28 +32,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BusinessCenter
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,10 +51,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,16 +63,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -100,16 +81,11 @@ import com.example.ui.components.EndTripBottomSheet
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.components.ReferenceTripCard
 import com.example.ui.components.UndoToast
-import com.example.ui.theme.BusinessBlue
 import com.example.ui.theme.MileageBlue
-import com.example.ui.theme.PersonalOrange
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 @Composable
 fun HomeScreen(
@@ -279,7 +255,9 @@ fun HomeScreen(
                 // Once classified, each trip is removed from the home screen.
                 DrivingModeHomeScreen(
                     unclassifiedTrips = unclassifiedTrips,
+                    trackingState = trackingState,
                     isMiles = isMiles,
+                    pulseAlpha = pulseAlpha,
                     settings = settings,
                     isCompactHeight = isCompactHeight,
                     hasLocationPermission = hasLocationPermission,
@@ -581,18 +559,7 @@ fun HomeScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // 1. Active live drive card if currently tracking
-                    if (trackingState.isTracking) {
-                        LiveDriveHomeCard(
-                            trackingState = trackingState,
-                            isMiles = isMiles,
-                            pulseAlpha = pulseAlpha,
-                            isCompact = isCompactHeight
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
-
-                    // 2. Recent trips listed in the reference format
+                    // Recent trips listed in the reference format
                     val tripsToShow = unclassifiedTrips
 
                     if (tripsToShow.isNotEmpty()) {
@@ -754,7 +721,9 @@ fun HomeScreen(
 @Composable
 fun DrivingModeHomeScreen(
     unclassifiedTrips: List<TripEntity>,
+    trackingState: com.example.service.LiveTrackingState,
     isMiles: Boolean,
+    pulseAlpha: Float,
     settings: com.example.data.MileageSettings,
     isCompactHeight: Boolean,
     hasLocationPermission: Boolean,
@@ -783,6 +752,15 @@ fun DrivingModeHomeScreen(
                 .testTag("home_driving_trips_section"),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (trackingState.isTracking) {
+                LiveDriveHomeCard(
+                    trackingState = trackingState,
+                    isMiles = isMiles,
+                    pulseAlpha = pulseAlpha,
+                    isCompact = isCompactHeight
+                )
+            }
+
             Text(
                 text = "Recent trips",
                 fontSize = if (isCompactHeight) 16.sp else 18.sp,
@@ -1012,305 +990,6 @@ fun LiveDriveHomeCard(
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF2563EB)
                     )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Compact swipeable and clickable card for pending unclassified trips shown under "Recent trips"
- * on the Home Screen. Optimized to fit perfectly on the user's device after stopping a trip.
- */
-@Composable
-fun CompactSwipeableHomeTripCard(
-    trip: TripEntity,
-    isMiles: Boolean,
-    isCompact: Boolean,
-    onOpenDetail: () -> Unit,
-    onClassify: (TripEntity, String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val coroutineScope = rememberCoroutineScope()
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var isAnimating by remember { mutableStateOf(false) }
-
-    val density = LocalDensity.current
-    val thresholdPx = with(density) { 60.dp.toPx() }
-
-    val distanceDisplay = if (isMiles) {
-        val miles = trip.distanceKm * 0.621371
-        String.format(Locale.US, "%.1f mi", miles)
-    } else {
-        String.format(Locale.US, "%.1f km", trip.distanceKm)
-    }
-
-    val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
-    val dateFormat = remember { SimpleDateFormat("MMM d", Locale.getDefault()) }
-    val dateStr = remember(trip.startDate) { dateFormat.format(Date(trip.startDate)) }
-    val startStr = remember(trip.startDate) { timeFormat.format(Date(trip.startDate)) }
-    val endStr = remember(trip.endDate) { timeFormat.format(Date(trip.endDate)) }
-
-    val origin = trip.startAddress?.ifBlank { "Trip Origin" } ?: "Trip Origin"
-    val destination = trip.endAddress?.ifBlank { "Destination Stop" } ?: "Destination Stop"
-
-    val isSwipingRight = offsetX > 0
-    val progress = (abs(offsetX) / thresholdPx).coerceIn(0f, 1f)
-    val isThresholdReached = abs(offsetX) >= thresholdPx
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .testTag("home_trip_card_${trip.id}")
-    ) {
-        // Background swipe indicators
-        if (offsetX != 0f) {
-            val bgColor = if (isSwipingRight) {
-                BusinessBlue.copy(alpha = (0.25f + progress * 0.75f).coerceIn(0f, 1f))
-            } else {
-                PersonalOrange.copy(alpha = (0.25f + progress * 0.75f).coerceIn(0f, 1f))
-            }
-
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(bgColor, RoundedCornerShape(14.dp))
-                    .padding(horizontal = 16.dp),
-                contentAlignment = if (isSwipingRight) Alignment.CenterStart else Alignment.CenterEnd
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (isSwipingRight) {
-                        Icon(
-                            imageVector = Icons.Default.BusinessCenter,
-                            contentDescription = "Business",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = if (isThresholdReached) "Business ✓" else "Business",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp
-                        )
-                    } else {
-                        Text(
-                            text = if (isThresholdReached) "Personal ✓" else "Personal",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Personal",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Foreground Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .clickable { onOpenDetail() }
-                .pointerInput(trip.id) {
-                    if (isAnimating) return@pointerInput
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (isThresholdReached) {
-                                isAnimating = true
-                                val targetX = if (offsetX > 0) size.width.toFloat() else -size.width.toFloat()
-                                val category = if (offsetX > 0) "Business" else "Personal"
-                                coroutineScope.launch {
-                                    animate(
-                                        initialValue = offsetX,
-                                        targetValue = targetX,
-                                        animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f)
-                                    ) { value, _ -> offsetX = value }
-                                    onClassify(trip, category)
-                                    offsetX = 0f
-                                    isAnimating = false
-                                }
-                            } else {
-                                coroutineScope.launch {
-                                    animate(
-                                        initialValue = offsetX,
-                                        targetValue = 0f,
-                                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f)
-                                    ) { value, _ -> offsetX = value }
-                                }
-                            }
-                        },
-                        onDragCancel = {
-                            coroutineScope.launch {
-                                animate(
-                                    initialValue = offsetX,
-                                    targetValue = 0f
-                                ) { value, _ -> offsetX = value }
-                            }
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            if (!isAnimating) {
-                                offsetX = (offsetX + dragAmount).coerceIn(-400f, 400f)
-                            }
-                        }
-                    )
-                },
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 12.dp,
-                        vertical = if (isCompact) 7.dp else 9.dp
-                    ),
-                verticalArrangement = Arrangement.spacedBy(if (isCompact) 4.dp else 6.dp)
-            ) {
-                // Header: Destination Stop Tag, Time & Distance
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFFEF3C7)
-                        ) {
-                            Text(
-                                text = "📍 Stopped",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFB45309),
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                            )
-                        }
-
-                        Text(
-                            text = "$dateStr • $startStr - $endStr",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF64748B)
-                        )
-                    }
-
-                    Text(
-                        text = distanceDisplay,
-                        fontSize = if (isCompact) 13.5.sp else 14.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                }
-
-                // Route: Origin -> Destination
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2563EB))
-                    )
-                    Text(
-                        text = origin,
-                        fontSize = 11.5.sp,
-                        color = Color(0xFF334155),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text("→", fontSize = 10.5.sp, color = Color(0xFF94A3B8))
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFEF4444))
-                    )
-                    Text(
-                        text = destination,
-                        fontSize = 11.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF0F172A),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-
-                // Action Classification Buttons: [ Business ] & [ Personal ]
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { onClassify(trip, "Business") },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MileageBlue,
-                            contentColor = Color.White
-                        ),
-                        elevation = null,
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(if (isCompact) 30.dp else 34.dp)
-                            .testTag("classify_business_${trip.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.BusinessCenter,
-                            contentDescription = "Business",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Business",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = { onClassify(trip, "Personal") },
-                        shape = RoundedCornerShape(10.dp),
-                        border = BorderStroke(1.dp, Color(0xFFCBD5E1)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF334155)),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(if (isCompact) 30.dp else 34.dp)
-                            .testTag("classify_personal_${trip.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Personal",
-                            tint = Color(0xFF475569),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Personal",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF334155)
-                        )
-                    }
                 }
             }
         }
