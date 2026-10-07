@@ -1,4 +1,4 @@
-﻿package com.example.ui.screens
+package com.example.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
@@ -315,7 +316,11 @@ fun HomeScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = if (isCompactHeight) 4.dp else 6.dp)
+                            .padding(
+                                top = if (isCompactHeight) 36.dp else 54.dp,
+                                bottom = if (isCompactHeight) 16.dp else 24.dp
+                            )
+                            .height(if (isCompactHeight) 304.dp else 356.dp)
                             .testTag("home_total_driven_dial"),
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -324,14 +329,15 @@ fun HomeScreen(
                     ) {
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .padding(
-                                top = dialPaddingTop,
-                                bottom = dialPaddingBottom,
+                                top = if (isCompactHeight) 14.dp else 20.dp,
+                                bottom = if (isCompactHeight) 16.dp else 22.dp,
                                 start = 12.dp,
                                 end = 12.dp
                             ),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         // Circular Dial dynamically proportioned to screen height
                         Box(
@@ -464,7 +470,7 @@ fun HomeScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(if (isCompactHeight) 8.dp else 10.dp))
+                        Spacer(modifier = Modifier.weight(1f))
 
                         // Bottom Stats Row inside Card: "2026 • 6% / of 15,000 km" | "Resets Dec 31"
                         Row(
@@ -519,16 +525,6 @@ fun HomeScreen(
 
                 // 3. RECENT TRIPS SECTION (Optimized for Ended Trip after stopping)
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "Recent trips",
-                        fontSize = if (isCompactHeight) 16.sp else 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A),
-                        modifier = Modifier.padding(horizontal = 2.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
                     // Recent trips listed in the reference format
                     val tripsToShow = unclassifiedTrips
 
@@ -590,24 +586,29 @@ fun HomeScreen(
                             }
                         }
                     } else if (!trackingState.isTracking) {
-                        // Empty state: Car driving towards location icon
+                        // Empty state: Minimalist trips icon
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.img_empty_trips),
-                                contentDescription = "Car driving towards destination pin",
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(if (isCompactHeight) 80.dp else 90.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                                contentScale = ContentScale.Fit
-                            )
+                                    .size(if (isCompactHeight) 72.dp else 84.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFF1F5F9)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsCar,
+                                    contentDescription = "Trips",
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(if (isCompactHeight) 36.dp else 42.dp)
+                                )
+                            }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
                             Text(
                                 text = "Your trips will appear here",
