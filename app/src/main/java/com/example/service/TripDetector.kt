@@ -19,7 +19,7 @@ data class ActiveTrip(
 )
 
 class TripDetector(
-    private var dwellMinutes: Int = 5,
+    dwellMinutes: Int = 5,
     private val onTripStarted: (ActiveTrip) -> Unit,
     private val onTripUpdated: (ActiveTrip) -> Unit,
     private val onTripEnded: (ActiveTrip) -> Unit,
@@ -31,6 +31,9 @@ class TripDetector(
         const val WARMUP_MS = 25_000L // 25 seconds of continuous movement
     }
 
+    var dwellMinutes: Int = dwellMinutes
+        private set
+
     var state: DetectorState = DetectorState.IDLE
         private set
 
@@ -39,6 +42,7 @@ class TripDetector(
 
     private var movingSince: Long? = null
     private var stoppedSince: Long? = null
+    private var lastIdlePoint: LatLngPoint? = null
 
     fun updateDwellMinutes(minutes: Int) {
         dwellMinutes = minutes.coerceIn(1, 30)
@@ -54,14 +58,23 @@ class TripDetector(
                     state = DetectorState.MOVING
                     movingSince = now
                     stoppedSince = null
+                    val startPt = lastIdlePoint ?: point
+                    val initialDist = if (startPt != point) {
+                        haversineDistanceKm(startPt.latitude, startPt.longitude, point.latitude, point.longitude)
+                            .coerceIn(0.0, 3.0)
+                    } else {
+                        0.0
+                    }
                     currentTrip = ActiveTrip(
                         id = now,
-                        startTime = now,
+                        startTime = startPt.timestamp,
                         endTime = now,
-                        distanceKm = 0.0,
-                        points = mutableListOf(point),
+                        distanceKm = initialDist,
+                        points = if (startPt != point) mutableListOf(startPt, point) else mutableListOf(point),
                         lastPoint = point
                     )
+                } else {
+                    lastIdlePoint = point
                 }
             }
 
@@ -69,6 +82,7 @@ class TripDetector(
                 val trip = currentTrip
                 if (trip == null) {
                     state = DetectorState.IDLE
+                    lastIdlePoint = point
                     return
                 }
 
@@ -77,6 +91,7 @@ class TripDetector(
                     state = DetectorState.IDLE
                     currentTrip = null
                     movingSince = null
+                    lastIdlePoint = point
                 } else if (now - (movingSince ?: now) >= WARMUP_MS || speedKmh >= 20.0f) {
                     // Confirmed trip!
                     state = DetectorState.RECORDING
@@ -125,9 +140,22 @@ class TripDetector(
         return trip
     }
 
+    fun checkDwellTimeout(now: Long = System.currentTimeMillis()): ActiveTrip? {
+        if (state == DetectorState.RECORDING) {
+            val trip = currentTrip ?: return null
+            val dwellMs = dwellMinutes * 60 * 1000L
+            val lastTime = trip.lastPoint?.timestamp ?: trip.startTime
+            val stopped = stoppedSince ?: (if (now - lastTime >= dwellMs) lastTime else null)
+            if (stopped != null && (now - stopped) >= dwellMs) {
+                return endTrip()
+            }
+        }
+        return null
+    }
+
     fun endTrip(): ActiveTrip? {
         val trip = currentTrip ?: return null
-        trip.endTime = System.currentTimeMillis()
+        trip.endTime = stoppedSince ?: trip.lastPoint?.timestamp ?: System.currentTimeMillis()
         if (trip.distanceKm >= MIN_TRIP_KM) {
             onTripEnded(trip)
         } else {
@@ -137,6 +165,7 @@ class TripDetector(
         currentTrip = null
         movingSince = null
         stoppedSince = null
+        lastIdlePoint = null
         return trip
     }
 
@@ -145,6 +174,7 @@ class TripDetector(
         currentTrip = null
         movingSince = null
         stoppedSince = null
+        lastIdlePoint = null
     }
 
     private fun accumulateDistance(trip: ActiveTrip, point: LatLngPoint) {
@@ -152,7 +182,7 @@ class TripDetector(
         if (last != null) {
             val d = haversineDistanceKm(last.latitude, last.longitude, point.latitude, point.longitude)
             // Ignore GPS noise/teleport jumps (> 3 km in a single update)
-            if (d in 0.002..3.0) {
+            if (d in 0.005..3.0) {
                 trip.distanceKm += d
                 trip.points.add(point)
             }
@@ -164,11 +194,12 @@ class TripDetector(
     }
 
     private fun estimateSpeed(point: LatLngPoint): Float {
-        val trip = currentTrip ?: return 0f
-        val last = trip.lastPoint ?: return 0f
+        val last = currentTrip?.lastPoint ?: lastIdlePoint ?: return 0f
         val dKm = haversineDistanceKm(last.latitude, last.longitude, point.latitude, point.longitude)
-        val dtHours = (point.timestamp - last.timestamp).toDouble() / 3_600_000.0
-        return if (dtHours > 0) (dKm / dtHours).toFloat() else 0f
+        if (dKm < 0.015) return 0f // Filter out stationary GPS noise jitter (< 15 meters)
+        val dtMillis = maxOf(1000L, point.timestamp - last.timestamp)
+        val dtHours = dtMillis.toDouble() / 3_600_000.0
+        return (dKm / dtHours).toFloat()
     }
 }
 

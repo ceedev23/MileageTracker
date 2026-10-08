@@ -138,8 +138,9 @@ fun TripsScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 2.dp,
+                    color = Color.White,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 1.dp,
                     border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
                 ) {
                     Row(

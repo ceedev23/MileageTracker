@@ -77,14 +77,14 @@ fun LiveDriveScreen(
     vehicleName: String,
     onVehicleChange: (String) -> Unit,
     onStop: () -> Unit,
-    onDraftChange: (category: String, vehicle: String, note: String, startPlaceName: String?) -> Unit,
+    onDraftChange: (category: String?, vehicle: String, note: String, startPlaceName: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val unitLabel = if (isMiles) "mi" else "km"
     val displayDistance = if (isMiles) trackingState.distanceKm * 0.621371 else trackingState.distanceKm
     val distanceText = String.format(Locale.US, "%.2f", displayDistance)
 
-    var category by remember { mutableStateOf("Personal") }
+    var category by remember { mutableStateOf<String?>(null) }
     var vehicle by remember(vehicleName) { mutableStateOf(vehicleName.ifBlank { "Toyota Rav4" }) }
     var note by remember { mutableStateOf("") }
     var startPlaceName by remember { mutableStateOf<String?>(null) }
@@ -292,7 +292,7 @@ fun LiveDriveScreen(
                         selected = category == "Personal",
                         selectedColor = PersonalRed,
                         icon = Icons.Default.Home,
-                        onClick = { category = "Personal" },
+                        onClick = { category = if (category == "Personal") null else "Personal" },
                         modifier = Modifier
                             .weight(1f)
                             .testTag("home_tracking_personal")
@@ -308,7 +308,7 @@ fun LiveDriveScreen(
                         selected = category == "Business",
                         selectedColor = BusinessBlue,
                         icon = Icons.Default.BusinessCenter,
-                        onClick = { category = "Business" },
+                        onClick = { category = if (category == "Business") null else "Business" },
                         modifier = Modifier
                             .weight(1f)
                             .testTag("home_tracking_business")

@@ -314,8 +314,9 @@ fun SwipeableTripCard(
                 .animateContentSize()
                 .testTag("trip_card_${trip.id}"),
             shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = if (isExpanded) 4.dp else 2.dp,
+            color = Color.White,
+            tonalElevation = 0.dp,
+            shadowElevation = if (isExpanded) 3.dp else 1.dp,
             border = BorderStroke(
                 if (isExpanded) 1.5.dp else 1.dp,
                 if (isExpanded) MileageBlue.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)

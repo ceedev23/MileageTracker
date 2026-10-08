@@ -37,8 +37,7 @@ data class LiveTrackingState(
     fun showsLiveDrive(): Boolean =
         isTracking ||
             detectorState == DetectorState.MOVING ||
-            detectorState == DetectorState.RECORDING ||
-            speedKmh > 3f
+            detectorState == DetectorState.RECORDING
 }
 
 /** Choices made on the live tracking screen, applied when the trip is saved. */
@@ -58,6 +57,7 @@ object TrackingManager {
 
     private var tripDetector: TripDetector? = null
     private var appContext: Context? = null
+    private var currentDwellMinutes: Int = 5
     private var startTimeMs: Long = 0L
     private var activeDraft = ActiveTripDraft()
     private var startGeocodeStarted = false
@@ -69,8 +69,16 @@ object TrackingManager {
         appContext = context.applicationContext
         val db = AppDatabase.getDatabase(context)
 
+        val savedDwell = try {
+            val prefs = context.getSharedPreferences("mileage_tracker_prefs", Context.MODE_PRIVATE)
+            prefs.getInt("dwell_minutes", currentDwellMinutes)
+        } catch (_: Exception) {
+            currentDwellMinutes
+        }
+        currentDwellMinutes = savedDwell
+
         tripDetector = TripDetector(
-            dwellMinutes = 5,
+            dwellMinutes = currentDwellMinutes,
             onTripStarted = { trip ->
                 startTimeMs = trip.startTime
                 val existingStart = _trackingState.value.startAddress
@@ -99,31 +107,35 @@ object TrackingManager {
                 val draft = activeDraft
                 val liveStart = _trackingState.value.startAddress
                 scope.launch {
-                    val pathJson = serializePoints(trip.points)
-                    val (startAddr, endAddr) = if (ctx != null && trip.points.isNotEmpty()) {
-                        reverseGeocodeTrip(ctx, trip.points.first(), trip.points.last())
-                    } else {
-                        Pair(liveStart ?: "Trip Origin", "Trip Destination")
-                    }
+                    try {
+                        val pathJson = serializePoints(trip.points)
+                        val (startAddr, endAddr) = if (ctx != null && trip.points.isNotEmpty()) {
+                            reverseGeocodeTrip(ctx, trip.points.first(), trip.points.last())
+                        } else {
+                            Pair(liveStart ?: "Trip Origin", "Trip Destination")
+                        }
 
-                    val namedStart = draft.startPlaceName?.takeIf { it.isNotBlank() }
-                    val entity = TripEntity(
-                        startDate = trip.startTime,
-                        endDate = trip.endTime,
-                        distanceKm = trip.distanceKm,
-                        type = draft.category,
-                        startAddress = namedStart ?: startAddr,
-                        endAddress = endAddr,
-                        purpose = draft.note.ifBlank {
-                            "Drive (${String.format("%.1f", trip.distanceKm)} km)"
-                        },
-                        vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
-                        pathJson = pathJson
-                    )
-                    val insertedId = db.tripDao().insertTrip(entity)
-                    val saved = entity.copy(id = insertedId)
-                    withContext(Dispatchers.Main) {
-                        onTripSavedCallback?.invoke(saved)
+                        val namedStart = draft.startPlaceName?.takeIf { it.isNotBlank() }
+                        val entity = TripEntity(
+                            startDate = trip.startTime,
+                            endDate = trip.endTime,
+                            distanceKm = trip.distanceKm,
+                            type = draft.category,
+                            startAddress = namedStart ?: startAddr,
+                            endAddress = endAddr,
+                            purpose = draft.note.ifBlank {
+                                "Drive (${String.format(Locale.US, "%.1f", trip.distanceKm)} km)"
+                            },
+                            vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
+                            pathJson = pathJson
+                        )
+                        val insertedId = db.tripDao().insertTrip(entity)
+                        val saved = entity.copy(id = insertedId)
+                        withContext(Dispatchers.Main) {
+                            onTripSavedCallback?.invoke(saved)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
                 }
                 stopTimer()
@@ -137,8 +149,22 @@ object TrackingManager {
                     path = emptyList(),
                     startAddress = null,
                     tripStartedAtMs = 0L,
-                    statusMessage = "Trip saved (${String.format("%.1f", trip.distanceKm)} km)"
+                    statusMessage = "Trip saved (${String.format(Locale.US, "%.1f", trip.distanceKm)} km)"
                 )
+
+                // If not in auto-detection monitoring mode, stop the foreground service
+                if (!_trackingState.value.isMonitoringMovement) {
+                    ctx?.let { c ->
+                        try {
+                            val intent = Intent(c, TrackingService::class.java).apply {
+                                action = TrackingService.ACTION_STOP
+                            }
+                            c.stopService(intent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
             },
             onTripDiscarded = { trip ->
                 stopTimer()
@@ -311,8 +337,11 @@ object TrackingManager {
     }
 
     fun setDwellMinutes(minutes: Int) {
-        tripDetector?.updateDwellMinutes(minutes)
+        currentDwellMinutes = minutes.coerceIn(1, 30)
+        tripDetector?.updateDwellMinutes(currentDwellMinutes)
     }
+
+    fun getDwellMinutes(): Int = tripDetector?.dwellMinutes ?: currentDwellMinutes
 
     private fun startTimer() {
         timerJob?.cancel()
@@ -323,6 +352,7 @@ object TrackingManager {
                 _trackingState.value = _trackingState.value.copy(
                     elapsedSeconds = elapsed.coerceAtLeast(0L)
                 )
+                tripDetector?.checkDwellTimeout(System.currentTimeMillis())
             }
         }
     }

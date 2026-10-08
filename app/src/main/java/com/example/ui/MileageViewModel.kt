@@ -188,10 +188,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         )
 
         settings = settingsManager.settings
-
-        TrackingManager.onTripSavedCallback = { trip ->
-            _justCompletedTrip.value = trip
-        }
+        TrackingManager.setDwellMinutes(settingsManager.settings.value.dwellMinutes)
     }
 
     fun selectTab(tab: AppTab) {

@@ -16,3 +16,8 @@
 local.properties
 .env
 debug.keystore
+
+# Emulator & test screen captures
+/*.png
+/window_dump.xml
+

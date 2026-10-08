@@ -75,7 +75,6 @@ import com.example.R
 import com.example.data.TripEntity
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
-import com.example.ui.components.EndTripBottomSheet
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.components.ReferenceTripCard
 import com.example.ui.components.UndoToast
@@ -93,23 +92,12 @@ fun HomeScreen(
     val trips by viewModel.trips.collectAsState()
     val scanState by viewModel.receiptScanState.collectAsState()
     val undoAction by viewModel.undoAction.collectAsState()
-    val justCompletedTrip by viewModel.justCompletedTrip.collectAsState()
 
     // Receipt Scanner Dialog
     if (scanState.isDialogVisible) {
         ReceiptScanDialog(
             viewModel = viewModel,
             onDismiss = { viewModel.dismissReceiptScanner() }
-        )
-    }
-
-    // End of Trip Review / Classification Bottom Sheet
-    justCompletedTrip?.let { completedTrip ->
-        EndTripBottomSheet(
-            trip = completedTrip,
-            isMiles = settings.unit == "mi",
-            onClassify = { t, category -> viewModel.classifyTrip(t, category) },
-            onDismiss = { viewModel.dismissJustCompletedTrip() }
         )
     }
 
@@ -577,9 +565,6 @@ fun HomeScreen(
                                         },
                                         onUpdateTrip = { updatedTrip ->
                                             viewModel.updateTrip(updatedTrip)
-                                        },
-                                        onOpenDetail = {
-                                            viewModel.showCompletedTrip(trip)
                                         }
                                     )
                                 }

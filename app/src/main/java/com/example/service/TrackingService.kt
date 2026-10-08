@@ -77,17 +77,19 @@ class TrackingService : Service() {
 
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
             .setMinUpdateIntervalMillis(1500L)
-            .setMinUpdateDistanceMeters(5f)
             .build()
 
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
+                val now = System.currentTimeMillis()
                 for (location in result.locations) {
                     val speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0f
+                    val locTime = location.time
+                    val timestamp = if (locTime > 0 && kotlin.math.abs(now - locTime) < 30_000L) locTime else now
                     val point = LatLngPoint(
                         latitude = location.latitude,
                         longitude = location.longitude,
-                        timestamp = location.time,
+                        timestamp = timestamp,
                         speedKmh = speedKmh
                     )
                     TrackingManager.processGpsPoint(point)

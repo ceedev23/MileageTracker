@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.service.TrackingManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +43,7 @@ class SettingsManager(context: Context) {
         val clamped = minutes.coerceIn(1, 30)
         prefs.edit().putInt("dwell_minutes", clamped).apply()
         _settings.value = _settings.value.copy(dwellMinutes = clamped)
+        TrackingManager.setDwellMinutes(clamped)
     }
 
     fun setUnit(unit: String) {

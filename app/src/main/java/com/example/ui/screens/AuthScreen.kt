@@ -451,7 +451,6 @@ private fun SignInFormView(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = Color.White.copy(alpha = 0.92f),
-                        border = BorderStroke(1.dp, Color.White),
                         modifier = Modifier.testTag("auth_top_app_logo")
                     ) {
                         Row(
@@ -924,7 +923,6 @@ private fun SignUpFormView(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = Color.White.copy(alpha = 0.92f),
-                        border = BorderStroke(1.dp, Color.White),
                         modifier = Modifier.testTag("auth_signup_top_app_logo")
                     ) {
                         Row(
