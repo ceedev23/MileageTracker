@@ -75,7 +75,7 @@ import java.util.Date
 import java.util.Locale
 
 private val LiveRouteGreen = Color(0xFF188038)
-private val PersonalOrange = Color(0xFFEA580C)
+private val PersonalGreen = Color(0xFF16A34A)
 private val BusinessBlue = Color(0xFF2563EB)
 private val StopRed = Color(0xFFEF4444)
 
@@ -555,7 +555,7 @@ fun LiveDriveScreen(
                                         .weight(1f)
                                         .fillMaxSize()
                                         .clip(RoundedCornerShape(16.dp))
-                                        .background(if (isPersonalSelected) PersonalOrange else Color.Transparent)
+                                        .background(if (isPersonalSelected) PersonalGreen else Color.Transparent)
                                         .testTag("home_tracking_personal")
                                         .clickable { category = if (isPersonalSelected) null else "Personal" },
                                     contentAlignment = Alignment.Center
@@ -567,7 +567,7 @@ fun LiveDriveScreen(
                                         Icon(
                                             imageVector = Icons.Default.Home,
                                             contentDescription = null,
-                                            tint = if (isPersonalSelected) Color.White else PersonalOrange,
+                                            tint = if (isPersonalSelected) Color.White else PersonalGreen,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(

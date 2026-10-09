@@ -1,0 +1,11 @@
+---
+description: Never commit screenshots or screen captures to git/GitHub
+alwaysApply: true
+---
+
+# Do Not Commit Screenshots
+
+- Never stage, commit, or push screenshots, screen captures, or emulator recordings to git or GitHub.
+- Any temporary or generated screenshots (such as `emulator_*.png`, `test_*.png`, `sim_*.png`, Robolectric/Roborazzi test screenshots, or files matching `*screenshot*`) must remain local and ignored.
+- Only legitimate Android app resource assets located in `app/src/main/res/` and `app/src/main/assets/` may be committed.
+- Always check `git status` or `git diff --cached --name-only` before creating commits to ensure no screenshots are staged.

@@ -17,7 +17,21 @@ local.properties
 .env
 debug.keystore
 
-# Emulator & test screen captures
-/*.png
+# Emulator & test screen captures, screenshots, and visual diffs
+screenshots/
+**/screenshots/
+**/screen-captures/
+*screenshot*.png
+*screenshot*.jpg
+*screenshot*.jpeg
+*screenshot*.webp
 /window_dump.xml
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Except app resource drawables and assets
+!app/src/main/res/**
+!app/src/main/assets/**
 

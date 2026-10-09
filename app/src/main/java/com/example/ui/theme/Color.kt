@@ -14,7 +14,7 @@ val BusinessBlue = Color(0xFF3B72FF) // Royal Blue
 val BusinessBg = Color(0xFFEFF6FF) // Soft Sky Blue Container
 val BusinessBorder = Color(0xFFBFDBFE)
 
-val PersonalOrange = Color(0xFFF59E0B) // Warm Amber Orange
+val PersonalOrange = Color(0xFF16A34A) // Vibrant Green
 val PersonalBg = Color(0xFFFEF3C7) // Soft Amber Container
 val PersonalBorder = Color(0xFFFDE68A)
 

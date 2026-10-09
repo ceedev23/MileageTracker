@@ -168,7 +168,7 @@ fun ReferenceTripCard(
             .clip(RoundedCornerShape(20.dp))
             .testTag("recent_trip_card_${trip.id}")
     ) {
-        // --- 1. SWIPE REVEAL BACKGROUND (Business Blue / Personal Orange) ---
+        // --- 1. SWIPE REVEAL BACKGROUND (Business Blue / Personal Green) ---
         if (isSwipingRight) {
             Box(
                 modifier = Modifier
@@ -214,7 +214,7 @@ fun ReferenceTripCard(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Color(0xFFEA580C))
+                    .background(Color(0xFF16A34A))
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
@@ -584,7 +584,7 @@ fun ReferenceTripCard(
                                 .weight(1f)
                                 .fillMaxSize()
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(if (isPersonalSelected) Color(0xFFEA580C) else Color.Transparent)
+                                .background(if (isPersonalSelected) Color(0xFF16A34A) else Color.Transparent)
                                 .testTag("classify_personal_${trip.id}")
                                 .clickable {
                                     val updated = trip.copy(
@@ -602,7 +602,7 @@ fun ReferenceTripCard(
                                 Icon(
                                     imageVector = Icons.Default.Home,
                                     contentDescription = null,
-                                    tint = if (isPersonalSelected) Color.White else Color(0xFFEA580C),
+                                    tint = if (isPersonalSelected) Color.White else Color(0xFF16A34A),
                                     modifier = Modifier.size(17.dp)
                                 )
                                 Text(
