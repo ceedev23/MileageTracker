@@ -1,6 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,14 +31,21 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BusinessCenter
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,12 +57,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.service.LiveTrackingState
@@ -59,15 +75,20 @@ import java.util.Date
 import java.util.Locale
 
 private val LiveRouteGreen = Color(0xFF188038)
-private val PersonalRed = Color(0xFFE53935)
+private val PersonalOrange = Color(0xFFEA580C)
 private val BusinessBlue = Color(0xFF2563EB)
-private val RowMuted = Color(0xFF9CA3AF)
-private val AddressGray = Color(0xFF6B7280)
-private val DividerColor = Color(0xFFE6E6E6)
+private val StopRed = Color(0xFFEF4444)
 
 /**
- * Live tracking screen shown as soon as movement is detected.
- * Replaces the previous "trip in progress" home layout.
+ * Modern Live Tracking Screen styled to seamlessly match the design language of the rest of the app:
+ * - Floating top tracking banner with live pulsing status indicator and crisp rounded card surface
+ * - Compact live stats card (Distance & Amount) with high-contrast typography and subtle borders
+ * - Elevated bottom sheet container with rounded top corners and drag handle indicator
+ * - Start / Destination timeline card with clean markers and dashed connector
+ * - Two-segment category toggle pill ([ Personal ] | [ Business ])
+ * - Vehicle selector card with icon and chevron
+ * - Note input card with edit iconography
+ * - Pinned prominent Stop button with icon for quick and safe accessibility while driving
  */
 @Composable
 fun LiveDriveScreen(
@@ -107,13 +128,24 @@ fun LiveDriveScreen(
     val addressLine = trackingState.startAddress?.takeIf { it.isNotBlank() } ?: "Locating start address…"
     val placeTitle = startPlaceName?.takeIf { it.isNotBlank() } ?: "Select a location"
 
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_alpha"
+    )
+
     LaunchedEffect(category, vehicle, note, startPlaceName) {
         onDraftChange(category, vehicle, note, startPlaceName)
     }
 
     if (showPlaceDialog) {
         NameDialog(
-            title = "Start location",
+            title = "Start Location",
             label = "Place name",
             initialValue = startPlaceName.orEmpty(),
             onDismiss = { showPlaceDialog = false },
@@ -123,6 +155,7 @@ fun LiveDriveScreen(
             }
         )
     }
+
     if (showVehicleDialog) {
         NameDialog(
             title = "Vehicle",
@@ -141,11 +174,17 @@ fun LiveDriveScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(Color(0xFFF8FAFC))
             .testTag("home_screen_driving_mode")
     ) {
-        val mapHeight = maxHeight * 0.40f
+        val mapHeight = when {
+            maxHeight < 680.dp -> maxHeight * 0.22f
+            maxHeight < 800.dp -> maxHeight * 0.26f
+            else -> maxHeight * 0.30f
+        }
+
         Column(modifier = Modifier.fillMaxSize()) {
+            // MAP & FLOATING OVERLAYS
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -162,330 +201,580 @@ fun LiveDriveScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
+                // 1. Sleek Floating Top Tracking Banner
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.55f))
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
                         .testTag("home_tracking_banner")
                 ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEFF6FF)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsCar,
+                                    contentDescription = null,
+                                    tint = BusinessBlue,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "Tracking is starting",
+                                        color = Color(0xFF0F172A),
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFFDCFCE7),
+                                        border = BorderStroke(1.dp, Color(0xFF86EFAC))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFF16A34A).copy(alpha = pulseAlpha))
+                                            )
+                                            Text(
+                                                text = "LIVE",
+                                                color = Color(0xFF15803D),
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(1.dp))
+                                Text(
+                                    text = "We detected fast movement. Unless you stop,\nwe'll record this as a trip.",
+                                    color = Color(0xFF64748B),
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ELEVATED BOTTOM SHEET / DRAFT DETAILS
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                color = Color(0xFFF8FAFC),
+                shadowElevation = 8.dp
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Drag Handle Indicator
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .padding(top = 6.dp, bottom = 4.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .size(22.dp)
-                        )
-                        Column(
+                        Surface(
+                            color = Color(0xFFCBD5E1),
+                            shape = RoundedCornerShape(2.dp)
+                        ) {
+                            Box(modifier = Modifier.size(width = 36.dp, height = 3.5.dp))
+                        }
+                    }
+
+                    // Trip configuration items
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        // 1. Compact Live Stats Card (Distance & Amount)
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .testTag("home_tracking_stats"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
                         ) {
-                            Text(
-                                text = "Tracking is starting",
-                                color = Color.White,
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "We detected fast movement. Unless you stop,\nwe'll record this as a trip.",
-                                color = Color.White.copy(alpha = 0.92f),
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
-                                textAlign = TextAlign.Center
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "DISTANCE",
+                                        color = Color(0xFF64748B),
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(1.dp))
+                                    Text(
+                                        text = "$distanceText $unitLabel",
+                                        color = Color(0xFF0F172A),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .height(22.dp)
+                                        .width(1.dp)
+                                        .background(Color(0xFFE2E8F0))
+                                )
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "AMOUNT",
+                                        color = Color(0xFF64748B),
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(1.dp))
+                                    Text(
+                                        text = amountText,
+                                        color = if (amount > 0.0) BusinessBlue else Color(0xFF0F172A),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
 
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 12.dp, bottom = 16.dp)
-                        .background(Color(0xE6323232), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .testTag("home_tracking_stats"),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(
-                        text = "Distance",
-                        color = Color(0xFFD1D5DB),
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "$distanceText $unitLabel",
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Amount",
-                        color = Color(0xFFD1D5DB),
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = amountText,
-                        color = Color.White,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+                        // 2. Start & End Location Timeline Card
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                            ) {
+                                // Point A (Start)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { showPlaceDialog = true }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFEFF6FF))
+                                            .border(1.5.dp, BusinessBlue, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "A",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = BusinessBlue
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = placeTitle,
+                                                color = if (startPlaceName != null) Color(0xFF0F172A) else BusinessBlue,
+                                                fontSize = 13.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit start location",
+                                                tint = Color(0xFF94A3B8),
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = addressLine,
+                                            color = Color(0xFF64748B),
+                                            fontSize = 11.5.sp,
+                                            lineHeight = 14.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = dateText,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(0xFF64748B)
+                                        )
+                                        Text(
+                                            text = timeText,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0F172A)
+                                        )
+                                    }
+                                }
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                LocationRow(
-                    marker = "A",
-                    title = placeTitle,
-                    titleColor = LiveRouteGreen,
-                    subtitle = addressLine,
-                    trailing = {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = dateText,
-                                fontSize = 13.sp,
-                                color = Color(0xFF374151)
-                            )
-                            Text(
-                                text = timeText,
-                                fontSize = 13.sp,
-                                color = Color(0xFF374151)
-                            )
+                                // Timeline dashed connector
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 11.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Canvas(
+                                        modifier = Modifier
+                                            .width(2.dp)
+                                            .height(8.dp)
+                                    ) {
+                                        drawLine(
+                                            color = Color(0xFFCBD5E1),
+                                            start = Offset(size.width / 2, 0f),
+                                            end = Offset(size.width / 2, size.height),
+                                            strokeWidth = 2.dp.toPx(),
+                                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f), 0f)
+                                        )
+                                    }
+                                }
+
+                                // Point B (Live Destination)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFF1F5F9))
+                                            .border(1.5.dp, Color(0xFF94A3B8), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "B",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF64748B)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "We'll add the location once the trip's over",
+                                            color = Color(0xFF64748B),
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            lineHeight = 15.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "Recording route continuously…",
+                                            color = Color(0xFF94A3B8),
+                                            fontSize = 10.5.sp,
+                                            lineHeight = 13.sp
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    },
-                    onClick = { showPlaceDialog = true }
-                )
-                HorizontalDivider(color = DividerColor, thickness = 1.dp)
-                LocationRow(
-                    marker = "B",
-                    title = "We'll add the location once the trip's over",
-                    titleColor = AddressGray,
-                    subtitle = null,
-                    trailing = null,
-                    onClick = null
-                )
-                HorizontalDivider(color = DividerColor, thickness = 1.dp)
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CategoryChoice(
-                        label = "Personal",
-                        selected = category == "Personal",
-                        selectedColor = PersonalRed,
-                        icon = Icons.Default.Home,
-                        onClick = { category = if (category == "Personal") null else "Personal" },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("home_tracking_personal")
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(1.dp)
-                            .height(28.dp)
-                            .background(DividerColor)
-                    )
-                    CategoryChoice(
-                        label = "Business",
-                        selected = category == "Business",
-                        selectedColor = BusinessBlue,
-                        icon = Icons.Default.BusinessCenter,
-                        onClick = { category = if (category == "Business") null else "Business" },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("home_tracking_business")
-                    )
-                }
-                HorizontalDivider(color = DividerColor, thickness = 1.dp)
+                        // 3. Classification Segmented Pill Toggle
+                        val isPersonalSelected = category == "Personal"
+                        val isBusinessSelected = category == "Business"
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showVehicleDialog = true }
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
-                        .testTag("home_tracking_vehicle"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = vehicle,
-                        fontSize = 16.sp,
-                        color = Color(0xFF111827)
-                    )
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Choose vehicle",
-                        tint = RowMuted
-                    )
-                }
-                HorizontalDivider(color = DividerColor, thickness = 1.dp)
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFFF1F5F9),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Personal Pill
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (isPersonalSelected) PersonalOrange else Color.Transparent)
+                                        .testTag("home_tracking_personal")
+                                        .clickable { category = if (isPersonalSelected) null else "Personal" },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Home,
+                                            contentDescription = null,
+                                            tint = if (isPersonalSelected) Color.White else PersonalOrange,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Personal",
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isPersonalSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isPersonalSelected) Color.White else Color(0xFF64748B)
+                                        )
+                                    }
+                                }
 
-                Spacer(modifier = Modifier.height(14.dp))
-                BasicTextField(
-                    value = note,
-                    onValueChange = { note = it },
-                    textStyle = TextStyle(
-                        fontSize = 15.sp,
-                        color = Color(0xFF111827)
-                    ),
-                    cursorBrush = SolidColor(BusinessBlue),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .border(1.dp, DividerColor, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 14.dp, vertical = 14.dp)
-                        .testTag("home_tracking_note"),
-                    decorationBox = { inner ->
-                        Box {
-                            if (note.isEmpty()) {
-                                Text(
-                                    text = "Write a note",
-                                    color = RowMuted,
-                                    fontSize = 15.sp
+                                // Business Pill
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (isBusinessSelected) BusinessBlue else Color.Transparent)
+                                        .testTag("home_tracking_business")
+                                        .clickable { category = if (isBusinessSelected) null else "Business" },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.BusinessCenter,
+                                            contentDescription = null,
+                                            tint = if (isBusinessSelected) Color.White else BusinessBlue,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Business",
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isBusinessSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isBusinessSelected) Color.White else Color(0xFF64748B)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4. Vehicle Selector Card
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showVehicleDialog = true }
+                                .testTag("home_tracking_vehicle"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFEFF6FF)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsCar,
+                                            contentDescription = null,
+                                            tint = BusinessBlue,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "Vehicle",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF64748B)
+                                        )
+                                        Text(
+                                            text = vehicle,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0F172A)
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Choose vehicle",
+                                    tint = Color(0xFF94A3B8),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
-                            inner()
+                        }
+
+                        // 5. Note Input Card
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFF1F5F9)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.EditNote,
+                                        contentDescription = null,
+                                        tint = Color(0xFF64748B),
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                }
+                                BasicTextField(
+                                    value = note,
+                                    onValueChange = { note = it },
+                                    textStyle = TextStyle(
+                                        fontSize = 13.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF0F172A)
+                                    ),
+                                    cursorBrush = SolidColor(BusinessBlue),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("home_tracking_note"),
+                                    decorationBox = { innerTextField ->
+                                        Box {
+                                            if (note.isEmpty()) {
+                                                Text(
+                                                    text = "Write a note",
+                                                    color = Color(0xFF94A3B8),
+                                                    fontSize = 13.5.sp
+                                                )
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(bottom = 28.dp, top = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        onDraftChange(category, vehicle, note, startPlaceName)
-                        onStop()
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.5.dp, Color(0xFFE57373)),
-                    modifier = Modifier
-                        .width(188.dp)
-                        .height(48.dp)
-                        .testTag("home_tracking_stop")
-                ) {
-                    Text(
-                        text = "Stop",
-                        color = Color(0xFFE57373),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    // Pinned Bottom Stop Action
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFF8FAFC)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Button(
+                                onClick = {
+                                    onDraftChange(category, vehicle, note, startPlaceName)
+                                    onStop()
+                                },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = StopRed,
+                                    contentColor = Color.White
+                                ),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 1.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("home_tracking_stop")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Stop",
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun LocationRow(
-    marker: String,
-    title: String,
-    titleColor: Color,
-    subtitle: String?,
-    trailing: (@Composable () -> Unit)?,
-    onClick: (() -> Unit)?
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(top = 2.dp)
-                .size(28.dp)
-                .border(1.5.dp, Color(0xFFD0D0D0), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = marker,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = RowMuted
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = titleColor,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 20.sp
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = subtitle,
-                    color = AddressGray,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
-            }
-        }
-        if (trailing != null) {
-            Spacer(modifier = Modifier.width(12.dp))
-            trailing()
-        }
-    }
-}
-
-@Composable
-private fun CategoryChoice(
-    label: String,
-    selected: Boolean,
-    selectedColor: Color,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val tint = if (selected) selectedColor else RowMuted
-    Row(
-        modifier = modifier
-            .fillMaxSize()
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tint,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = label,
-            color = tint,
-            fontSize = 16.sp,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
-        )
     }
 }
 
@@ -500,24 +789,44 @@ private fun NameDialog(
     var value by remember(initialValue) { mutableStateOf(initialValue) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.Bold) },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = Color.White,
+        title = {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = Color(0xFF0F172A)
+            )
+        },
         text = {
             OutlinedTextField(
                 value = value,
                 onValueChange = { value = it },
                 label = { Text(label) },
+                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BusinessBlue,
+                    unfocusedBorderColor = Color(0xFFE2E8F0),
+                    focusedLabelColor = BusinessBlue,
+                    unfocusedLabelColor = Color(0xFF64748B)
+                )
             )
         },
         confirmButton = {
-            TextButton(onClick = { onSave(value.trim()) }) {
-                Text("Save", fontWeight = FontWeight.Bold, color = BusinessBlue)
+            Button(
+                onClick = { onSave(value.trim()) },
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BusinessBlue)
+            ) {
+                Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text("Cancel", color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
             }
         }
     )
