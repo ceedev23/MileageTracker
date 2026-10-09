@@ -404,7 +404,7 @@ fun ReferenceTripCard(
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Destination",
-                            tint = Color(0xFF2563EB),
+                            tint = Color(0xFF16A34A),
                             modifier = Modifier.size(16.dp)
                         )
                     }

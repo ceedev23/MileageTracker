@@ -435,7 +435,7 @@ fun SwipeableTripCard(
                                 Box(
                                     modifier = Modifier
                                         .size(8.dp)
-                                        .background(PersonalOrange, CircleShape)
+                                        .background(Color(0xFF16A34A), CircleShape)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
@@ -528,7 +528,7 @@ fun SwipeableTripCard(
                                 Icon(
                                     imageVector = Icons.Default.LocationOn,
                                     contentDescription = "Destination",
-                                    tint = PersonalOrange,
+                                    tint = Color(0xFF16A34A),
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
