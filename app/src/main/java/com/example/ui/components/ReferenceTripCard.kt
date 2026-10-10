@@ -168,7 +168,7 @@ fun ReferenceTripCard(
             .clip(RoundedCornerShape(20.dp))
             .testTag("recent_trip_card_${trip.id}")
     ) {
-        // --- 1. SWIPE REVEAL BACKGROUND (Business Blue / Personal Green) ---
+        // --- 1. SWIPE REVEAL BACKGROUND (Business Blue / Personal Orange) ---
         if (isSwipingRight) {
             Box(
                 modifier = Modifier
@@ -214,7 +214,7 @@ fun ReferenceTripCard(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Color(0xFF16A34A))
+                    .background(Color(0xFFEA580C))
                     .padding(horizontal = 24.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
