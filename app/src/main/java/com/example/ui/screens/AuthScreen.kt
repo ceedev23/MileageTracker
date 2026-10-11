@@ -35,11 +35,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -49,6 +51,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -121,10 +124,12 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     var currentStep by remember { mutableStateOf(initialStep) }
+    val authUiState by viewModel.authUiState.collectAsState()
 
     // Intercept back button
     BackHandler {
         if (currentStep == AuthStep.SIGN_IN || currentStep == AuthStep.SIGN_UP) {
+            viewModel.clearAuthMessages()
             currentStep = AuthStep.WELCOME
         } else if (canDismiss) {
             onDismiss()
@@ -149,8 +154,14 @@ fun AuthScreen(
         when (step) {
             AuthStep.WELCOME -> {
                 WelcomeLandingView(
-                    onNavigateToSignIn = { currentStep = AuthStep.SIGN_IN },
-                    onNavigateToSignUp = { currentStep = AuthStep.SIGN_UP },
+                    onNavigateToSignIn = {
+                        viewModel.clearAuthMessages()
+                        currentStep = AuthStep.SIGN_IN
+                    },
+                    onNavigateToSignUp = {
+                        viewModel.clearAuthMessages()
+                        currentStep = AuthStep.SIGN_UP
+                    },
                     onContinueAsGuest = { viewModel.continueAsGuest() },
                     canDismiss = canDismiss,
                     onDismiss = onDismiss
@@ -158,32 +169,43 @@ fun AuthScreen(
             }
             AuthStep.SIGN_IN -> {
                 SignInFormView(
-                    onBack = { currentStep = AuthStep.WELCOME },
-                    onNavigateToSignUp = { currentStep = AuthStep.SIGN_UP },
-                    onSignIn = { email, pass ->
-                        viewModel.signIn(email)
+                    onBack = {
+                        viewModel.clearAuthMessages()
+                        currentStep = AuthStep.WELCOME
                     },
-                    onSocialSignIn = { provider ->
-                        viewModel.signIn(
-                            email = if (provider == "Google") "akpalamichael@gmail.com" else "user.facebook@example.com",
-                            name = if (provider == "Google") "Michael Akpala" else "Social User"
-                        )
-                    }
+                    onNavigateToSignUp = {
+                        viewModel.clearAuthMessages()
+                        currentStep = AuthStep.SIGN_UP
+                    },
+                    onSignIn = { email, pass ->
+                        viewModel.signIn(email = email, password = pass)
+                    },
+                    onResetPassword = { email, onSuccess, onError ->
+                        viewModel.resetPassword(email = email, onSuccess = onSuccess, onError = onError)
+                    },
+                    isLoading = authUiState.isLoading,
+                    backendError = authUiState.errorMessage,
+                    backendSuccess = authUiState.successMessage,
+                    onClearBackendMessages = { viewModel.clearAuthMessages() }
                 )
             }
             AuthStep.SIGN_UP -> {
                 SignUpFormView(
-                    onBack = { currentStep = AuthStep.WELCOME },
-                    onNavigateToSignIn = { currentStep = AuthStep.SIGN_IN },
-                    onSignUp = { name, email, pass ->
-                        viewModel.signUp(name, email)
+                    onBack = {
+                        viewModel.clearAuthMessages()
+                        currentStep = AuthStep.WELCOME
                     },
-                    onSocialSignIn = { provider ->
-                        viewModel.signIn(
-                            email = if (provider == "Google") "akpalamichael@gmail.com" else "user.facebook@example.com",
-                            name = if (provider == "Google") "Michael Akpala" else "Social User"
-                        )
-                    }
+                    onNavigateToSignIn = {
+                        viewModel.clearAuthMessages()
+                        currentStep = AuthStep.SIGN_IN
+                    },
+                    onSignUp = { name, email, pass ->
+                        viewModel.signUp(name = name, email = email, password = pass)
+                    },
+                    isLoading = authUiState.isLoading,
+                    backendError = authUiState.errorMessage,
+                    backendSuccess = authUiState.successMessage,
+                    onClearBackendMessages = { viewModel.clearAuthMessages() }
                 )
             }
         }
@@ -383,16 +405,25 @@ private fun SignInFormView(
     onBack: () -> Unit,
     onNavigateToSignUp: () -> Unit,
     onSignIn: (String, String) -> Unit,
-    onSocialSignIn: (String) -> Unit
+    onResetPassword: (String, () -> Unit, (String) -> Unit) -> Unit,
+    isLoading: Boolean,
+    backendError: String?,
+    backendSuccess: String?,
+    onClearBackendMessages: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var localError by remember { mutableStateOf<String?>(null) }
 
     var showForgotDialog by remember { mutableStateOf(false) }
     var showResetSentAlert by remember { mutableStateOf(false) }
+    var showSocialDialog by remember { mutableStateOf(false) }
+    var socialDialogProvider by remember { mutableStateOf("") }
+
+    val displayError = localError ?: backendError
+    val displaySuccess = backendSuccess
 
     val topHeaderGradient = Brush.verticalGradient(
         colors = listOf(
@@ -522,8 +553,27 @@ private fun SignInFormView(
                             color = Color(0xFF64748B)
                         )
                     }
+
+                    // Success notice (e.g. redirected from registration)
+                    AnimatedVisibility(visible = displaySuccess != null) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFF0FDF4),
+                            border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = displaySuccess ?: "",
+                                fontSize = 12.5.sp,
+                                color = Color(0xFF16A34A),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+
                     // Error message
-                    AnimatedVisibility(visible = errorMessage != null) {
+                    AnimatedVisibility(visible = displayError != null) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = Color(0xFFFEF2F2),
@@ -531,8 +581,8 @@ private fun SignInFormView(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = errorMessage ?: "",
-                                fontSize = 12.sp,
+                                text = displayError ?: "",
+                                fontSize = 12.5.sp,
                                 color = Color(0xFFDC2626),
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(12.dp)
@@ -545,8 +595,10 @@ private fun SignInFormView(
                         value = email,
                         onValueChange = {
                             email = it
-                            errorMessage = null
+                            localError = null
+                            if (backendError != null) onClearBackendMessages()
                         },
+                        enabled = !isLoading,
                         placeholder = { Text("Email", color = Color(0xFF94A3B8)) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -574,8 +626,10 @@ private fun SignInFormView(
                         value = password,
                         onValueChange = {
                             password = it
-                            errorMessage = null
+                            localError = null
+                            if (backendError != null) onClearBackendMessages()
                         },
+                        enabled = !isLoading,
                         placeholder = { Text("Password", color = Color(0xFF94A3B8)) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -602,10 +656,12 @@ private fun SignInFormView(
                                 focusManager.clearFocus()
                                 val cleanEmail = email.trim()
                                 if (cleanEmail.isEmpty() || !cleanEmail.contains("@")) {
-                                    errorMessage = "Please enter a valid email address."
+                                    localError = "Please enter a valid email address."
                                 } else if (password.length < 6) {
-                                    errorMessage = "Password must be at least 6 characters."
+                                    localError = "Password must be at least 6 characters."
                                 } else {
+                                    localError = null
+                                    onClearBackendMessages()
                                     onSignIn(cleanEmail, password)
                                 }
                             }
@@ -624,13 +680,16 @@ private fun SignInFormView(
                             focusManager.clearFocus()
                             val cleanEmail = email.trim()
                             if (cleanEmail.isEmpty() || !cleanEmail.contains("@")) {
-                                errorMessage = "Please enter a valid email address."
+                                localError = "Please enter a valid email address."
                             } else if (password.length < 6) {
-                                errorMessage = "Password must be at least 6 characters."
+                                localError = "Password must be at least 6 characters."
                             } else {
+                                localError = null
+                                onClearBackendMessages()
                                 onSignIn(cleanEmail, password)
                             }
                         },
+                        enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
@@ -642,12 +701,20 @@ private fun SignInFormView(
                         ),
                         elevation = null
                     ) {
-                        Text(
-                            text = "Sign In",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = Color.White,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Text(
+                                text = "Sign In",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
 
                     // "Forgot password?" Link
@@ -657,7 +724,10 @@ private fun SignInFormView(
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF64748B),
                         modifier = Modifier
-                            .clickable { showForgotDialog = true }
+                            .clickable {
+                                onClearBackendMessages()
+                                showForgotDialog = true
+                            }
                             .padding(vertical = 4.dp)
                     )
 
@@ -670,7 +740,10 @@ private fun SignInFormView(
                     ) {
                         // Facebook Sign In Button
                         OutlinedButton(
-                            onClick = { onSocialSignIn("Facebook") },
+                            onClick = {
+                                socialDialogProvider = "Facebook"
+                                showSocialDialog = true
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp),
@@ -710,7 +783,10 @@ private fun SignInFormView(
 
                         // Google Sign In Button
                         OutlinedButton(
-                            onClick = { onSocialSignIn("Google") },
+                            onClick = {
+                                socialDialogProvider = "Google"
+                                showSocialDialog = true
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp),
@@ -767,7 +843,10 @@ private fun SignInFormView(
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = MileageBlue,
-                            modifier = Modifier.clickable { onNavigateToSignUp() }
+                            modifier = Modifier.clickable {
+                                onClearBackendMessages()
+                                onNavigateToSignUp()
+                            }
                         )
                     }
                 }
@@ -775,46 +854,114 @@ private fun SignInFormView(
         }
     }
 
-    // Forgot Password Dialog
-    if (showForgotDialog) {
-        var resetEmail by remember { mutableStateOf(email.ifBlank { "akpalamichael@gmail.com" }) }
+    // Social Provider Information Dialog
+    if (showSocialDialog) {
         AlertDialog(
-            onDismissRequest = { showForgotDialog = false },
-            title = { Text(text = "Reset Password", fontWeight = FontWeight.Bold) },
+            onDismissRequest = { showSocialDialog = false },
+            title = { Text(text = "$socialDialogProvider Sign In", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Enter your email address to receive password reset instructions:",
-                        fontSize = 13.5.sp,
-                        color = Color(0xFF475569)
-                    )
-                    OutlinedTextField(
-                        value = resetEmail,
-                        onValueChange = { resetEmail = it },
-                        label = { Text("Email") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                }
+                Text(
+                    text = "$socialDialogProvider OAuth is not enabled on this Supabase project. Please sign in or register with your email address and password, or Continue as Guest.",
+                    fontSize = 13.5.sp,
+                    color = Color(0xFF475569)
+                )
             },
             confirmButton = {
                 Button(
-                    onClick = {
-                        showForgotDialog = false
-                        showResetSentAlert = true
-                    },
+                    onClick = { showSocialDialog = false },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MileageBlue,
                         contentColor = Color.White
                     ),
                     elevation = null
                 ) {
-                    Text("Send Link", color = Color.White)
+                    Text("OK", color = Color.White)
+                }
+            }
+        )
+    }
+
+    // Forgot Password Dialog
+    if (showForgotDialog) {
+        var resetEmail by remember { mutableStateOf(email.ifBlank { "" }) }
+        var resetError by remember { mutableStateOf<String?>(null) }
+        var isResetting by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { if (!isResetting) showForgotDialog = false },
+            title = { Text(text = "Reset Password", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Enter your email address to receive password reset instructions from Supabase:",
+                        fontSize = 13.5.sp,
+                        color = Color(0xFF475569)
+                    )
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = {
+                            resetEmail = it
+                            resetError = null
+                        },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    if (resetError != null) {
+                        Text(
+                            text = resetError ?: "",
+                            fontSize = 12.sp,
+                            color = Color(0xFFDC2626)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val clean = resetEmail.trim()
+                        if (clean.isBlank() || !clean.contains("@")) {
+                            resetError = "Please enter a valid email address."
+                            return@Button
+                        }
+                        isResetting = true
+                        onResetPassword(
+                            clean,
+                            {
+                                isResetting = false
+                                showForgotDialog = false
+                                showResetSentAlert = true
+                            },
+                            { err ->
+                                isResetting = false
+                                resetError = err
+                            }
+                        )
+                    },
+                    enabled = !isResetting,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MileageBlue,
+                        contentColor = Color.White
+                    ),
+                    elevation = null
+                ) {
+                    if (isResetting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Send Link", color = Color.White)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showForgotDialog = false }) {
+                TextButton(
+                    onClick = { showForgotDialog = false },
+                    enabled = !isResetting
+                ) {
                     Text("Cancel")
                 }
             }
@@ -824,7 +971,7 @@ private fun SignInFormView(
     if (showResetSentAlert) {
         AlertDialog(
             onDismissRequest = { showResetSentAlert = false },
-            title = { Text("Link Dispatched", fontWeight = FontWeight.Bold) },
+            title = { Text("Reset Link Sent", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     text = "A password reset email has been sent. Check your inbox to proceed.",
@@ -856,7 +1003,10 @@ private fun SignUpFormView(
     onBack: () -> Unit,
     onNavigateToSignIn: () -> Unit,
     onSignUp: (String, String, String) -> Unit,
-    onSocialSignIn: (String) -> Unit
+    isLoading: Boolean,
+    backendError: String?,
+    backendSuccess: String?,
+    onClearBackendMessages: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
     var name by remember { mutableStateOf("") }
@@ -864,7 +1014,11 @@ private fun SignUpFormView(
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var localError by remember { mutableStateOf<String?>(null) }
+    var showSocialDialog by remember { mutableStateOf(false) }
+    var socialDialogProvider by remember { mutableStateOf("") }
+
+    val displayError = localError ?: backendError
 
     val topHeaderGradient = Brush.verticalGradient(
         colors = listOf(
@@ -994,7 +1148,55 @@ private fun SignUpFormView(
                             color = Color(0xFF64748B)
                         )
                     }
-                    AnimatedVisibility(visible = errorMessage != null) {
+
+                    // Success notice (when confirmation email sent)
+                    AnimatedVisibility(visible = backendSuccess != null) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFF0FDF4),
+                            border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF16A34A),
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Text(
+                                    text = "Account Created!",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF15803D)
+                                )
+                                Text(
+                                    text = backendSuccess ?: "",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF166534),
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Button(
+                                    onClick = onNavigateToSignIn,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF16A34A),
+                                        contentColor = Color.White
+                                    ),
+                                    shape = RoundedCornerShape(20.dp)
+                                ) {
+                                    Text("Proceed to Sign In", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Error notice
+                    AnimatedVisibility(visible = displayError != null) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = Color(0xFFFEF2F2),
@@ -1002,8 +1204,8 @@ private fun SignUpFormView(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = errorMessage ?: "",
-                                fontSize = 12.sp,
+                                text = displayError ?: "",
+                                fontSize = 12.5.sp,
                                 color = Color(0xFFDC2626),
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(12.dp)
@@ -1016,8 +1218,10 @@ private fun SignUpFormView(
                         value = name,
                         onValueChange = {
                             name = it
-                            errorMessage = null
+                            localError = null
+                            if (backendError != null) onClearBackendMessages()
                         },
+                        enabled = !isLoading,
                         placeholder = { Text("Full Name", color = Color(0xFF94A3B8)) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1045,8 +1249,10 @@ private fun SignUpFormView(
                         value = email,
                         onValueChange = {
                             email = it
-                            errorMessage = null
+                            localError = null
+                            if (backendError != null) onClearBackendMessages()
                         },
+                        enabled = !isLoading,
                         placeholder = { Text("Email", color = Color(0xFF94A3B8)) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1074,8 +1280,10 @@ private fun SignUpFormView(
                         value = password,
                         onValueChange = {
                             password = it
-                            errorMessage = null
+                            localError = null
+                            if (backendError != null) onClearBackendMessages()
                         },
+                        enabled = !isLoading,
                         placeholder = { Text("Password", color = Color(0xFF94A3B8)) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -1113,8 +1321,10 @@ private fun SignUpFormView(
                         value = confirmPassword,
                         onValueChange = {
                             confirmPassword = it
-                            errorMessage = null
+                            localError = null
+                            if (backendError != null) onClearBackendMessages()
                         },
+                        enabled = !isLoading,
                         placeholder = { Text("Confirm Password", color = Color(0xFF94A3B8)) },
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier
@@ -1135,8 +1345,12 @@ private fun SignUpFormView(
                                     email = email,
                                     password = password,
                                     confirmPassword = confirmPassword,
-                                    onError = { errorMessage = it },
-                                    onSuccess = { nm, em, pw -> onSignUp(nm, em, pw) }
+                                    onError = { localError = it },
+                                    onSuccess = { nm, em, pw ->
+                                        localError = null
+                                        onClearBackendMessages()
+                                        onSignUp(nm, em, pw)
+                                    }
                                 )
                             }
                         ),
@@ -1157,10 +1371,15 @@ private fun SignUpFormView(
                                 email = email,
                                 password = password,
                                 confirmPassword = confirmPassword,
-                                onError = { errorMessage = it },
-                                onSuccess = { nm, em, pw -> onSignUp(nm, em, pw) }
+                                onError = { localError = it },
+                                onSuccess = { nm, em, pw ->
+                                    localError = null
+                                    onClearBackendMessages()
+                                    onSignUp(nm, em, pw)
+                                }
                             )
                         },
+                        enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(52.dp)
@@ -1172,12 +1391,20 @@ private fun SignUpFormView(
                         ),
                         elevation = null
                     ) {
-                        Text(
-                            text = "Sign Up",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = Color.White,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Text(
+                                text = "Sign Up",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
                     }
 
                     // Social Registration Buttons
@@ -1186,7 +1413,10 @@ private fun SignUpFormView(
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { onSocialSignIn("Facebook") },
+                            onClick = {
+                                socialDialogProvider = "Facebook"
+                                showSocialDialog = true
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp),
@@ -1215,7 +1445,10 @@ private fun SignUpFormView(
                         }
 
                         OutlinedButton(
-                            onClick = { onSocialSignIn("Google") },
+                            onClick = {
+                                socialDialogProvider = "Google"
+                                showSocialDialog = true
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp),
@@ -1260,12 +1493,42 @@ private fun SignUpFormView(
                             fontSize = 13.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = MileageBlue,
-                            modifier = Modifier.clickable { onNavigateToSignIn() }
+                            modifier = Modifier.clickable {
+                                onClearBackendMessages()
+                                onNavigateToSignIn()
+                            }
                         )
                     }
                 }
             }
         }
+    }
+
+    // Social Provider Information Dialog
+    if (showSocialDialog) {
+        AlertDialog(
+            onDismissRequest = { showSocialDialog = false },
+            title = { Text(text = "$socialDialogProvider Sign Up", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "$socialDialogProvider OAuth is not enabled on this Supabase project. Please register with your email address and password, or Continue as Guest.",
+                    fontSize = 13.5.sp,
+                    color = Color(0xFF475569)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showSocialDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MileageBlue,
+                        contentColor = Color.White
+                    ),
+                    elevation = null
+                ) {
+                    Text("OK", color = Color.White)
+                }
+            }
+        )
     }
 }
 

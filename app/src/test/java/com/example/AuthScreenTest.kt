@@ -41,6 +41,7 @@ class AuthScreenTest {
     fun setUp() {
         val app = ApplicationProvider.getApplicationContext<Application>()
         viewModel = MileageViewModel(app)
+        viewModel.supabaseConfig.setAnonKey("")
     }
 
     @Test

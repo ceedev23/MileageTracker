@@ -16,6 +16,11 @@ import com.example.data.MileageSettings
 import com.example.data.SettingsManager
 import com.example.data.TripEntity
 import com.example.data.TripRepository
+import com.example.data.supabase.SupabaseClient
+import com.example.data.supabase.SupabaseConfig
+import com.example.data.supabase.SupabaseSyncManager
+import com.example.data.supabase.SupabaseSyncState
+import com.example.data.supabase.SyncStatus
 import com.example.service.ActiveTripDraft
 import com.example.service.ExtractedReceiptData
 import com.example.service.ExtractionResult
@@ -75,10 +80,22 @@ data class UserProfile(
     val isGuest: Boolean = false
 )
 
+data class AuthUiState(
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val successMessage: String? = null,
+    val infoMessage: String? = null
+)
+
 class MileageViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: TripRepository
     private val gasReceiptRepository: GasReceiptRepository
     private val settingsManager: SettingsManager
+
+    val supabaseConfig: SupabaseConfig = SupabaseConfig(application)
+    val supabaseClient: SupabaseClient = SupabaseClient(supabaseConfig)
+    val supabaseSyncManager: SupabaseSyncManager
+    val supabaseSyncState: StateFlow<SupabaseSyncState>
 
     val trips: StateFlow<List<TripEntity>>
     val receipts: StateFlow<List<GasReceiptEntity>>
@@ -107,24 +124,184 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     private val _isAuthPromptVisible = MutableStateFlow<Boolean>(true)
     val isAuthPromptVisible: StateFlow<Boolean> = _isAuthPromptVisible.asStateFlow()
 
-    fun signIn(email: String, name: String? = null) {
-        val cleanName = name?.takeIf { it.isNotBlank() }
-            ?: email.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
-        _userProfile.value = UserProfile(
-            name = cleanName,
-            email = email,
-            isGuest = false
-        )
-        _isAuthPromptVisible.value = false
+    private val _authUiState = MutableStateFlow(AuthUiState())
+    val authUiState: StateFlow<AuthUiState> = _authUiState.asStateFlow()
+
+    fun clearAuthMessages() {
+        _authUiState.value = AuthUiState()
     }
 
-    fun signUp(name: String, email: String) {
-        _userProfile.value = UserProfile(
-            name = name.ifBlank { "User" },
-            email = email,
-            isGuest = false
-        )
-        _isAuthPromptVisible.value = false
+    fun signIn(
+        email: String,
+        password: String? = null,
+        name: String? = null,
+        onSuccess: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+            val err = "Please enter a valid email address."
+            _authUiState.value = AuthUiState(errorMessage = err)
+            onError?.invoke(err)
+            return
+        }
+
+        if (password.isNullOrBlank()) {
+            val cleanName = name?.takeIf { it.isNotBlank() }
+                ?: cleanEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+            _userProfile.value = UserProfile(name = cleanName, email = cleanEmail, isGuest = false)
+            _isAuthPromptVisible.value = false
+            _authUiState.value = AuthUiState()
+            onSuccess?.invoke()
+            return
+        }
+
+        if (password.length < 6) {
+            val err = "Password must be at least 6 characters."
+            _authUiState.value = AuthUiState(errorMessage = err)
+            onError?.invoke(err)
+            return
+        }
+
+        _authUiState.value = AuthUiState(isLoading = true)
+
+        viewModelScope.launch {
+            if (supabaseConfig.isConfigured()) {
+                val res = supabaseClient.signIn(cleanEmail, password)
+                if (res.isSuccess) {
+                    val session = res.getOrNull()
+                    val cleanName = session?.user?.name?.takeIf { it.isNotBlank() }
+                        ?: name?.takeIf { it.isNotBlank() }
+                        ?: cleanEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+
+                    _userProfile.value = UserProfile(
+                        name = cleanName,
+                        email = session?.user?.email ?: cleanEmail,
+                        isGuest = false
+                    )
+                    _isAuthPromptVisible.value = false
+                    _authUiState.value = AuthUiState(isLoading = false)
+                    onSuccess?.invoke()
+                    supabaseSyncManager.syncAll()
+                } else {
+                    val err = res.exceptionOrNull()?.message ?: "Sign in failed. Please check your credentials."
+                    _authUiState.value = AuthUiState(isLoading = false, errorMessage = err)
+                    onError?.invoke(err)
+                }
+            } else {
+                val cleanName = name?.takeIf { it.isNotBlank() }
+                    ?: cleanEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+                _userProfile.value = UserProfile(
+                    name = cleanName,
+                    email = cleanEmail,
+                    isGuest = false
+                )
+                _isAuthPromptVisible.value = false
+                _authUiState.value = AuthUiState(isLoading = false)
+                onSuccess?.invoke()
+            }
+        }
+    }
+
+    fun signUp(
+        name: String,
+        email: String,
+        password: String? = null,
+        onSuccess: ((Boolean) -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        val cleanName = name.trim()
+        val cleanEmail = email.trim()
+
+        if (cleanName.isBlank()) {
+            val err = "Please enter your name."
+            _authUiState.value = AuthUiState(errorMessage = err)
+            onError?.invoke(err)
+            return
+        }
+
+        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+            val err = "Please enter a valid email address."
+            _authUiState.value = AuthUiState(errorMessage = err)
+            onError?.invoke(err)
+            return
+        }
+
+        if (password.isNullOrBlank() || password.length < 6) {
+            val err = "Password must be at least 6 characters."
+            _authUiState.value = AuthUiState(errorMessage = err)
+            onError?.invoke(err)
+            return
+        }
+
+        _authUiState.value = AuthUiState(isLoading = true)
+
+        viewModelScope.launch {
+            if (supabaseConfig.isConfigured()) {
+                val res = supabaseClient.signUp(cleanEmail, password, cleanName)
+                if (res.isSuccess) {
+                    val session = res.getOrNull()
+                    if (session != null && session.accessToken.isNotBlank()) {
+                        _userProfile.value = UserProfile(
+                            name = session.user.name ?: cleanName,
+                            email = session.user.email,
+                            isGuest = false
+                        )
+                        _isAuthPromptVisible.value = false
+                        _authUiState.value = AuthUiState(isLoading = false)
+                        onSuccess?.invoke(true)
+                        supabaseSyncManager.syncAll()
+                    } else {
+                        val msg = "Account created! A confirmation email has been sent to $cleanEmail. Please verify your email before signing in."
+                        _authUiState.value = AuthUiState(
+                            isLoading = false,
+                            successMessage = msg
+                        )
+                        onSuccess?.invoke(false)
+                    }
+                } else {
+                    val err = res.exceptionOrNull()?.message ?: "Sign up failed. Please try again."
+                    _authUiState.value = AuthUiState(isLoading = false, errorMessage = err)
+                    onError?.invoke(err)
+                }
+            } else {
+                _userProfile.value = UserProfile(
+                    name = cleanName,
+                    email = cleanEmail,
+                    isGuest = false
+                )
+                _isAuthPromptVisible.value = false
+                _authUiState.value = AuthUiState(isLoading = false)
+                onSuccess?.invoke(true)
+            }
+        }
+    }
+
+    fun resetPassword(
+        email: String,
+        onSuccess: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ) {
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+            val err = "Please enter a valid email address."
+            onError?.invoke(err)
+            return
+        }
+
+        viewModelScope.launch {
+            if (supabaseConfig.isConfigured()) {
+                val res = supabaseClient.resetPassword(cleanEmail)
+                if (res.isSuccess) {
+                    onSuccess?.invoke()
+                } else {
+                    val err = res.exceptionOrNull()?.message ?: "Failed to send reset link."
+                    onError?.invoke(err)
+                }
+            } else {
+                onSuccess?.invoke()
+            }
+        }
     }
 
     fun continueAsGuest() {
@@ -134,11 +311,34 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             isGuest = true
         )
         _isAuthPromptVisible.value = false
+        _authUiState.value = AuthUiState()
     }
 
     fun signOut() {
+        viewModelScope.launch {
+            supabaseClient.signOut()
+        }
         _userProfile.value = null
         _isAuthPromptVisible.value = true
+        _authUiState.value = AuthUiState()
+    }
+
+    fun syncWithSupabase() {
+        supabaseSyncManager.triggerSync()
+    }
+
+    fun saveSupabaseAnonKey(key: String) {
+        supabaseConfig.setAnonKey(key)
+        if (supabaseConfig.isConfigured()) {
+            supabaseSyncManager.triggerSync()
+        }
+    }
+
+    fun testSupabaseConnection(callback: (Result<String>) -> Unit) {
+        viewModelScope.launch {
+            val result = supabaseClient.testConnection()
+            callback(result)
+        }
     }
 
     fun showAuthScreen() {
@@ -169,6 +369,14 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         gasReceiptRepository = GasReceiptRepository(database.gasReceiptDao())
         settingsManager = SettingsManager(application)
 
+        supabaseSyncManager = SupabaseSyncManager(
+            tripRepository = repository,
+            receiptRepository = gasReceiptRepository,
+            supabaseClient = supabaseClient,
+            scope = viewModelScope
+        )
+        supabaseSyncState = supabaseSyncManager.syncState
+
         trips = repository.allTrips.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -189,6 +397,23 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
         settings = settingsManager.settings
         TrackingManager.setDwellMinutes(settingsManager.settings.value.dwellMinutes)
+
+        // Restore existing Supabase session if present
+        supabaseConfig.getSession()?.let { session ->
+            _userProfile.value = UserProfile(
+                name = session.user.name ?: session.user.email.substringBefore("@"),
+                email = session.user.email,
+                isGuest = false
+            )
+            _isAuthPromptVisible.value = false
+        }
+
+        // Trigger sync if Supabase is configured
+        if (supabaseConfig.isConfigured()) {
+            viewModelScope.launch {
+                supabaseSyncManager.syncAll()
+            }
+        }
     }
 
     fun selectTab(tab: AppTab) {
@@ -207,6 +432,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
         viewModelScope.launch {
             repository.updateTrip(updated)
+            supabaseSyncManager.onTripSaved(updated)
             _undoAction.value = UndoAction(trip = trip, previousType = previousType, assignedType = newType)
             undoDismissJob?.cancel()
             undoDismissJob = launch {
@@ -219,7 +445,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun undoClassification() {
         val action = _undoAction.value ?: return
         viewModelScope.launch {
-            repository.updateTrip(action.trip.copy(type = action.previousType))
+            val reverted = action.trip.copy(type = action.previousType)
+            repository.updateTrip(reverted)
+            supabaseSyncManager.onTripSaved(reverted)
             _undoAction.value = null
         }
     }
@@ -231,16 +459,20 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun deleteTrip(trip: TripEntity) {
         viewModelScope.launch {
             repository.deleteTrip(trip)
+            supabaseSyncManager.onTripDeleted(trip)
         }
     }
 
     fun saveTrip(trip: TripEntity) {
         viewModelScope.launch {
-            if (trip.id == 0L) {
+            val savedId = if (trip.id == 0L) {
                 repository.insertTrip(trip)
             } else {
                 repository.updateTrip(trip)
+                trip.id
             }
+            val tripToSync = if (trip.id == 0L) trip.copy(id = savedId) else trip
+            supabaseSyncManager.onTripSaved(tripToSync)
         }
     }
 
@@ -561,7 +793,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         )
 
         viewModelScope.launch {
-            gasReceiptRepository.insertReceipt(entity)
+            val insertedId = gasReceiptRepository.insertReceipt(entity)
+            val entityToSync = entity.copy(id = insertedId)
+            supabaseSyncManager.onReceiptSaved(entityToSync)
             _receiptScanState.value = ReceiptScanUiState(
                 isDialogVisible = false,
                 isSavedSuccess = true
@@ -577,6 +811,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 } catch (_: Exception) {}
             }
             gasReceiptRepository.deleteReceipt(receipt)
+            supabaseSyncManager.onReceiptDeleted(receipt)
         }
     }
 

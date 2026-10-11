@@ -33,6 +33,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import com.example.data.supabase.SyncStatus
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +81,7 @@ fun SettingsScreen(
     val userProfile by viewModel.userProfile.collectAsState()
 
     var showClearDialog by remember { mutableStateOf(false) }
+    var showAnonKeyDialog by remember { mutableStateOf(false) }
     var rateInput by remember(settings.reimbursementRate) {
         mutableStateOf(String.format(Locale.US, "%.2f", settings.reimbursementRate))
     }
@@ -236,6 +238,145 @@ fun SettingsScreen(
                         ) {
                             Text("Sign In or Create Account", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
+                    }
+                }
+            }
+        }
+
+        // Supabase Cloud Database Section
+        val syncState by viewModel.supabaseSyncState.collectAsState()
+        var testResultMsg by remember { mutableStateOf<String?>(null) }
+        var isTestingConnection by remember { mutableStateOf(false) }
+
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("settings_supabase_card"),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Supabase Database",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = SlateTextPrimary
+                            )
+                            val (badgeBg, badgeFg, badgeText) = when (syncState.status) {
+                                SyncStatus.SUCCESS -> Triple(Color(0xFFDCFCE7), Color(0xFF15803D), "Connected")
+                                SyncStatus.SYNCING -> Triple(Color(0xFFDBEAFE), Color(0xFF1D4ED8), "Syncing...")
+                                SyncStatus.ERROR -> Triple(Color(0xFFFEE2E2), Color(0xFFB91C1C), "Error")
+                                SyncStatus.NOT_CONFIGURED -> Triple(Color(0xFFFEF3C7), Color(0xFFB45309), "Anon Key Needed")
+                                SyncStatus.IDLE -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Ready")
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = badgeBg
+                            ) {
+                                Text(
+                                    text = badgeText,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = badgeFg,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "https://gszhecjcksyxlptlmwok.supabase.co",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SlateTextSecondary,
+                            fontSize = 11.5.sp
+                        )
+                    }
+                }
+
+                if (syncState.message != null) {
+                    Text(
+                        text = syncState.message ?: "",
+                        fontSize = 12.sp,
+                        color = if (syncState.status == SyncStatus.ERROR) Color(0xFFDC2626) else SlateTextSecondary
+                    )
+                }
+
+                if (testResultMsg != null) {
+                    val isGood = testResultMsg!!.contains("Connected") || testResultMsg!!.contains("Success")
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isGood) Color(0xFFF0FDF4) else Color(0xFFFEF2F2),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isGood) Color(0xFFBBF7D0) else Color(0xFFFECACA)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = testResultMsg ?: "",
+                            fontSize = 12.sp,
+                            color = if (isGood) Color(0xFF16A34A) else Color(0xFFDC2626),
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showAnonKeyDialog = true },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Config / Key", fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            isTestingConnection = true
+                            testResultMsg = "Testing connection..."
+                            viewModel.testSupabaseConnection { res ->
+                                isTestingConnection = false
+                                testResultMsg = if (res.isSuccess) {
+                                    res.getOrNull() ?: "Connected to Supabase successfully."
+                                } else {
+                                    res.exceptionOrNull()?.message ?: "Connection test failed."
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !isTestingConnection
+                    ) {
+                        Text(if (isTestingConnection) "Testing..." else "Test", fontSize = 12.sp)
+                    }
+
+                    Button(
+                        onClick = { viewModel.syncWithSupabase() },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MileageBlue,
+                            contentColor = Color.White
+                        ),
+                        elevation = null
+                    ) {
+                        Text("Sync Now", fontSize = 12.sp, color = Color.White)
                     }
                 }
             }
@@ -609,6 +750,53 @@ fun SettingsScreen(
             },
             dismissButton = {
                 OutlinedButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showAnonKeyDialog) {
+        var keyInput by remember { mutableStateOf(viewModel.supabaseConfig.getAnonKey()) }
+        AlertDialog(
+            onDismissRequest = { showAnonKeyDialog = false },
+            title = { Text("Supabase Configuration", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Project URL: https://gszhecjcksyxlptlmwok.supabase.co",
+                        fontSize = 12.5.sp,
+                        color = SlateTextSecondary
+                    )
+                    Text(
+                        text = "Enter your Supabase Anon / Public Key (found in Supabase Dashboard -> Project Settings -> API):",
+                        fontSize = 13.sp,
+                        color = SlateTextPrimary
+                    )
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        label = { Text("Anon Key (JWT)") },
+                        placeholder = { Text("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        maxLines = 3
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.saveSupabaseAnonKey(keyInput.trim())
+                        showAnonKeyDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White)
+                ) {
+                    Text("Save & Connect", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showAnonKeyDialog = false }) {
                     Text("Cancel")
                 }
             }
