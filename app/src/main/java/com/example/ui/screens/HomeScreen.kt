@@ -744,7 +744,7 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFBFD)),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                                 border = BorderStroke(1.dp, Color(0xFFEDEFF3))
                             ) {
                                 Column(
