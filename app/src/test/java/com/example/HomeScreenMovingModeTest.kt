@@ -55,6 +55,10 @@ class HomeScreenMovingModeTest {
         composeTestRule.onNodeWithTag("home_screen").assertExists()
         composeTestRule.onNodeWithTag("home_start_drive_button").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_profile_avatar").assertExists()
+        composeTestRule.onNodeWithTag("home_total_driven_dial").assertExists()
+        composeTestRule.onNodeWithText("TOTAL DRIVEN").assertExists()
+        composeTestRule.onNodeWithText("Resets Dec 31").assertExists()
+        composeTestRule.onNodeWithText("Your trips will appear here").assertExists()
         // Driving mode layout is not active
         composeTestRule.onNodeWithTag("home_screen_driving_mode").assertDoesNotExist()
     }

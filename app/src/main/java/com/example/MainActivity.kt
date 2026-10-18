@@ -128,7 +128,7 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
-    contentWindowInsets = if (showLiveDrive) {
+    contentWindowInsets = if (showLiveDrive || currentTab == AppTab.HOME) {
       WindowInsets(0, 0, 0, 0)
     } else {
       ScaffoldDefaults.contentWindowInsets
@@ -462,3 +462,4 @@ private fun QuickActionItem(
     }
   }
 }
+
