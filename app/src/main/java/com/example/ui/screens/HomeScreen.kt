@@ -374,27 +374,27 @@ fun HomeScreen(
                                             spotColor = Color(0x400F172A)
                                         )
                                         .clip(heroShape)
-                                        .background(Color(0xFF071426))
+                                        .background(Color(0xFF3B72FF))
                                         .testTag("home_total_driven_dial")
                                 ) {
-                                    // Background Twilight Mountain Highway Image
+                                    // Minimalist royal-blue mountain road illustration
                                     Image(
                                         painter = painterResource(id = R.drawable.img_home_hero),
-                                        contentDescription = "Mountain road background",
+                                        contentDescription = "Minimalist mountain road illustration",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )
 
-                                    // Subtle dark vignette at bottom-left for text legibility
+                                    // Soft lower wash so distance text stays readable
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .background(
                                                 Brush.verticalGradient(
-                                                    0.0f to Color(0x18040C18),
-                                                    0.45f to Color.Transparent,
-                                                    0.75f to Color(0x33030B16),
-                                                    1.0f to Color(0x66020812)
+                                                    0.00f to Color.Transparent,
+                                                    0.52f to Color.Transparent,
+                                                    0.78f to Color(0x22071B4A),
+                                                    1.00f to Color(0x4D071B4A)
                                                 )
                                             )
                                     )
@@ -458,15 +458,15 @@ fun HomeScreen(
                                             }
                                         }
 
-                                        // Translucent Glass Profile Button
+                                        // Frosted glass profile button
                                         Box(
                                             modifier = Modifier
                                                 .size(44.dp)
                                                 .clip(CircleShape)
-                                                .background(Color(0xFF475B74).copy(alpha = 0.52f))
+                                                .background(Color.White.copy(alpha = 0.22f))
                                                 .border(
                                                     width = 1.dp,
-                                                    color = Color.White.copy(alpha = 0.14f),
+                                                    color = Color.White.copy(alpha = 0.32f),
                                                     shape = CircleShape
                                                 )
                                                 .clickable { viewModel.selectTab(AppTab.SETTINGS) }
@@ -525,13 +525,13 @@ fun HomeScreen(
 
                                         Spacer(modifier = Modifier.height(10.dp))
 
-                                        // "• Tracking is on" Dark Navy Pill Badge
+                                        // "• Tracking is on" deep-blue pill badge
                                         Surface(
                                             shape = RoundedCornerShape(50),
-                                            color = Color(0xFF0E1F38).copy(alpha = 0.88f),
+                                            color = Color(0xFF1E3A8A).copy(alpha = 0.72f),
                                             border = BorderStroke(
                                                 1.dp,
-                                                Color(0xFF25426B).copy(alpha = 0.45f)
+                                                Color.White.copy(alpha = 0.18f)
                                             )
                                         ) {
                                             Row(
