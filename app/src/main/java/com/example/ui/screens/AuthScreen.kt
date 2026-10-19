@@ -405,6 +405,10 @@ private fun WelcomeLandingView(
                     )
                 }
             }
+
+            // Extra space under the buttons shortens the illustration and lifts
+            // Sign In / Sign Up higher on the screen.
+            Spacer(modifier = Modifier.height(56.dp))
         }
     }
 }
