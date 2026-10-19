@@ -15,7 +15,8 @@
 .cxx
 local.properties
 .env
-debug.keystore
+debug.keystore*
+.build-outputs/
 
 # Emulator & test screen captures, screenshots, and visual diffs
 screenshots/
