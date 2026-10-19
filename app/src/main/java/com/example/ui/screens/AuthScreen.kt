@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -51,6 +52,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,9 +60,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -108,7 +111,7 @@ private val ZoomedCrop = object : ContentScale {
 
 /**
  * Onboarding and Auth Screen faithfully matching the provided UI design & flow:
- * - Screen 1: "HELLO" Welcome screen with city skyline & white sedan illustration,
+ * - Screen 1: "HELLO" Welcome screen with the mountain road illustration,
  *   rounded navy "Sign In" button and rounded white "Sign Up" button.
  * - Screen 2: "Sign In" screen with illustration header, curved white card,
  *   soft pill inputs for Email & Password, navy "Sign In" button, "Forgot password?",
@@ -223,6 +226,15 @@ private fun WelcomeLandingView(
     canDismiss: Boolean,
     onDismiss: () -> Unit
 ) {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as Activity).window
+        val insets = WindowCompat.getInsetsController(window, view)
+        val previousLightStatusBars = insets.isAppearanceLightStatusBars
+        insets.isAppearanceLightStatusBars = false
+        onDispose { insets.isAppearanceLightStatusBars = previousLightStatusBars }
+    }
+
     val backgroundGradient = Brush.verticalGradient(
         colors = listOf(
             Color(0xFFD8EBFF),
@@ -231,108 +243,108 @@ private fun WelcomeLandingView(
         )
     )
 
+    val heroBottomShape = RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundGradient)
-            .statusBarsPadding()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 28.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Top Section: Back button if allowed & HELLO Title
-            Column(modifier = Modifier.fillMaxWidth()) {
-                if (canDismiss) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.size(40.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = NavyDark
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                } else {
-                    Spacer(modifier = Modifier.height(28.dp))
-                }
-
-                // App Brand Logo & Name
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .padding(bottom = 10.dp)
-                        .testTag("welcome_app_logo")
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_asset),
-                        contentDescription = "App logo",
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                    Text(
-                        text = "MileageTracker",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NavyDark
-                    )
-                }
-
-                Text(
-                    text = "HELLO",
-                    fontSize = 44.sp,
-                    fontWeight = FontWeight.Black,
-                    color = NavyDark,
-                    letterSpacing = (-1).sp
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                Text(
-                    text = "Track drives, log gas receipts & claim maximum tax deductions",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF475569),
-                    lineHeight = 20.sp
-                )
-            }
-
-            // Center Illustration (City & White Car)
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Illustration bleeds to the left, right, and top of the screen.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.img_auth_hero),
-                    contentDescription = "Mileage tracking city and car illustration",
+                    painter = painterResource(id = R.drawable.img_home_hero),
+                    contentDescription = "Minimalist mountain road illustration",
                     modifier = Modifier
-                        .fillMaxWidth(0.95f)
-                        .clip(RoundedCornerShape(24.dp))
-                        .shadow(12.dp, RoundedCornerShape(24.dp)),
-                    contentScale = ZoomedCrop
+                        .fillMaxSize()
+                        .clip(heroBottomShape),
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.BottomCenter
                 )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 28.dp)
+                        .padding(top = 12.dp)
+                ) {
+                    if (canDismiss) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    } else {
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier
+                            .padding(bottom = 10.dp)
+                            .testTag("welcome_app_logo")
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_asset),
+                            contentDescription = "App logo",
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .border(1.5.dp, Color.White, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        Text(
+                            text = "MileageTracker",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+
+                    Text(
+                        text = "HELLO",
+                        fontSize = 44.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        letterSpacing = (-1).sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Track drives, log gas receipts & claim maximum tax deductions",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.92f),
+                        lineHeight = 20.sp
+                    )
+                }
             }
 
             // Bottom Buttons: Rounded Navy "Sign In" & Rounded White "Sign Up"
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(horizontal = 28.dp)
+                    .padding(top = 18.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
