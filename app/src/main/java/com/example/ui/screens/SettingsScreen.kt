@@ -24,8 +24,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -71,6 +69,9 @@ import com.example.ui.theme.SlateTextSecondary
 import com.example.ui.theme.StopRed
 import java.util.Locale
 
+private const val CRA_RATE_PER_KM = 0.73
+private const val IRS_RATE_PER_MILE = 0.76
+
 @Composable
 fun SettingsScreen(
     viewModel: MileageViewModel,
@@ -81,7 +82,6 @@ fun SettingsScreen(
     val userProfile by viewModel.userProfile.collectAsState()
 
     var showClearDialog by remember { mutableStateOf(false) }
-    var showAnonKeyDialog by remember { mutableStateOf(false) }
     var rateInput by remember(settings.reimbursementRate) {
         mutableStateOf(String.format(Locale.US, "%.2f", settings.reimbursementRate))
     }
@@ -164,7 +164,7 @@ fun SettingsScreen(
                                 .background(if (profile?.isGuest == false) MileageBlue else Color(0xFF64748B)),
                             contentAlignment = Alignment.Center
                         ) {
-                            val initial = profile?.name?.firstOrNull()?.uppercase() ?: "G"
+                            val initial = profile?.takeIf { !it.isGuest }?.name?.firstOrNull()?.uppercase() ?: "G"
                             Text(
                                 text = initial,
                                 fontSize = 18.sp,
@@ -174,32 +174,17 @@ fun SettingsScreen(
                         }
 
                         Column {
+                            val signedIn = profile != null && !profile.isGuest
                             Text(
-                                text = profile?.name ?: "Guest Driver",
+                                text = if (signedIn) profile.name else "Guest",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = SlateTextPrimary
                             )
                             Text(
-                                text = profile?.email ?: "Not signed in",
+                                text = if (signedIn) profile.email else "Not signed in",
                                 fontSize = 12.5.sp,
                                 color = SlateTextSecondary
-                            )
-                        }
-                    }
-
-                    if (profile != null && !profile.isGuest) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFEFF6FF),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
-                        ) {
-                            Text(
-                                text = "Pro Plan",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MileageBlue,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
@@ -243,13 +228,28 @@ fun SettingsScreen(
             }
         }
 
-        // Supabase Cloud Database Section
         val syncState by viewModel.supabaseSyncState.collectAsState()
-        var testResultMsg by remember { mutableStateOf<String?>(null) }
-        var isTestingConnection by remember { mutableStateOf(false) }
+        val signedIn = profile != null && !profile.isGuest
+        val backupAvailable = syncState.status != SyncStatus.NOT_CONFIGURED
+        val (badgeBg, badgeFg, badgeText) = when {
+            !backupAvailable -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Unavailable")
+            !signedIn -> Triple(Color(0xFFFEF3C7), Color(0xFFB45309), "Sign in")
+            syncState.status == SyncStatus.SUCCESS -> Triple(Color(0xFFDCFCE7), Color(0xFF15803D), "Synced")
+            syncState.status == SyncStatus.SYNCING -> Triple(Color(0xFFDBEAFE), Color(0xFF1D4ED8), "Syncing")
+            syncState.status == SyncStatus.ERROR -> Triple(Color(0xFFFEE2E2), Color(0xFFB91C1C), "Sync failed")
+            else -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Ready")
+        }
+        val backupDetail = when {
+            !backupAvailable -> "Backup isn't available in this version."
+            !signedIn -> "Sign in to back up trips and receipts to your account."
+            syncState.status == SyncStatus.ERROR -> "The last backup didn't finish. Trips on this device are unchanged."
+            syncState.status == SyncStatus.SUCCESS -> "Trips and receipts are backed up to your account."
+            syncState.status == SyncStatus.SYNCING -> "Backing up trips and receipts."
+            else -> "Back up trips and receipts to your account."
+        }
 
         Card(
-            modifier = Modifier.fillMaxWidth().testTag("settings_supabase_card"),
+            modifier = Modifier.fillMaxWidth().testTag("settings_cloud_backup_card"),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
@@ -265,118 +265,51 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "Supabase Database",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = SlateTextPrimary
-                            )
-                            val (badgeBg, badgeFg, badgeText) = when (syncState.status) {
-                                SyncStatus.SUCCESS -> Triple(Color(0xFFDCFCE7), Color(0xFF15803D), "Connected")
-                                SyncStatus.SYNCING -> Triple(Color(0xFFDBEAFE), Color(0xFF1D4ED8), "Syncing...")
-                                SyncStatus.ERROR -> Triple(Color(0xFFFEE2E2), Color(0xFFB91C1C), "Error")
-                                SyncStatus.NOT_CONFIGURED -> Triple(Color(0xFFFEF3C7), Color(0xFFB45309), "Anon Key Needed")
-                                SyncStatus.IDLE -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Ready")
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = badgeBg
-                            ) {
-                                Text(
-                                    text = badgeText,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = badgeFg,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "https://gszhecjcksyxlptlmwok.supabase.co",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SlateTextSecondary,
-                            fontSize = 11.5.sp
-                        )
-                    }
-                }
-
-                if (syncState.message != null) {
                     Text(
-                        text = syncState.message ?: "",
-                        fontSize = 12.sp,
-                        color = if (syncState.status == SyncStatus.ERROR) Color(0xFFDC2626) else SlateTextSecondary
+                        text = "Cloud backup",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = SlateTextPrimary,
+                        modifier = Modifier.weight(1f)
                     )
-                }
-
-                if (testResultMsg != null) {
-                    val isGood = testResultMsg!!.contains("Connected") || testResultMsg!!.contains("Success")
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (isGood) Color(0xFFF0FDF4) else Color(0xFFFEF2F2),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isGood) Color(0xFFBBF7D0) else Color(0xFFFECACA)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
+                        color = badgeBg
                     ) {
                         Text(
-                            text = testResultMsg ?: "",
-                            fontSize = 12.sp,
-                            color = if (isGood) Color(0xFF16A34A) else Color(0xFFDC2626),
-                            modifier = Modifier.padding(10.dp)
+                            text = badgeText,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = badgeFg,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { showAnonKeyDialog = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Config / Key", fontSize = 12.sp)
-                    }
+                Text(
+                    text = backupDetail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SlateTextSecondary
+                )
 
-                    OutlinedButton(
-                        onClick = {
-                            isTestingConnection = true
-                            testResultMsg = "Testing connection..."
-                            viewModel.testSupabaseConnection { res ->
-                                isTestingConnection = false
-                                testResultMsg = if (res.isSuccess) {
-                                    res.getOrNull() ?: "Connected to Supabase successfully."
-                                } else {
-                                    res.exceptionOrNull()?.message ?: "Connection test failed."
-                                }
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = !isTestingConnection
-                    ) {
-                        Text(if (isTestingConnection) "Testing..." else "Test", fontSize = 12.sp)
-                    }
-
+                if (backupAvailable && signedIn) {
                     Button(
                         onClick = { viewModel.syncWithSupabase() },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
+                        enabled = syncState.status != SyncStatus.SYNCING,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MileageBlue,
                             contentColor = Color.White
                         ),
                         elevation = null
                     ) {
-                        Text("Sync Now", fontSize = 12.sp, color = Color.White)
+                        Text(
+                            text = if (syncState.status == SyncStatus.SYNCING) "Syncing..." else "Sync now",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
                     }
                 }
             }
@@ -553,7 +486,9 @@ fun SettingsScreen(
                             isSelected = settings.unit == "km",
                             onClick = {
                                 viewModel.setUnit("km")
-                                if (settings.reimbursementRate == 0.67) viewModel.setReimbursementRate(0.70)
+                                if (settings.reimbursementRate == IRS_RATE_PER_MILE) {
+                                    viewModel.setReimbursementRate(CRA_RATE_PER_KM)
+                                }
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -563,7 +498,9 @@ fun SettingsScreen(
                             isSelected = settings.unit == "mi",
                             onClick = {
                                 viewModel.setUnit("mi")
-                                if (settings.reimbursementRate == 0.70) viewModel.setReimbursementRate(0.67)
+                                if (settings.reimbursementRate == CRA_RATE_PER_KM) {
+                                    viewModel.setReimbursementRate(IRS_RATE_PER_MILE)
+                                }
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -598,15 +535,28 @@ fun SettingsScreen(
                         // Quick Presets
                         OutlinedButton(
                             onClick = {
-                                val preset = if (settings.unit == "km") 0.70 else 0.67
+                                val preset = if (settings.unit == "km") CRA_RATE_PER_KM else IRS_RATE_PER_MILE
                                 rateInput = String.format(Locale.US, "%.2f", preset)
                                 viewModel.setReimbursementRate(preset)
                             },
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text(if (settings.unit == "km") "2024 CRA (0.70)" else "2024 IRS (0.67)", fontSize = 12.sp)
+                            Text(
+                                text = if (settings.unit == "km") "2026 CRA (0.73)" else "2026 IRS (0.76)",
+                                fontSize = 12.sp
+                            )
                         }
                     }
+
+                    Text(
+                        text = if (settings.unit == "km") {
+                            "2026 CRA rate for the first 5,000 km. Each kilometre after that is $0.67."
+                        } else {
+                            "2026 IRS business rate for July 1 through December 31."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SlateTextMuted
+                    )
                 }
 
                 // Vehicle Name
@@ -691,36 +641,29 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Data & Testing",
+                    text = "Your data",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = SlateTextPrimary
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { viewModel.seedSampleTrips() },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Seed Sample Trips", fontSize = 13.sp)
-                    }
+                Text(
+                    text = "Remove every trip saved on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SlateTextSecondary
+                )
 
-                    Button(
-                        onClick = { showClearDialog = true },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = StopRed,
-                            contentColor = Color.White
-                        ),
-                        elevation = null
-                    ) {
-                        Text("Clear All Trips", fontSize = 13.sp, color = Color.White)
-                    }
+                Button(
+                    onClick = { showClearDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StopRed,
+                        contentColor = Color.White
+                    ),
+                    elevation = null
+                ) {
+                    Text("Clear all trips", fontSize = 13.sp, color = Color.White)
                 }
             }
         }
@@ -756,52 +699,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showAnonKeyDialog) {
-        var keyInput by remember { mutableStateOf(viewModel.supabaseConfig.getAnonKey()) }
-        AlertDialog(
-            onDismissRequest = { showAnonKeyDialog = false },
-            title = { Text("Supabase Configuration", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Project URL: https://gszhecjcksyxlptlmwok.supabase.co",
-                        fontSize = 12.5.sp,
-                        color = SlateTextSecondary
-                    )
-                    Text(
-                        text = "Enter your Supabase Anon / Public Key (found in Supabase Dashboard -> Project Settings -> API):",
-                        fontSize = 13.sp,
-                        color = SlateTextPrimary
-                    )
-                    OutlinedTextField(
-                        value = keyInput,
-                        onValueChange = { keyInput = it },
-                        label = { Text("Anon Key (JWT)") },
-                        placeholder = { Text("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...") },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        maxLines = 3
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.saveSupabaseAnonKey(keyInput.trim())
-                        showAnonKeyDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White)
-                ) {
-                    Text("Save & Connect", color = Color.White)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showAnonKeyDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 }
 
 @Composable

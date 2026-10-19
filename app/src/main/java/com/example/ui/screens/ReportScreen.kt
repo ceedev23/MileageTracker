@@ -18,10 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BusinessCenter
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Share
@@ -53,7 +49,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.TripEntity
+import com.example.data.GasReceiptEntity
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.theme.BusinessBlue
@@ -64,6 +60,7 @@ import com.example.ui.theme.SlateBorder
 import com.example.ui.theme.SlateTextMuted
 import com.example.ui.theme.SlateTextPrimary
 import com.example.ui.theme.SlateTextSecondary
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
@@ -81,7 +78,6 @@ fun ReportScreen(
     val context = LocalContext.current
     val trips by viewModel.trips.collectAsState()
     val receipts by viewModel.receipts.collectAsState()
-    val totalGasExpenses by viewModel.totalGasExpenses.collectAsState()
     val settings by viewModel.settings.collectAsState()
 
     var selectedPeriod by remember { mutableStateOf(ReportPeriod.ALL) }
@@ -97,13 +93,12 @@ fun ReportScreen(
     val currentYear = now.get(Calendar.YEAR)
 
     val filteredTrips = trips.filter { trip ->
-        val tripCal = Calendar.getInstance().apply { timeInMillis = trip.startDate }
-        when (selectedPeriod) {
-            ReportPeriod.ALL -> true
-            ReportPeriod.THIS_MONTH -> tripCal.get(Calendar.MONTH) == currentMonth && tripCal.get(Calendar.YEAR) == currentYear
-            ReportPeriod.THIS_YEAR -> tripCal.get(Calendar.YEAR) == currentYear
-        }
+        matchesReportPeriod(trip.startDate, selectedPeriod, currentMonth, currentYear)
     }
+    val filteredReceipts = receipts.filter { receipt ->
+        matchesReportPeriod(receiptTimeMillis(receipt), selectedPeriod, currentMonth, currentYear)
+    }
+    val periodGasExpenses = filteredReceipts.sumOf { it.totalAmount }
 
     val totalKm = filteredTrips.sumOf { it.distanceKm }
     val businessKm = filteredTrips.filter { it.type == "Business" }.sumOf { it.distanceKm }
@@ -115,6 +110,7 @@ fun ReportScreen(
 
     val estimatedTaxValue = businessDist * rate
     val businessRatio = if (totalDist > 0) (businessDist / totalDist).toFloat() else 0f
+    val personalRatio = if (totalDist > 0) 1f - businessRatio else 0f
 
     Column(
         modifier = modifier
@@ -298,7 +294,7 @@ fun ReportScreen(
                         Column(horizontalAlignment = Alignment.End) {
                             Text("Personal", fontSize = 12.sp, color = SlateTextSecondary)
                             Text(
-                                "${String.format(Locale.getDefault(), "%.1f", personalDist)} $unitLabel (${((1f - businessRatio) * 100).toInt()}%)",
+                                "${String.format(Locale.getDefault(), "%.1f", personalDist)} $unitLabel (${(personalRatio * 100).toInt()}%)",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = SlateTextPrimary
@@ -346,7 +342,7 @@ fun ReportScreen(
                     }
 
                     Text(
-                        text = "$${String.format(Locale.US, "%.2f", totalGasExpenses ?: 0.0)}",
+                        text = "$${String.format(Locale.US, "%.2f", periodGasExpenses)}",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1D4ED8)
@@ -354,7 +350,7 @@ fun ReportScreen(
                 }
 
                 Text(
-                    text = "${receipts.size} receipts captured with AI-extracted totals. Keep digital photo copies for tax deductions.",
+                    text = receiptSummary(filteredReceipts.size, selectedPeriod),
                     style = MaterialTheme.typography.bodySmall,
                     color = SlateTextSecondary
                 )
@@ -421,7 +417,7 @@ fun ReportScreen(
                     }
 
                     Button(
-                        onClick = { viewModel.shareCsvReport(context) },
+                        onClick = { viewModel.shareCsvReport(context, filteredTrips) },
                         modifier = Modifier
                             .weight(1.2f)
                             .testTag("export_csv_button"),
@@ -469,7 +465,7 @@ fun ReportScreen(
                 Button(
                     onClick = {
                         showCsvPreview = false
-                        viewModel.shareCsvReport(context)
+                        viewModel.shareCsvReport(context, filteredTrips)
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MileageBlue,
@@ -487,4 +483,43 @@ fun ReportScreen(
             }
         )
     }
+}
+
+private fun matchesReportPeriod(
+    timeMillis: Long,
+    period: ReportPeriod,
+    currentMonth: Int,
+    currentYear: Int
+): Boolean {
+    val calendar = Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+    return when (period) {
+        ReportPeriod.ALL -> true
+        ReportPeriod.THIS_MONTH ->
+            calendar.get(Calendar.MONTH) == currentMonth && calendar.get(Calendar.YEAR) == currentYear
+        ReportPeriod.THIS_YEAR -> calendar.get(Calendar.YEAR) == currentYear
+    }
+}
+
+private fun receiptTimeMillis(receipt: GasReceiptEntity): Long {
+    val raw = receipt.receiptDate?.trim().orEmpty()
+    if (raw.length >= 10) {
+        try {
+            return SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+                .parse(raw.take(10))
+                ?.time
+                ?: receipt.timestamp
+        } catch (_: Exception) {
+        }
+    }
+    return receipt.timestamp
+}
+
+private fun receiptSummary(count: Int, period: ReportPeriod): String {
+    val noun = if (count == 1) "receipt" else "receipts"
+    val whenPhrase = when (period) {
+        ReportPeriod.ALL -> "saved"
+        ReportPeriod.THIS_MONTH -> "this month"
+        ReportPeriod.THIS_YEAR -> "this year"
+    }
+    return "$count $noun $whenPhrase. Keep the photos with your tax records."
 }

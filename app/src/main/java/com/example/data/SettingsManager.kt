@@ -11,7 +11,7 @@ data class MileageSettings(
     val autoDetect: Boolean = true,
     val dwellMinutes: Int = 5,
     val unit: String = "km", // "km" or "mi"
-    val reimbursementRate: Double = 0.70, // dollars per unit
+    val reimbursementRate: Double = 0.73, // 2026 CRA rate for the first 5,000 km
     val vehicleName: String = "Primary Vehicle",
     val annualGoal: Double = 15000.0 // target annual distance in user's unit
 )
@@ -28,7 +28,7 @@ class SettingsManager(context: Context) {
             autoDetect = prefs.getBoolean("auto_detect", true),
             dwellMinutes = prefs.getInt("dwell_minutes", 5),
             unit = prefs.getString("distance_unit", "km") ?: "km",
-            reimbursementRate = prefs.getFloat("reimbursement_rate", 0.70f).toDouble(),
+            reimbursementRate = prefs.getFloat("reimbursement_rate", 0.73f).toDouble(),
             vehicleName = prefs.getString("vehicle_name", "Primary Vehicle") ?: "Primary Vehicle",
             annualGoal = prefs.getFloat("annual_goal", 15000f).toDouble()
         )

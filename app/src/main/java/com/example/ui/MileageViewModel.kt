@@ -627,10 +627,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         return header + rows
     }
 
-    fun shareCsvReport(context: Context) {
+    fun shareCsvReport(context: Context, tripsToExport: List<TripEntity> = trips.value) {
         val isMiles = settings.value.unit == "mi"
         val rate = settings.value.reimbursementRate
-        val csvData = generateCsv(trips.value, isMiles, rate)
+        val csvData = generateCsv(tripsToExport, isMiles, rate)
 
         try {
             val file = File(context.cacheDir, "Mileage_Report_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv")
