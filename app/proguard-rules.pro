@@ -22,6 +22,8 @@
 
 # Room database entity and DAO preservation
 -keep class com.example.data.** { *; }
+-keep class com.google.mlkit.vision.text.** { *; }
+-keep class com.google.mlkit.vision.common.** { *; }
 -keepclassmembers class * extends androidx.room.RoomDatabase {
     public void <init>();
 }

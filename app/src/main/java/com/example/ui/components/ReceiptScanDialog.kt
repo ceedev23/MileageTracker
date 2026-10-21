@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
@@ -51,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.ui.ReceiptCaptureTarget
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,14 +82,25 @@ fun ReceiptScanDialog(
 ) {
     val context = LocalContext.current
     val scanState by viewModel.receiptScanState.collectAsState()
+    val pendingCapture = remember { mutableStateOf<ReceiptCaptureTarget?>(null) }
 
-    // Camera launcher (takes photo directly, returns Bitmap preview)
+    // Full-resolution capture. The preview contract only returns a tiny thumbnail,
+    // which is too small to read station, gallons, and total off a receipt.
     val takePhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
-        if (bitmap != null) {
-            viewModel.processCapturedReceipt(context, bitmap)
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val target = pendingCapture.value
+        if (target != null && target.file.exists() && target.file.length() > 0L) {
+            viewModel.processReceiptFromUri(context, target.uri)
+        } else if (success) {
+            viewModel.reportReceiptCaptureError("The photo didn't save. Try taking it again.")
         }
+    }
+
+    val openCamera = {
+        val target = viewModel.createReceiptCaptureTarget(context)
+        pendingCapture.value = target
+        takePhotoLauncher.launch(target.uri)
     }
 
     // Photo picker launcher (gallery)
@@ -185,6 +196,16 @@ fun ReceiptScanDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                scanState.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 // If no image is captured yet, show capture options
                 if (scanState.currentBitmap == null && !scanState.isScanningOrExtracting) {
                     Card(
@@ -233,9 +254,7 @@ fun ReceiptScanDialog(
 
                             // Capture Buttons
                             Button(
-                                onClick = {
-                                    takePhotoLauncher.launch(null)
-                                },
+                                onClick = { openCamera() },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp)
@@ -329,7 +348,7 @@ fun ReceiptScanDialog(
                                     color = SlateTextPrimary
                                 )
                                 Text(
-                                    text = "Saving receipt photo and preparing expense details.",
+                                    text = "Reading the station, gallons, and total from your photo.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = SlateTextSecondary,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -429,6 +448,18 @@ fun ReceiptScanDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    if (scanState.errorMessage == null && extracted != null &&
+                        (extracted.totalAmount > 0.0 || extracted.gallonsOrLiters != null || !extracted.merchant.isNullOrBlank())
+                    ) {
+                        Text(
+                            text = "Read from your photo. Review the details, then save.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = DriveGreen,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
                     // Receipt Details Form (User can review and edit before saving)
                     Text(
                         text = "Receipt Details (Review & Save)",
@@ -482,7 +513,7 @@ fun ReceiptScanDialog(
                         OutlinedTextField(
                             value = gallonsInput,
                             onValueChange = { gallonsInput = it },
-                            label = { Text("Gallons") },
+                            label = { Text(if (extracted?.unit == "L") "Liters" else "Gallons") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier
                                 .weight(1f)
@@ -494,7 +525,7 @@ fun ReceiptScanDialog(
                         OutlinedTextField(
                             value = pricePerUnitInput,
                             onValueChange = { pricePerUnitInput = it },
-                            label = { Text("Price/Gal ($)") },
+                            label = { Text(if (extracted?.unit == "L") "Price/L ($)" else "Price/Gal ($)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier
                                 .weight(1f)
@@ -538,6 +569,22 @@ fun ReceiptScanDialog(
                         )
                     }
 
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = paymentMethodInput,
+                        onValueChange = { paymentMethodInput = it },
+                        label = { Text("Payment") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Payment, contentDescription = null, tint = MileageBlue, modifier = Modifier.size(18.dp))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("receipt_payment_input"),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Retake / Change Photo options
@@ -546,7 +593,7 @@ fun ReceiptScanDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { takePhotoLauncher.launch(null) },
+                            onClick = { openCamera() },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(10.dp)
                         ) {

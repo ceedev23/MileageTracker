@@ -3,13 +3,20 @@ package com.example.service
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Typeface
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.max
 
 data class ExtractedReceiptData(
     val merchant: String? = null,
@@ -32,26 +39,108 @@ sealed class ExtractionResult {
 
 object ReceiptExtractionService {
 
+    private val textRecognizer by lazy {
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
     /**
-     * Local production receipt processing (zero AI/cloud reliance).
-     * Prepares standard receipt data with current date and currency defaults.
+     * Reads a receipt photo on device and pulls out the station, fuel, gallons, and total.
+     * The photo itself is still saved even when a field cannot be read.
      */
     suspend fun extractReceiptDetails(bitmap: Bitmap): ExtractionResult = withContext(Dispatchers.Default) {
-        val now = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        val defaultData = ExtractedReceiptData(
-            merchant = "Gas Station",
-            totalAmount = 0.0,
-            currency = "$",
-            fuelType = "Regular Unleaded",
-            gallonsOrLiters = null,
-            unit = "gal",
-            pricePerUnit = null,
-            date = now,
-            paymentMethod = "Card",
-            summary = "Fuel Purchase",
-            rawText = null
+        if (bitmap.width <= 0 || bitmap.height <= 0) {
+            return@withContext ExtractionResult.Failure(
+                "That photo was empty. Retake the receipt in brighter light.",
+                ExtractedReceiptData()
+            )
+        }
+        try {
+            val prepared = prepareForOcr(bitmap)
+            try {
+                val first = ReceiptTextParser.parse(recognize(prepared))
+                val best = if (first.totalAmount > 0.0 || first.gallonsOrLiters != null) {
+                    first
+                } else {
+                    val enhanced = enhanceContrast(prepared)
+                    try {
+                        val second = ReceiptTextParser.parse(recognize(enhanced))
+                        if (detailScore(second) > detailScore(first)) second else first
+                    } finally {
+                        if (enhanced !== prepared) enhanced.recycle()
+                    }
+                }
+                if (!hasUsefulDetails(best)) {
+                    ExtractionResult.Failure(
+                        "Couldn't read the receipt details. Retake the photo flat and in good light, or type them in.",
+                        best
+                    )
+                } else {
+                    ExtractionResult.Success(best)
+                }
+            } finally {
+                if (prepared !== bitmap) prepared.recycle()
+            }
+        } catch (_: Exception) {
+            ExtractionResult.Failure(
+                "Couldn't scan this photo. Enter the receipt details manually.",
+                ExtractedReceiptData()
+            )
+        }
+    }
+
+    private fun recognize(bitmap: Bitmap): String {
+        val image = InputImage.fromBitmap(bitmap, 0)
+        return Tasks.await(textRecognizer.process(image)).text.orEmpty()
+    }
+
+    private fun prepareForOcr(bitmap: Bitmap): Bitmap {
+        val longest = max(bitmap.width, bitmap.height)
+        if (longest >= 1400 || longest <= 0) return bitmap
+        val scale = (1600f / longest).coerceAtMost(3f)
+        val width = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val height = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        return Bitmap.createScaledBitmap(bitmap, width, height, true)
+    }
+
+    private fun enhanceContrast(source: Bitmap): Bitmap {
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint()
+        val matrix = ColorMatrix().apply { setSaturation(0f) }
+        val contrast = 1.6f
+        val translate = (-0.5f * contrast + 0.5f) * 255f
+        matrix.postConcat(
+            ColorMatrix(
+                floatArrayOf(
+                    contrast, 0f, 0f, 0f, translate,
+                    0f, contrast, 0f, 0f, translate,
+                    0f, 0f, contrast, 0f, translate,
+                    0f, 0f, 0f, 1f, 0f
+                )
+            )
         )
-        ExtractionResult.Success(defaultData)
+        paint.colorFilter = ColorMatrixColorFilter(matrix)
+        canvas.drawBitmap(source, 0f, 0f, paint)
+        return output
+    }
+
+    private fun hasUsefulDetails(data: ExtractedReceiptData): Boolean {
+        return data.totalAmount > 0.0 ||
+            data.gallonsOrLiters != null ||
+            data.pricePerUnit != null ||
+            !data.merchant.isNullOrBlank() ||
+            !data.fuelType.isNullOrBlank()
+    }
+
+    private fun detailScore(data: ExtractedReceiptData): Int {
+        var score = 0
+        if (data.totalAmount > 0.0) score += 4
+        if (data.gallonsOrLiters != null) score += 3
+        if (data.pricePerUnit != null) score += 2
+        if (!data.merchant.isNullOrBlank()) score += 1
+        if (!data.fuelType.isNullOrBlank()) score += 1
+        if (!data.date.isNullOrBlank()) score += 1
+        return score
     }
 
     /**

@@ -134,6 +134,8 @@ dependencies {
   // implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
   implementation(libs.play.services.location)
+  implementation(libs.androidx.exifinterface)
+  implementation(libs.mlkit.text.recognition)
   // implementation(libs.play.services.maps)
   // implementation(libs.maps.compose)
   // implementation(libs.retrofit)

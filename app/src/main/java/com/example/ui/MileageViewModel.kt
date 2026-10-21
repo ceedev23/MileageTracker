@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
@@ -42,6 +44,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.max
 
 enum class AppTab(val label: String) {
     HOME("Home"),
@@ -62,6 +65,11 @@ data class UndoAction(
     val trip: TripEntity,
     val previousType: String?,
     val assignedType: String
+)
+
+data class ReceiptCaptureTarget(
+    val file: File,
+    val uri: Uri
 )
 
 data class ReceiptScanUiState(
@@ -669,6 +677,26 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         _receiptScanState.value = ReceiptScanUiState(isDialogVisible = false)
     }
 
+    fun createReceiptCaptureTarget(context: Context): ReceiptCaptureTarget {
+        val dir = File(context.cacheDir, "receipt_captures").apply { mkdirs() }
+        val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
+        file.createNewFile()
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        return ReceiptCaptureTarget(file, uri)
+    }
+
+    fun reportReceiptCaptureError(message: String) {
+        _receiptScanState.value = _receiptScanState.value.copy(
+            isDialogVisible = true,
+            isScanningOrExtracting = false,
+            errorMessage = message
+        )
+    }
+
     fun processCapturedReceipt(
         context: Context,
         bitmap: Bitmap,
@@ -696,45 +724,45 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 }
             }
 
-            // Local receipt extraction and state setup (no cloud/AI dependency)
-            val receiptData = prefilledData ?: when (val res = ReceiptExtractionService.extractReceiptDetails(bitmap)) {
-                is ExtractionResult.Success -> res.data
-                is ExtractionResult.Failure -> res.fallbackData ?: ExtractedReceiptData()
+            val extraction = if (prefilledData != null) {
+                ExtractionResult.Success(prefilledData)
+            } else {
+                ReceiptExtractionService.extractReceiptDetails(bitmap)
             }
+            val receiptData = when (extraction) {
+                is ExtractionResult.Success -> extraction.data
+                is ExtractionResult.Failure -> extraction.fallbackData ?: ExtractedReceiptData()
+            }
+            val errorMessage = (extraction as? ExtractionResult.Failure)?.message
 
             _receiptScanState.value = _receiptScanState.value.copy(
                 isScanningOrExtracting = false,
                 currentSavedImagePath = imagePath,
-                extractedData = receiptData
+                extractedData = receiptData,
+                errorMessage = errorMessage
             )
         }
     }
 
     fun processReceiptFromUri(context: Context, uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                if (bitmap != null) {
-                    withContext(Dispatchers.Main) {
-                        processCapturedReceipt(context, bitmap)
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        _receiptScanState.value = _receiptScanState.value.copy(
-                            errorMessage = "Could not load selected image.",
-                            isDialogVisible = true
-                        )
-                    }
+        viewModelScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                try {
+                    decodeReceiptBitmap(context, uri)
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    deleteCaptureFile(uri)
                 }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    _receiptScanState.value = _receiptScanState.value.copy(
-                        errorMessage = "Error reading image: ${e.message}",
-                        isDialogVisible = true
-                    )
-                }
+            }
+            if (bitmap != null) {
+                processCapturedReceipt(context, bitmap)
+            } else {
+                _receiptScanState.value = _receiptScanState.value.copy(
+                    errorMessage = "Could not load that photo. Try taking it again.",
+                    isDialogVisible = true,
+                    isScanningOrExtracting = false
+                )
             }
         }
     }
@@ -785,6 +813,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             currency = currency,
             fuelType = fuelType,
             gallonsOrLiters = gallonsOrLiters,
+            unit = state.extractedData?.unit ?: "gal",
             pricePerUnit = pricePerUnit,
             receiptDate = receiptDate,
             paymentMethod = paymentMethod,
@@ -875,5 +904,43 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 gasReceiptRepository.insertReceipt(r)
             }
         }
+    }
+
+    private fun decodeReceiptBitmap(context: Context, uri: Uri): Bitmap? {
+        val resolver = context.contentResolver
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sample = 1
+        while (max(bounds.outWidth, bounds.outHeight) / sample > 2000) sample *= 2
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        val decoded = resolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, options)
+        } ?: return null
+
+        val rotation = try {
+            resolver.openInputStream(uri)?.use { stream ->
+                ExifInterface(stream).rotationDegrees
+            } ?: 0
+        } catch (_: Exception) {
+            0
+        }
+        if (rotation == 0) return decoded
+
+        val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
+        val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        if (rotated != decoded) decoded.recycle()
+        return rotated
+    }
+
+    private fun deleteCaptureFile(uri: Uri) {
+        val name = uri.lastPathSegment?.substringAfterLast('/') ?: return
+        if (!name.startsWith("capture_")) return
+        val file = File(getApplication<Application>().cacheDir, "receipt_captures/$name")
+        if (file.exists()) file.delete()
     }
 }
