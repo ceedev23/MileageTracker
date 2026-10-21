@@ -16,16 +16,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -92,10 +93,20 @@ enum class AuthStep {
 }
 
 private val NavyDark = Color(0xFF1E284A)
-private val SkyBlueLight = Color(0xFFCDE4FE)
-private val SkyBlueMid = Color(0xFFB1D7FE)
-private val SkyBlueDeeper = Color(0xFF7CB8F6)
 private val InputBg = Color(0xFFF1F5F9)
+
+// Welcome screen, sampled from the scenic reference.
+private val WelcomeBlue = Color(0xFF2E6AFE)
+private val WelcomePanelTop = Color(0xFF97C6F8)
+private val WelcomePanelBottom = Color(0xFF84BBF4)
+private val WelcomeSignUpFill = Color(0xFFFCFCFE)
+private val WelcomeSkyScrim = Brush.verticalGradient(
+    0.00f to Color(0x992158F0),
+    0.12f to Color(0x732158F0),
+    0.26f to Color(0x262158F0),
+    0.38f to Color.Transparent,
+    1.00f to Color.Transparent
+)
 
 private val ZoomedCrop = object : ContentScale {
     override fun computeScaleFactor(
@@ -216,7 +227,8 @@ fun AuthScreen(
 }
 
 /**
- * Screen 1: Welcome / Landing Page matching the left mockup
+ * Welcome landing: scenic road bleeds to the screen edges, then a light-blue
+ * panel holds the large pill actions and the guest link.
  */
 @Composable
 private fun WelcomeLandingView(
@@ -235,36 +247,42 @@ private fun WelcomeLandingView(
         onDispose { insets.isAppearanceLightStatusBars = previousLightStatusBars }
     }
 
-    val backgroundGradient = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFFD8EBFF),
-            Color(0xFFC0DEFE),
-            Color(0xFF90C2F9)
-        )
+    val panelGradient = Brush.verticalGradient(
+        colors = listOf(WelcomePanelTop, WelcomePanelBottom)
     )
+    val heroBottomShape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+    val pill = RoundedCornerShape(33.dp)
 
-    val heroBottomShape = RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp)
-
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundGradient)
+            .background(panelGradient)
+            .navigationBarsPadding()
     ) {
+        val gapAfterArt = maxHeight * 0.05f
+        val gapBeforeGuest = maxHeight * 0.06f
+        val gapBelowGuest = maxHeight * 0.04f
+
         Column(modifier = Modifier.fillMaxSize()) {
-            // Illustration bleeds to the left, right, and top of the screen.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
+                    .clip(heroBottomShape)
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.img_home_hero),
                     contentDescription = "Minimalist mountain road illustration",
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(heroBottomShape),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.BottomCenter
+                )
+                // The artwork sky is paler than the reference. Deepen only the
+                // upper sky so the wordmark stays on saturated blue.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(WelcomeSkyScrim)
                 )
 
                 Column(
@@ -272,143 +290,138 @@ private fun WelcomeLandingView(
                         .fillMaxWidth()
                         .statusBarsPadding()
                         .padding(horizontal = 28.dp)
-                        .padding(top = 12.dp)
+                        .padding(top = 8.dp)
                 ) {
                     if (canDismiss) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Start
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(40.dp)
                         ) {
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = Color.White
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White
+                            )
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                     } else {
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier
-                            .padding(bottom = 10.dp)
-                            .testTag("welcome_app_logo")
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.testTag("welcome_app_logo")
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_asset),
                             contentDescription = "App logo",
                             modifier = Modifier
-                                .size(34.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .border(1.5.dp, Color.White, CircleShape),
                             contentScale = ContentScale.Crop
                         )
                         Text(
                             text = "MileageTracker",
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     }
 
+                    Spacer(modifier = Modifier.height(18.dp))
+
                     Text(
                         text = "HELLO",
-                        fontSize = 44.sp,
+                        fontSize = 42.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White,
-                        letterSpacing = (-1).sp
+                        letterSpacing = 0.2.sp
                     )
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Track drives, log gas receipts & claim maximum tax deductions",
-                        fontSize = 14.sp,
+                        text = "Track drives, log gas receipts & claim\nmaximum tax deductions",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
-                        color = Color.White.copy(alpha = 0.92f),
-                        lineHeight = 20.sp
+                        color = Color.White,
+                        lineHeight = 21.sp
                     )
                 }
             }
 
-            // Bottom Buttons: Rounded Navy "Sign In" & Rounded White "Sign Up"
+            Spacer(modifier = Modifier.height(gapAfterArt))
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 28.dp)
-                    .padding(top = 18.dp, bottom = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                    .padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // App's Blue Sign In Button (Flat, no shadow, white text)
                 Button(
                     onClick = onNavigateToSignIn,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(64.dp)
                         .testTag("welcome_sign_in_button"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = pill,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MileageBlue,
+                        containerColor = WelcomeBlue,
                         contentColor = Color.White
                     ),
                     elevation = null
                 ) {
                     Text(
                         text = "Sign In",
-                        fontSize = 16.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                 }
 
-                // White Sign Up Button with App Blue Accents
+                Spacer(modifier = Modifier.height(14.dp))
+
                 Button(
                     onClick = onNavigateToSignUp,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(54.dp)
+                        .height(64.dp)
                         .testTag("welcome_sign_up_button"),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = pill,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = MileageBlue
+                        containerColor = WelcomeSignUpFill,
+                        contentColor = WelcomeBlue
                     ),
                     elevation = null
                 ) {
                     Text(
                         text = "Sign Up",
-                        fontSize = 16.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MileageBlue
-                    )
-                }
-
-                // Guest Access Prompt
-                TextButton(
-                    onClick = onContinueAsGuest,
-                    modifier = Modifier.testTag("auth_guest_button")
-                ) {
-                    Text(
-                        text = "Continue as Guest  →",
-                        fontSize = 13.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MileageBlue
+                        color = WelcomeBlue
                     )
                 }
             }
 
-            // Extra space under the buttons shortens the illustration and lifts
-            // Sign In / Sign Up higher on the screen.
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(gapBeforeGuest))
+
+            TextButton(
+                onClick = onContinueAsGuest,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .testTag("auth_guest_button")
+            ) {
+                Text(
+                    text = "Continue as Guest  →",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = WelcomeBlue
+                )
+            }
+
+            Spacer(modifier = Modifier.height(gapBelowGuest))
         }
     }
 }
