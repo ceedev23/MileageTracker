@@ -14,10 +14,22 @@ data class GasReceiptEntity(
     val currency: String = "$",
     val fuelType: String? = null,
     val gallonsOrLiters: Double? = null,
-    val unit: String = "gal",
+    val unit: String = "L",
     val pricePerUnit: Double? = null,
     val receiptDate: String? = null,
     val paymentMethod: String? = null,
     val rawExtraction: String? = null,
     val tripId: Long? = null
 )
+
+fun isGallonUnit(unit: String?): Boolean = unit.equals("gal", ignoreCase = true)
+
+fun fuelVolumeLabel(unit: String?): String = if (isGallonUnit(unit)) "Gallons" else "Litres"
+
+fun fuelUnitShort(unit: String?): String = if (isGallonUnit(unit)) "gal" else "L"
+
+fun fuelPriceFieldLabel(unit: String?): String =
+    if (isGallonUnit(unit)) "Price/Gal ($)" else "Price/L ($)"
+
+fun fuelPriceDetailLabel(unit: String?): String =
+    if (isGallonUnit(unit)) "Price per gallon" else "Price per litre"

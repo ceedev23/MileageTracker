@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddRoad
+import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.PlayArrow
@@ -62,8 +63,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
+import com.example.ui.components.OdometerDialog
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.components.TripEditDialog
 import com.example.ui.screens.AuthScreen
@@ -108,6 +111,7 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
 
   var showQuickActionsSheet by remember { mutableStateOf(false) }
   var showManualTripDialog by remember { mutableStateOf(false) }
+  var showOdometerDialog by remember { mutableStateOf(false) }
   val userProfile by viewModel.userProfile.collectAsState()
   val isAuthPromptVisible by viewModel.isAuthPromptVisible.collectAsState()
 
@@ -351,10 +355,29 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        val odometerSubtitle = settings.odometerKm?.let { km ->
+          val shown = if (settings.unit == "mi") km * 0.621371 else km
+          val unit = if (settings.unit == "mi") "mi" else "km"
+          "Last ${String.format(Locale.US, "%,.1f", shown)} $unit"
+        } ?: "Bluetooth OBD adapter, or type the dash reading"
+        QuickActionItem(
+          title = "Odometer",
+          subtitle = odometerSubtitle,
+          icon = Icons.Default.Bluetooth,
+          iconBgColor = Color(0xFFECFDF5),
+          iconTint = Color(0xFF059669),
+          onClick = {
+            showQuickActionsSheet = false
+            showOdometerDialog = true
+          }
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
         // 3. Scan Gas Receipt Action
         QuickActionItem(
           title = "Scan Gas Receipt",
-          subtitle = "Instant camera OCR for fuel & gallons",
+          subtitle = "Instant camera OCR for fuel & litres",
           icon = Icons.AutoMirrored.Filled.ReceiptLong,
           iconBgColor = Color(0xFFFEF3C7),
           iconTint = Color(0xFFD97706),
@@ -380,6 +403,13 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
         )
       }
     }
+  }
+
+  if (showOdometerDialog) {
+    OdometerDialog(
+      viewModel = viewModel,
+      onDismiss = { showOdometerDialog = false }
+    )
   }
 
   // Manual Trip Dialog launched from Quick Actions

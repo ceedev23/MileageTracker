@@ -15,7 +15,10 @@ data class SupabaseSession(
     val refreshToken: String,
     val user: SupabaseUser,
     val expiresAt: Long = System.currentTimeMillis() + 3600 * 1000L
-)
+) {
+    fun isAccessExpired(now: Long = System.currentTimeMillis(), skewMs: Long = 60_000L): Boolean =
+        expiresAt <= now + skewMs
+}
 
 enum class SyncStatus {
     IDLE,
@@ -134,7 +137,7 @@ data class SupabaseReceiptDto(
     val currency: String = "$",
     val fuelType: String? = null,
     val gallonsOrLiters: Double? = null,
-    val unit: String = "gal",
+    val unit: String = "L",
     val pricePerUnit: Double? = null,
     val receiptDate: String? = null,
     val paymentMethod: String? = null,
@@ -220,7 +223,7 @@ data class SupabaseReceiptDto(
                 currency = json.optString("currency", "$"),
                 fuelType = json.optString("fuel_type").takeIf { it.isNotBlank() && it != "null" },
                 gallonsOrLiters = if (json.has("gallons_or_liters") && !json.isNull("gallons_or_liters")) json.getDouble("gallons_or_liters") else null,
-                unit = json.optString("unit", "gal"),
+                unit = json.optString("unit", "L").ifBlank { "L" },
                 pricePerUnit = if (json.has("price_per_unit") && !json.isNull("price_per_unit")) json.getDouble("price_per_unit") else null,
                 receiptDate = json.optString("receipt_date").takeIf { it.isNotBlank() && it != "null" },
                 paymentMethod = json.optString("payment_method").takeIf { it.isNotBlank() && it != "null" },

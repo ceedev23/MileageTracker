@@ -3,6 +3,7 @@ package com.example.data.supabase
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.BuildConfig
+import com.example.data.InputCheck
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,7 +39,7 @@ class SupabaseConfig(context: Context) {
     }
 
     fun setUrl(url: String) {
-        val clean = url.trim().removeSuffix("/")
+        val clean = InputCheck.projectUrl(url) ?: return
         prefs.edit().putString(KEY_URL, clean).apply()
         _urlFlow.value = clean
     }
@@ -49,7 +50,7 @@ class SupabaseConfig(context: Context) {
     }
 
     fun setAnonKey(key: String) {
-        val clean = key.trim()
+        val clean = InputCheck.anonKey(key) ?: return
         prefs.edit().putString(KEY_ANON_KEY, clean).apply()
         _anonKeyFlow.value = clean
     }
@@ -104,6 +105,17 @@ class SupabaseConfig(context: Context) {
         _sessionFlow.value = null
     }
 
+    fun loginFailureCount(): Int = prefs.getInt(KEY_LOGIN_FAILURES, 0)
+
+    fun loginLockedUntil(): Long = prefs.getLong(KEY_LOGIN_LOCKED_UNTIL, 0L)
+
+    fun saveLoginAttempts(failures: Int, lockedUntil: Long) {
+        prefs.edit()
+            .putInt(KEY_LOGIN_FAILURES, failures)
+            .putLong(KEY_LOGIN_LOCKED_UNTIL, lockedUntil)
+            .commit()
+    }
+
     companion object {
         private const val KEY_URL = "supabase_url"
         private const val KEY_ANON_KEY = "supabase_anon_key"
@@ -113,5 +125,7 @@ class SupabaseConfig(context: Context) {
         private const val KEY_USER_EMAIL = "supabase_user_email"
         private const val KEY_USER_NAME = "supabase_user_name"
         private const val KEY_EXPIRES_AT = "supabase_expires_at"
+        private const val KEY_LOGIN_FAILURES = "login_failures"
+        private const val KEY_LOGIN_LOCKED_UNTIL = "login_locked_until"
     }
 }

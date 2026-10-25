@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.graphics.BitmapFactory
+import com.example.data.InputCheck
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +66,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.example.data.GasReceiptEntity
+import com.example.data.fuelPriceDetailLabel
+import com.example.data.fuelUnitShort
+import com.example.data.fuelVolumeLabel
 import com.example.ui.MileageViewModel
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.theme.DriveGreen
@@ -76,7 +80,6 @@ import com.example.ui.theme.SlateSurfaceVariant
 import com.example.ui.theme.SlateTextMuted
 import com.example.ui.theme.SlateTextPrimary
 import com.example.ui.theme.SlateTextSecondary
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -331,7 +334,7 @@ fun ReceiptsScreen(
                             )
 
                             Text(
-                                text = "Snap a picture of your gas pump or paper receipt. The app automatically extracts the station name, fuel amount, gallons, and grand total.",
+                                text = "Snap a picture of your gas pump or paper receipt. The app automatically extracts the station name, fuel amount, litres, and grand total.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = SlateTextSecondary,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -431,8 +434,8 @@ fun ReceiptCardItem(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Receipt Image Thumbnail Preview
-            val imageFile = File(receipt.imagePath)
-            if (imageFile.exists()) {
+            val imageFile = InputCheck.receiptFile(LocalContext.current.filesDir, receipt.imagePath)
+            if (imageFile != null && imageFile.exists()) {
                 AsyncImage(
                     model = imageFile,
                     contentDescription = "Receipt Image",
@@ -486,7 +489,7 @@ fun ReceiptCardItem(
                     if (!receipt.fuelType.isNullOrBlank()) append(receipt.fuelType)
                     if (receipt.gallonsOrLiters != null) {
                         if (isNotEmpty()) append(" • ")
-                        append("${String.format(Locale.US, "%.2f", receipt.gallonsOrLiters)} ${receipt.unit}")
+                        append("${String.format(Locale.US, "%.2f", receipt.gallonsOrLiters)} ${fuelUnitShort(receipt.unit)}")
                     }
                 }
                 if (fuelDetails.isNotBlank()) {
@@ -576,8 +579,8 @@ fun ReceiptDetailModal(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Full Image Preview
-                val imageFile = File(receipt.imagePath)
-                if (imageFile.exists()) {
+                val imageFile = InputCheck.receiptFile(LocalContext.current.filesDir, receipt.imagePath)
+                if (imageFile != null && imageFile.exists()) {
                     AsyncImage(
                         model = imageFile,
                         contentDescription = "Full Receipt",
@@ -641,10 +644,10 @@ fun ReceiptDetailModal(
                         DetailRow(label = "Fuel Grade", value = receipt.fuelType)
                     }
                     if (receipt.gallonsOrLiters != null) {
-                        DetailRow(label = "Volume", value = "${String.format(Locale.US, "%.3f", receipt.gallonsOrLiters)} ${receipt.unit}")
+                        DetailRow(label = fuelVolumeLabel(receipt.unit), value = "${String.format(Locale.US, "%.3f", receipt.gallonsOrLiters)} ${fuelUnitShort(receipt.unit)}")
                     }
                     if (receipt.pricePerUnit != null) {
-                        DetailRow(label = "Price per ${receipt.unit}", value = "$${String.format(Locale.US, "%.3f", receipt.pricePerUnit)}")
+                        DetailRow(label = fuelPriceDetailLabel(receipt.unit), value = "$${String.format(Locale.US, "%.3f", receipt.pricePerUnit)}")
                     }
                     if (!receipt.paymentMethod.isNullOrBlank()) {
                         DetailRow(label = "Payment", value = receipt.paymentMethod)

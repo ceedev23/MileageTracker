@@ -83,6 +83,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.InputCheck
 import com.example.ui.MileageViewModel
 import com.example.ui.theme.MileageBlue
 
@@ -623,7 +624,7 @@ private fun SignInFormView(
                     OutlinedTextField(
                         value = email,
                         onValueChange = {
-                            email = it
+                            email = InputCheck.keepEmail(it)
                             localError = null
                             if (backendError != null) onClearBackendMessages()
                         },
@@ -654,7 +655,7 @@ private fun SignInFormView(
                     OutlinedTextField(
                         value = password,
                         onValueChange = {
-                            password = it
+                            password = InputCheck.keepPassword(it)
                             localError = null
                             if (backendError != null) onClearBackendMessages()
                         },
@@ -683,11 +684,12 @@ private fun SignInFormView(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 focusManager.clearFocus()
-                                val cleanEmail = email.trim()
-                                if (cleanEmail.isEmpty() || !cleanEmail.contains("@")) {
+                                val cleanEmail = InputCheck.email(email)
+                                val passwordError = InputCheck.passwordProblem(password)
+                                if (cleanEmail == null) {
                                     localError = "Please enter a valid email address."
-                                } else if (password.length < 6) {
-                                    localError = "Password must be at least 6 characters."
+                                } else if (passwordError != null) {
+                                    localError = passwordError
                                 } else {
                                     localError = null
                                     onClearBackendMessages()
@@ -707,11 +709,12 @@ private fun SignInFormView(
                     Button(
                         onClick = {
                             focusManager.clearFocus()
-                            val cleanEmail = email.trim()
-                            if (cleanEmail.isEmpty() || !cleanEmail.contains("@")) {
+                            val cleanEmail = InputCheck.email(email)
+                            val passwordError = InputCheck.passwordProblem(password)
+                            if (cleanEmail == null) {
                                 localError = "Please enter a valid email address."
-                            } else if (password.length < 6) {
-                                localError = "Password must be at least 6 characters."
+                            } else if (passwordError != null) {
+                                localError = passwordError
                             } else {
                                 localError = null
                                 onClearBackendMessages()
@@ -929,7 +932,7 @@ private fun SignInFormView(
                     OutlinedTextField(
                         value = resetEmail,
                         onValueChange = {
-                            resetEmail = it
+                            resetEmail = InputCheck.keepEmail(it)
                             resetError = null
                         },
                         label = { Text("Email") },
@@ -949,8 +952,8 @@ private fun SignInFormView(
             confirmButton = {
                 Button(
                     onClick = {
-                        val clean = resetEmail.trim()
-                        if (clean.isBlank() || !clean.contains("@")) {
+                        val clean = InputCheck.email(resetEmail)
+                        if (clean == null) {
                             resetError = "Please enter a valid email address."
                             return@Button
                         }
@@ -1246,7 +1249,7 @@ private fun SignUpFormView(
                     OutlinedTextField(
                         value = name,
                         onValueChange = {
-                            name = it
+                            name = InputCheck.keepName(it)
                             localError = null
                             if (backendError != null) onClearBackendMessages()
                         },
@@ -1277,7 +1280,7 @@ private fun SignUpFormView(
                     OutlinedTextField(
                         value = email,
                         onValueChange = {
-                            email = it
+                            email = InputCheck.keepEmail(it)
                             localError = null
                             if (backendError != null) onClearBackendMessages()
                         },
@@ -1308,7 +1311,7 @@ private fun SignUpFormView(
                     OutlinedTextField(
                         value = password,
                         onValueChange = {
-                            password = it
+                            password = InputCheck.keepPassword(it)
                             localError = null
                             if (backendError != null) onClearBackendMessages()
                         },
@@ -1349,7 +1352,7 @@ private fun SignUpFormView(
                     OutlinedTextField(
                         value = confirmPassword,
                         onValueChange = {
-                            confirmPassword = it
+                            confirmPassword = InputCheck.keepPassword(it)
                             localError = null
                             if (backendError != null) onClearBackendMessages()
                         },
@@ -1569,19 +1572,24 @@ private fun validateAndRegister(
     onError: (String) -> Unit,
     onSuccess: (String, String, String) -> Unit
 ) {
-    val cleanName = name.trim()
-    val cleanEmail = email.trim()
+    val cleanName = InputCheck.exactName(name)
+    val cleanEmail = InputCheck.email(email)
+    val passwordError = InputCheck.passwordProblem(password)
 
-    if (cleanName.isEmpty()) {
+    if (name.isBlank()) {
         onError("Please enter your name.")
         return
     }
-    if (cleanEmail.isEmpty() || !cleanEmail.contains("@")) {
+    if (cleanName == null) {
+        onError("Name can use letters, spaces, hyphens, and apostrophes.")
+        return
+    }
+    if (cleanEmail == null) {
         onError("Please enter a valid email address.")
         return
     }
-    if (password.length < 6) {
-        onError("Password must be at least 6 characters.")
+    if (passwordError != null) {
+        onError(passwordError)
         return
     }
     if (password != confirmPassword) {

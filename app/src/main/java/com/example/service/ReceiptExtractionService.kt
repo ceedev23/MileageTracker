@@ -24,7 +24,7 @@ data class ExtractedReceiptData(
     val currency: String = "$",
     val fuelType: String? = null,
     val gallonsOrLiters: Double? = null,
-    val unit: String = "gal",
+    val unit: String = "L",
     val pricePerUnit: Double? = null,
     val date: String? = null,
     val paymentMethod: String? = null,
@@ -44,7 +44,7 @@ object ReceiptExtractionService {
     }
 
     /**
-     * Reads a receipt photo on device and pulls out the station, fuel, gallons, and total.
+     * Reads a receipt photo on device and pulls out the station, fuel, litres, and total.
      * The photo itself is still saved even when a field cannot be read.
      */
     suspend fun extractReceiptDetails(bitmap: Bitmap): ExtractionResult = withContext(Dispatchers.Default) {
@@ -148,11 +148,11 @@ object ReceiptExtractionService {
      * Perfect for testing in Android emulator or camera-less environments!
      */
     fun createSampleGasReceiptBitmap(
-        merchant: String = "CHEVRON SERVICE STATION",
-        gallons: Double = 13.420,
-        pricePerGal: Double = 3.959,
-        total: Double = 53.13,
-        fuelType: String = "REGULAR 87 (PUMP #06)"
+        merchant: String = "PETRO-CANADA",
+        litres: Double = 45.200,
+        pricePerLitre: Double = 1.599,
+        total: Double = 72.27,
+        fuelType: String = "REGULAR (PUMP #06)"
     ): Bitmap {
         val width = 600
         val height = 900
@@ -191,9 +191,9 @@ object ReceiptExtractionService {
         y += 45f
         canvas.drawText(merchant, (width / 2).toFloat(), y, centerPaint)
         y += 30f
-        canvas.drawText("1042 HIGHLAND AVE, SPRINGFIELD", (width / 2).toFloat(), y, Paint(paint).apply { textAlign = Paint.Align.CENTER; textSize = 17f })
+        canvas.drawText("88 KING ST W, TORONTO", (width / 2).toFloat(), y, Paint(paint).apply { textAlign = Paint.Align.CENTER; textSize = 17f })
         y += 26f
-        canvas.drawText("TEL: (555) 328-9901", (width / 2).toFloat(), y, Paint(paint).apply { textAlign = Paint.Align.CENTER; textSize = 17f })
+        canvas.drawText("TEL: (416) 555-0199", (width / 2).toFloat(), y, Paint(paint).apply { textAlign = Paint.Align.CENTER; textSize = 17f })
         y += 40f
 
         // Separator line
@@ -213,12 +213,12 @@ object ReceiptExtractionService {
         y += 40f
 
         // Details
-        canvas.drawText("GALLONS PUMPED:", 35f, y, paint)
-        canvas.drawText(String.format(Locale.US, "%.3f GAL", gallons), 380f, y, boldPaint)
+        canvas.drawText("LITRES PUMPED:", 35f, y, paint)
+        canvas.drawText(String.format(Locale.US, "%.3f L", litres), 380f, y, boldPaint)
         y += 35f
 
-        canvas.drawText("PRICE / GALLON:", 35f, y, paint)
-        canvas.drawText(String.format(Locale.US, "$%.3f", pricePerGal), 380f, y, boldPaint)
+        canvas.drawText("PRICE / LITRE:", 35f, y, paint)
+        canvas.drawText(String.format(Locale.US, "$%.3f", pricePerLitre), 380f, y, boldPaint)
         y += 35f
 
         canvas.drawText("SUBTOTAL:", 35f, y, paint)

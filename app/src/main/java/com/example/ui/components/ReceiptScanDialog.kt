@@ -50,6 +50,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.data.InputCheck
+import com.example.data.fuelPriceFieldLabel
+import com.example.data.fuelVolumeLabel
 import com.example.ui.ReceiptCaptureTarget
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,19 +117,36 @@ fun ReceiptScanDialog(
 
     val extracted = scanState.extractedData
 
-    var merchantInput by remember(extracted) { mutableStateOf(extracted?.merchant ?: "") }
-    var totalAmountInput by remember(extracted) {
-        mutableStateOf(if (extracted != null && extracted.totalAmount > 0) String.format(Locale.US, "%.2f", extracted.totalAmount) else "")
+    var merchantInput by remember(extracted) {
+        mutableStateOf(extracted?.merchant?.let { InputCheck.finishLabel(it, 80) } ?: "")
     }
-    var fuelTypeInput by remember(extracted) { mutableStateOf(extracted?.fuelType ?: "") }
+    var totalAmountInput by remember(extracted) {
+        mutableStateOf(
+            extracted?.totalAmount?.takeIf { InputCheck.receiptTotal(it) != null }
+                ?.let { String.format(Locale.US, "%.2f", it) } ?: ""
+        )
+    }
+    var fuelTypeInput by remember(extracted) {
+        mutableStateOf(extracted?.fuelType?.let { InputCheck.finishLabel(it, 40) } ?: "")
+    }
     var gallonsInput by remember(extracted) {
-        mutableStateOf(if (extracted?.gallonsOrLiters != null) String.format(Locale.US, "%.3f", extracted.gallonsOrLiters) else "")
+        mutableStateOf(
+            extracted?.gallonsOrLiters?.takeIf { InputCheck.fuelVolume(it) != null }
+                ?.let { String.format(Locale.US, "%.3f", it) } ?: ""
+        )
     }
     var pricePerUnitInput by remember(extracted) {
-        mutableStateOf(if (extracted?.pricePerUnit != null) String.format(Locale.US, "%.3f", extracted.pricePerUnit) else "")
+        mutableStateOf(
+            extracted?.pricePerUnit?.takeIf { InputCheck.fuelPrice(it) != null }
+                ?.let { String.format(Locale.US, "%.3f", it) } ?: ""
+        )
     }
-    var dateInput by remember(extracted) { mutableStateOf(extracted?.date ?: "") }
-    var paymentMethodInput by remember(extracted) { mutableStateOf(extracted?.paymentMethod ?: "") }
+    var dateInput by remember(extracted) {
+        mutableStateOf(extracted?.date?.takeIf { InputCheck.receiptDate(it) != null } ?: "")
+    }
+    var paymentMethodInput by remember(extracted) {
+        mutableStateOf(extracted?.paymentMethod?.let { InputCheck.finishLabel(it, 40) } ?: "")
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -348,7 +368,7 @@ fun ReceiptScanDialog(
                                     color = SlateTextPrimary
                                 )
                                 Text(
-                                    text = "Reading the station, gallons, and total from your photo.",
+                                    text = "Reading the station, litres, and total from your photo.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = SlateTextSecondary,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -473,7 +493,7 @@ fun ReceiptScanDialog(
                     // Merchant Field
                     OutlinedTextField(
                         value = merchantInput,
-                        onValueChange = { merchantInput = it },
+                        onValueChange = { merchantInput = InputCheck.keepTyped(it, 80) },
                         label = { Text("Gas Station / Merchant") },
                         leadingIcon = {
                             Icon(Icons.Default.Storefront, contentDescription = null, tint = MileageBlue)
@@ -490,7 +510,7 @@ fun ReceiptScanDialog(
                     // Total Amount Field
                     OutlinedTextField(
                         value = totalAmountInput,
-                        onValueChange = { totalAmountInput = it },
+                        onValueChange = { if (InputCheck.decimalText(it, 4, 2)) totalAmountInput = it },
                         label = { Text("Total Amount ($)") },
                         leadingIcon = {
                             Icon(Icons.Default.Payment, contentDescription = null, tint = DriveGreen)
@@ -512,8 +532,8 @@ fun ReceiptScanDialog(
                     ) {
                         OutlinedTextField(
                             value = gallonsInput,
-                            onValueChange = { gallonsInput = it },
-                            label = { Text(if (extracted?.unit == "L") "Liters" else "Gallons") },
+                            onValueChange = { if (InputCheck.decimalText(it, 3, 3)) gallonsInput = it },
+                            label = { Text(fuelVolumeLabel(extracted?.unit)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier
                                 .weight(1f)
@@ -524,8 +544,8 @@ fun ReceiptScanDialog(
 
                         OutlinedTextField(
                             value = pricePerUnitInput,
-                            onValueChange = { pricePerUnitInput = it },
-                            label = { Text(if (extracted?.unit == "L") "Price/L ($)" else "Price/Gal ($)") },
+                            onValueChange = { if (InputCheck.decimalText(it, 2, 3)) pricePerUnitInput = it },
+                            label = { Text(fuelPriceFieldLabel(extracted?.unit)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier
                                 .weight(1f)
@@ -544,7 +564,7 @@ fun ReceiptScanDialog(
                     ) {
                         OutlinedTextField(
                             value = fuelTypeInput,
-                            onValueChange = { fuelTypeInput = it },
+                            onValueChange = { fuelTypeInput = InputCheck.keepTyped(it, 40) },
                             label = { Text("Fuel Grade") },
                             placeholder = { Text("Regular 87") },
                             modifier = Modifier
@@ -556,7 +576,7 @@ fun ReceiptScanDialog(
 
                         OutlinedTextField(
                             value = dateInput,
-                            onValueChange = { dateInput = it },
+                            onValueChange = { if (InputCheck.dateText(it)) dateInput = it },
                             label = { Text("Date") },
                             leadingIcon = {
                                 Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -573,7 +593,7 @@ fun ReceiptScanDialog(
 
                     OutlinedTextField(
                         value = paymentMethodInput,
-                        onValueChange = { paymentMethodInput = it },
+                        onValueChange = { paymentMethodInput = InputCheck.keepTyped(it, 40) },
                         label = { Text("Payment") },
                         leadingIcon = {
                             Icon(Icons.Default.Payment, contentDescription = null, tint = MileageBlue, modifier = Modifier.size(18.dp))
@@ -622,7 +642,20 @@ fun ReceiptScanDialog(
                     // Save Button
                     Button(
                         onClick = {
-                            val parsedTotal = totalAmountInput.toDoubleOrNull() ?: 0.0
+                            val problem = InputCheck.receiptError(
+                                merchantInput,
+                                totalAmountInput,
+                                gallonsInput,
+                                pricePerUnitInput,
+                                fuelTypeInput,
+                                dateInput,
+                                paymentMethodInput
+                            )
+                            if (problem != null) {
+                                viewModel.reportReceiptCaptureError(problem)
+                                return@Button
+                            }
+                            val parsedTotal = totalAmountInput.toDouble()
                             val parsedGallons = gallonsInput.toDoubleOrNull()
                             val parsedPricePerUnit = pricePerUnitInput.toDoubleOrNull()
 

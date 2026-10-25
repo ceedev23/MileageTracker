@@ -6,6 +6,7 @@ import android.location.Address
 import android.location.Geocoder
 import android.os.Build
 import com.example.data.AppDatabase
+import com.example.data.InputCheck
 import com.example.data.LatLngPoint
 import com.example.data.TripEntity
 import kotlinx.coroutines.CoroutineScope
@@ -115,20 +116,22 @@ object TrackingManager {
                             Pair(liveStart ?: "Trip Origin", "Trip Destination")
                         }
 
-                        val namedStart = draft.startPlaceName?.takeIf { it.isNotBlank() }
-                        val entity = TripEntity(
-                            startDate = trip.startTime,
-                            endDate = trip.endTime,
-                            distanceKm = trip.distanceKm,
-                            type = draft.category,
-                            startAddress = namedStart ?: startAddr,
-                            endAddress = endAddr,
-                            purpose = draft.note.ifBlank {
-                                "Drive (${String.format(Locale.US, "%.1f", trip.distanceKm)} km)"
-                            },
-                            vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
-                            pathJson = pathJson
-                        )
+                        val namedStart = draft.startPlaceName?.let { InputCheck.finishLabel(it, 80) }
+                        val entity = InputCheck.storedTrip(
+                            TripEntity(
+                                startDate = trip.startTime,
+                                endDate = trip.endTime,
+                                distanceKm = trip.distanceKm,
+                                type = draft.category,
+                                startAddress = namedStart ?: InputCheck.finishLabel(startAddr, 120),
+                                endAddress = InputCheck.finishLabel(endAddr, 120),
+                                purpose = InputCheck.finishLabel(draft.note, 160)
+                                    ?: "Drive (${String.format(Locale.US, "%.1f", trip.distanceKm)} km)",
+                                vehicle = InputCheck.finishLabel(draft.vehicle, 40) ?: "Primary Vehicle",
+                                pathJson = pathJson
+                            ),
+                            strict = false
+                        ) ?: return@launch
                         val insertedId = db.tripDao().insertTrip(entity)
                         val saved = entity.copy(id = insertedId)
                         withContext(Dispatchers.Main) {
@@ -298,7 +301,12 @@ object TrackingManager {
     }
 
     fun updateActiveDraft(draft: ActiveTripDraft) {
-        activeDraft = draft
+        activeDraft = ActiveTripDraft(
+            category = if (draft.category == "Business" || draft.category == "Personal") draft.category else null,
+            vehicle = InputCheck.finishLabel(draft.vehicle, 40) ?: "",
+            note = InputCheck.finishLabel(draft.note, 160) ?: "",
+            startPlaceName = draft.startPlaceName?.let { InputCheck.finishLabel(it, 80) }
+        )
     }
 
     fun resetForTesting() {
@@ -373,6 +381,7 @@ object TrackingManager {
         startGeocodeStarted = true
         scope.launch {
             val addr = withContext(Dispatchers.IO) { geocodePoint(ctx, point) }
+                ?.let { InputCheck.finishLabel(it, 120) }
             if (!addr.isNullOrBlank() && (_trackingState.value.isTracking || _trackingState.value.showsLiveDrive())) {
                 _trackingState.value = _trackingState.value.copy(startAddress = addr)
             }

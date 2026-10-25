@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS public.gas_receipts (
     currency TEXT DEFAULT '$',
     fuel_type TEXT,
     gallons_or_liters DOUBLE PRECISION,
-    unit TEXT DEFAULT 'gal',
+    unit TEXT DEFAULT 'L',
     price_per_unit DOUBLE PRECISION,
     receipt_date TEXT,
     payment_method TEXT,
@@ -66,6 +66,9 @@ CREATE INDEX IF NOT EXISTS idx_trips_start_date ON public.trips(start_date DESC)
 CREATE INDEX IF NOT EXISTS idx_gas_receipts_user_id ON public.gas_receipts(user_id);
 CREATE INDEX IF NOT EXISTS idx_gas_receipts_client_id ON public.gas_receipts(client_id);
 CREATE INDEX IF NOT EXISTS idx_gas_receipts_timestamp ON public.gas_receipts(timestamp DESC);
+
+-- Fuel volume is litres in Canada. Safe to re-run on an existing project.
+ALTER TABLE public.gas_receipts ALTER COLUMN unit SET DEFAULT 'L';
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.trips ENABLE ROW LEVEL SECURITY;

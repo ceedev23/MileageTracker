@@ -68,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.InputCheck
 import com.example.service.LiveTrackingState
 import com.example.ui.components.GoogleMapView
 import java.text.SimpleDateFormat
@@ -147,10 +148,11 @@ fun LiveDriveScreen(
         NameDialog(
             title = "Start Location",
             label = "Place name",
+            maxChars = 80,
             initialValue = startPlaceName.orEmpty(),
             onDismiss = { showPlaceDialog = false },
             onSave = {
-                startPlaceName = it.ifBlank { null }
+                startPlaceName = InputCheck.finishLabel(it, 80)
                 showPlaceDialog = false
             }
         )
@@ -160,10 +162,11 @@ fun LiveDriveScreen(
         NameDialog(
             title = "Vehicle",
             label = "Vehicle name",
+            maxChars = 40,
             initialValue = vehicle,
             onDismiss = { showVehicleDialog = false },
             onSave = {
-                val saved = it.ifBlank { vehicle }
+                val saved = InputCheck.exactLabel(it, 40) ?: vehicle
                 vehicle = saved
                 onVehicleChange(saved)
                 showVehicleDialog = false
@@ -701,7 +704,7 @@ fun LiveDriveScreen(
                                 }
                                 BasicTextField(
                                     value = note,
-                                    onValueChange = { note = it },
+                                    onValueChange = { note = InputCheck.keepTyped(it, 160) },
                                     textStyle = TextStyle(
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Medium,
@@ -782,6 +785,7 @@ fun LiveDriveScreen(
 private fun NameDialog(
     title: String,
     label: String,
+    maxChars: Int,
     initialValue: String,
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
@@ -802,7 +806,7 @@ private fun NameDialog(
         text = {
             OutlinedTextField(
                 value = value,
-                onValueChange = { value = it },
+                onValueChange = { value = InputCheck.keepTyped(it, maxChars) },
                 label = { Text(label) },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth(),

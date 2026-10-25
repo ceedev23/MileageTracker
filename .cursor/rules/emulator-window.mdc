@@ -1,0 +1,14 @@
+---
+description: Keep the Android emulator window fully on the primary screen
+alwaysApply: true
+---
+
+# Emulator window
+
+When the Android emulator is open, or right after you start it, run from the repo root:
+
+`powershell -NoProfile -File scripts/position-emulator.ps1`
+
+That puts the window on the right side of the primary work area, above the taskbar, and shrinks it if it is taller than the screen. It also writes `window.x` and `window.y` into that AVD's `emulator-user.ini`.
+
+Leave the window fully on screen. Do not leave it above the display, under the taskbar, or on a monitor that is not connected.

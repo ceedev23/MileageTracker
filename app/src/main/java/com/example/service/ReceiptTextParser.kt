@@ -23,13 +23,13 @@ object ReceiptTextParser {
     private val moneyRegex = Regex("""(?<![A-Z0-9])\$?\s*(\d{1,4}[.,]\d{2})(?!\d)""")
 
     private val volumeThenUnit = Regex(
-        """(?i)(\d{1,3}[.,]\d{2,3})\s*(gallons?|gal|litres?|liters?)\b"""
+        """(?i)(\d{1,3}[.,]\d{2,3})\s*(gallons?|gal|litres?|liters?|l)\b"""
     )
     private val volumeThenLitersAbbrev = Regex("""(?i)(\d{1,3}[.,]\d{3})\s*L\b""")
     private val unitThenVolume = Regex(
         """(?i)\b(gallons?|litres?|liters?|volume)\b\s*(?:pumped)?\s*[:\-]?\s*(\d{1,3}[.,]\d{2,3})"""
     )
-    private val volumeBeforeAt = Regex("""(?i)(\d{1,3}[.,]\d{3})\s*(?:gal(?:lons?)?|litres?|liters?)?\s*@""")
+    private val volumeBeforeAt = Regex("""(?i)(\d{1,3}[.,]\d{3})\s*(?:gal(?:lons?)?|litres?|liters?|l)?\s*@""")
 
     private val pricePatterns = listOf(
         Regex("""(?i)(?:price|ppu|ppg|unit\s*price)\s*(?:/|per)?\s*(?:gal(?:lon)?s?|litres?|liters?|l)?\s*[:\-]?\s*\$?\s*(\d{1,2}[.,]\d{2,3})"""),
@@ -73,7 +73,7 @@ object ReceiptTextParser {
 
         val volume = findVolume(searchTexts)
         var gallons = volume?.value
-        val unit = volume?.unit ?: "gal"
+        val unit = volume?.unit ?: unitFromText(normalized)
         var total = findTotal(lines)
         var price = findPrice(searchTexts, gallons, total)
 
@@ -194,7 +194,7 @@ object ReceiptTextParser {
             for (match in volumeBeforeAt.findAll(text)) {
                 val token = match.groupValues[1]
                 val value = parseNumber(token) ?: continue
-                val unit = if (Regex("""(?i)litre|liter""").containsMatchIn(text)) "L" else "gal"
+                val unit = if (Regex("""(?i)\bgal(?:lons?)?\b""").containsMatchIn(text)) "gal" else "L"
                 hits += VolumeHit(value, unit, decimalPlaces(token))
             }
         }
@@ -314,7 +314,7 @@ object ReceiptTextParser {
                 !line.contains('$') &&
                 parseDate(line) == null &&
                 fuelRegex.replace(line, "").count { it.isLetter() } >= 4 &&
-                !Regex("""(?i)\b(total|subtotal|gallons?|price|pump|product|visa|mastercard|debit|cash|auth|transaction|payment|card|date|approved|invoice)\b""")
+                !Regex("""(?i)\b(total|subtotal|gallons?|litres?|liters?|price|pump|product|visa|mastercard|debit|cash|auth|transaction|payment|card|date|approved|invoice)\b""")
                     .containsMatchIn(line)
         }
         return fallback?.let { cleanMerchant(it) }
@@ -357,7 +357,17 @@ object ReceiptTextParser {
     }
 
     private fun unitOf(token: String): String {
-        return if (Regex("""(?i)^l$|litre|liter""").containsMatchIn(token)) "L" else "gal"
+        return when {
+            Regex("""(?i)^l$|litre|liter""").containsMatchIn(token) -> "L"
+            Regex("""(?i)^gal(?:lon)?s?$""").containsMatchIn(token) -> "gal"
+            else -> "L"
+        }
+    }
+
+    private fun unitFromText(text: String): String {
+        val hasGallon = Regex("""(?i)\bgal(?:lons?)?\b|/gal\b|per\s+gal\b|\bppg\b""").containsMatchIn(text)
+        val hasLitre = Regex("""(?i)\blitres?\b|\bliters?\b|/l\b|per\s+l\b""").containsMatchIn(text)
+        return if (hasGallon && !hasLitre) "gal" else "L"
     }
 
     private fun decimalPlaces(token: String): Int {

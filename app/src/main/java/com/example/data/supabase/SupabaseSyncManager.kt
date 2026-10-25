@@ -1,7 +1,9 @@
 package com.example.data.supabase
 
+import android.util.Log
 import com.example.data.GasReceiptEntity
 import com.example.data.GasReceiptRepository
+import com.example.data.InputCheck
 import com.example.data.TripEntity
 import com.example.data.TripRepository
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +27,7 @@ class SupabaseSyncManager(
         } else {
             SupabaseSyncState(
                 status = SyncStatus.NOT_CONFIGURED,
-                message = "Supabase Anon Key is required to enable cloud database sync."
+                message = "Cloud backup isn't available."
             )
         }
     )
@@ -41,7 +43,7 @@ class SupabaseSyncManager(
         if (!supabaseClient.config.isConfigured()) {
             val state = SupabaseSyncState(
                 status = SyncStatus.NOT_CONFIGURED,
-                message = "Supabase Anon Key is not configured."
+                message = "Cloud backup isn't available."
             )
             _syncState.value = state
             return@withContext state
@@ -66,7 +68,9 @@ class SupabaseSyncManager(
             var tripsSynced = localTrips.size
             if (remoteTripsResult.isSuccess) {
                 val remoteTrips = remoteTripsResult.getOrNull() ?: emptyList()
-                val entitiesToInsert = remoteTrips.map { it.toTripEntity() }
+                val entitiesToInsert = remoteTrips.mapNotNull {
+                    InputCheck.storedTrip(it.toTripEntity(), strict = false)
+                }
                 if (entitiesToInsert.isNotEmpty()) {
                     tripRepository.insertTrips(entitiesToInsert)
                     tripsSynced = maxOf(tripsSynced, remoteTrips.size)
@@ -87,7 +91,9 @@ class SupabaseSyncManager(
             var receiptsSynced = localReceipts.size
             if (remoteReceiptsResult.isSuccess) {
                 val remoteReceipts = remoteReceiptsResult.getOrNull() ?: emptyList()
-                val entitiesToInsert = remoteReceipts.map { it.toGasReceiptEntity() }
+                val entitiesToInsert = remoteReceipts.mapNotNull {
+                    InputCheck.storedReceipt(it.toGasReceiptEntity(), strict = false)
+                }
                 if (entitiesToInsert.isNotEmpty()) {
                     receiptRepository.insertReceipts(entitiesToInsert)
                     receiptsSynced = maxOf(receiptsSynced, remoteReceipts.size)
@@ -104,9 +110,10 @@ class SupabaseSyncManager(
             _syncState.value = successState
             return@withContext successState
         } catch (e: Exception) {
+            Log.e("SupabaseSync", "sync failed", e)
             val errorState = SupabaseSyncState(
                 status = SyncStatus.ERROR,
-                message = e.message ?: "Cloud sync failed. Local data remains safe.",
+                message = "Cloud sync failed. Local data remains safe.",
                 lastSyncTime = _syncState.value.lastSyncTime
             )
             _syncState.value = errorState

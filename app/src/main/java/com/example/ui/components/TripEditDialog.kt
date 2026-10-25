@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.InputCheck
 import com.example.data.TripEntity
 import com.example.ui.theme.BusinessBg
 import com.example.ui.theme.BusinessBlue
@@ -68,6 +69,7 @@ fun TripEditDialog(
     var endAddress by remember { mutableStateOf(trip?.endAddress ?: "") }
     var purpose by remember { mutableStateOf(trip?.purpose ?: "") }
     var vehicle by remember { mutableStateOf(trip?.vehicle ?: "Primary Vehicle") }
+    var formError by remember { mutableStateOf<String?>(null) }
 
     val unitLabel = if (isMiles) "mi" else "km"
 
@@ -126,7 +128,10 @@ fun TripEditDialog(
                 // Distance input
                 OutlinedTextField(
                     value = distanceText,
-                    onValueChange = { distanceText = it },
+                    onValueChange = {
+                        if (InputCheck.decimalText(it, 5, 1)) distanceText = it
+                        formError = null
+                    },
                     label = { Text("Distance ($unitLabel)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -177,7 +182,10 @@ fun TripEditDialog(
                 // Locations
                 OutlinedTextField(
                     value = startAddress,
-                    onValueChange = { startAddress = it },
+                    onValueChange = {
+                        startAddress = InputCheck.keepTyped(it, 120)
+                        formError = null
+                    },
                     label = { Text("Start Location") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -185,7 +193,10 @@ fun TripEditDialog(
 
                 OutlinedTextField(
                     value = endAddress,
-                    onValueChange = { endAddress = it },
+                    onValueChange = {
+                        endAddress = InputCheck.keepTyped(it, 120)
+                        formError = null
+                    },
                     label = { Text("Destination") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -193,7 +204,10 @@ fun TripEditDialog(
 
                 OutlinedTextField(
                     value = purpose,
-                    onValueChange = { purpose = it },
+                    onValueChange = {
+                        purpose = InputCheck.keepTyped(it, 160)
+                        formError = null
+                    },
                     label = { Text("Purpose / Notes") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -201,18 +215,40 @@ fun TripEditDialog(
 
                 OutlinedTextField(
                     value = vehicle,
-                    onValueChange = { vehicle = it },
+                    onValueChange = {
+                        vehicle = InputCheck.keepTyped(it, 40)
+                        formError = null
+                    },
                     label = { Text("Vehicle") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                formError?.let { message ->
+                    Text(text = message, color = Color(0xFFDC2626), fontSize = 12.sp)
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val rawDist = distanceText.toDoubleOrNull() ?: 0.0
-                    val distKm = if (isMiles) rawDist / 0.621371 else rawDist
+                    val rawDist = distanceText.toDoubleOrNull()
+                    val distKm = rawDist?.let { if (isMiles) it / 0.621371 else it }
+                    if (distKm == null || InputCheck.tripKm(distKm) == null) {
+                        formError = "Enter a distance greater than 0, up to 10,000 km."
+                        return@Button
+                    }
+                    if (selectedType != null && selectedType != "Business" && selectedType != "Personal") {
+                        formError = "Choose Business, Personal, or leave the trip pending."
+                        return@Button
+                    }
+                    val start = labelOrBlank(startAddress, 120)
+                    val end = labelOrBlank(endAddress, 120)
+                    val note = labelOrBlank(purpose, 160)
+                    val car = labelOrBlank(vehicle, 40)
+                    if (start == INVALID || end == INVALID || note == INVALID || car == INVALID) {
+                        formError = "Use letters, numbers, and simple punctuation."
+                        return@Button
+                    }
                     val now = System.currentTimeMillis()
                     val result = (trip ?: TripEntity(
                         startDate = now,
@@ -222,10 +258,10 @@ fun TripEditDialog(
                     )).copy(
                         distanceKm = distKm,
                         type = selectedType,
-                        startAddress = startAddress.ifBlank { null },
-                        endAddress = endAddress.ifBlank { null },
-                        purpose = purpose.ifBlank { null },
-                        vehicle = vehicle.ifBlank { null }
+                        startAddress = start,
+                        endAddress = end,
+                        purpose = note,
+                        vehicle = car
                     )
                     onSave(result)
                 },
@@ -244,6 +280,13 @@ fun TripEditDialog(
             }
         }
     )
+}
+
+private const val INVALID = "\u0000"
+
+private fun labelOrBlank(raw: String, max: Int): String? {
+    if (raw.isBlank()) return null
+    return InputCheck.exactLabel(raw, max) ?: INVALID
 }
 
 @Composable

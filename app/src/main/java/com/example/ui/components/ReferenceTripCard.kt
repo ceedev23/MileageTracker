@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.InputCheck
 import com.example.data.TripEntity
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -694,7 +695,7 @@ fun ReferenceTripCard(
             text = {
                 OutlinedTextField(
                     value = noteInput,
-                    onValueChange = { noteInput = it },
+                    onValueChange = { noteInput = InputCheck.keepTyped(it, 160) },
                     label = { Text("Note or purpose") },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -702,8 +703,10 @@ fun ReferenceTripCard(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        currentNote = noteInput
-                        val updated = trip.copy(purpose = noteInput)
+                        val clean = InputCheck.exactLabel(noteInput, 160)
+                        if (noteInput.isNotBlank() && clean == null) return@TextButton
+                        currentNote = clean ?: ""
+                        val updated = trip.copy(purpose = clean)
                         onUpdateTrip?.invoke(updated)
                         showNoteDialog = false
                     }
@@ -728,7 +731,7 @@ fun ReferenceTripCard(
             text = {
                 OutlinedTextField(
                     value = vehicleInput,
-                    onValueChange = { vehicleInput = it },
+                    onValueChange = { vehicleInput = InputCheck.keepTyped(it, 40) },
                     label = { Text("Vehicle name") },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -736,8 +739,9 @@ fun ReferenceTripCard(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        currentVehicle = vehicleInput
-                        val updated = trip.copy(vehicle = vehicleInput)
+                        val clean = InputCheck.exactLabel(vehicleInput, 40) ?: return@TextButton
+                        currentVehicle = clean
+                        val updated = trip.copy(vehicle = clean)
                         onUpdateTrip?.invoke(updated)
                         showVehicleDialog = false
                     }
@@ -762,7 +766,7 @@ fun ReferenceTripCard(
             text = {
                 OutlinedTextField(
                     value = tagInput,
-                    onValueChange = { tagInput = it },
+                    onValueChange = { tagInput = InputCheck.keepTyped(it, 40) },
                     label = { Text("Tags (e.g. Client, Meeting, Project)") },
                     modifier = Modifier.fillMaxWidth()
                 )

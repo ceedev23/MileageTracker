@@ -121,6 +121,7 @@ class ReceiptTextParserTest {
     assertEquals(41.20, parsed.totalAmount, 0.001)
     assertEquals(3.999, parsed.pricePerUnit ?: 0.0, 0.001)
     assertEquals(10.303, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals("gal", parsed.unit)
   }
 
   @Test
@@ -146,5 +147,55 @@ class ReceiptTextParserTest {
     assertNull(parsed.pricePerUnit)
     assertNull(parsed.fuelType)
     assertNull(parsed.paymentMethod)
+    assertEquals("L", parsed.unit)
+  }
+
+  @Test
+  fun `reads a canadian pump receipt in litres`() {
+    val text = """
+      PETRO-CANADA
+      88 KING ST W, TORONTO
+      2026-10-21
+      REGULAR
+      LITRES PUMPED: 45.200 L
+      PRICE / LITRE: ${'$'}1.599
+      TOTAL AMOUNT: ${'$'}72.27
+      INTERAC
+    """.trimIndent()
+
+    val parsed = ReceiptTextParser.parse(text)
+
+    assertEquals("Petro-Canada", parsed.merchant)
+    assertEquals("L", parsed.unit)
+    assertEquals(45.200, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(1.599, parsed.pricePerUnit ?: 0.0, 0.001)
+    assertEquals(72.27, parsed.totalAmount, 0.001)
+    assertEquals("Regular", parsed.fuelType)
+    assertEquals("2026-10-21", parsed.date)
+    assertEquals("Interac", parsed.paymentMethod)
+  }
+
+  @Test
+  fun `reads a short litre mark and an unlabeled volume as litres`() {
+    val marked = ReceiptTextParser.parse(
+      """
+        ESSO
+        52.340 L @ 1.549
+        TOTAL ${'$'}81.07
+      """.trimIndent()
+    )
+    assertEquals("L", marked.unit)
+    assertEquals(52.340, marked.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(1.549, marked.pricePerUnit ?: 0.0, 0.001)
+
+    val unlabeled = ReceiptTextParser.parse(
+      """
+        CANADIAN TIRE
+        VOLUME 45.200
+        TOTAL ${'$'}72.27
+      """.trimIndent()
+    )
+    assertEquals("L", unlabeled.unit)
+    assertEquals(45.200, unlabeled.gallonsOrLiters ?: 0.0, 0.001)
   }
 }

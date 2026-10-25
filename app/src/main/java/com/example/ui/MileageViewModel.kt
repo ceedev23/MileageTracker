@@ -12,6 +12,7 @@ import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AppDatabase
+import com.example.data.InputCheck
 import com.example.data.GasReceiptEntity
 import com.example.data.GasReceiptRepository
 import com.example.data.MileageSettings
@@ -20,10 +21,13 @@ import com.example.data.TripEntity
 import com.example.data.TripRepository
 import com.example.data.supabase.SupabaseClient
 import com.example.data.supabase.SupabaseConfig
+import com.example.data.supabase.SupabaseSession
 import com.example.data.supabase.SupabaseSyncManager
 import com.example.data.supabase.SupabaseSyncState
 import com.example.data.supabase.SyncStatus
 import com.example.service.ActiveTripDraft
+import com.example.service.ObdBluetoothReader
+import com.example.service.Odometer
 import com.example.service.ExtractedReceiptData
 import com.example.service.ExtractionResult
 import com.example.service.LiveTrackingState
@@ -39,8 +43,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -146,36 +154,27 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         onSuccess: (() -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
-        val cleanEmail = email.trim()
-        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+        val cleanEmail = InputCheck.email(email)
+        if (cleanEmail == null) {
             val err = "Please enter a valid email address."
             _authUiState.value = AuthUiState(errorMessage = err)
             onError?.invoke(err)
             return
         }
 
-        if (password.isNullOrBlank()) {
-            val cleanName = name?.takeIf { it.isNotBlank() }
-                ?: cleanEmail.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
-            _userProfile.value = UserProfile(name = cleanName, email = cleanEmail, isGuest = false)
-            _isAuthPromptVisible.value = false
-            _authUiState.value = AuthUiState()
-            onSuccess?.invoke()
+        val passwordError = InputCheck.passwordProblem(password)
+        if (passwordError != null) {
+            _authUiState.value = AuthUiState(errorMessage = passwordError)
+            onError?.invoke(passwordError)
             return
         }
-
-        if (password.length < 6) {
-            val err = "Password must be at least 6 characters."
-            _authUiState.value = AuthUiState(errorMessage = err)
-            onError?.invoke(err)
-            return
-        }
+        val pass = password.orEmpty()
 
         _authUiState.value = AuthUiState(isLoading = true)
 
         viewModelScope.launch {
             if (supabaseConfig.isConfigured()) {
-                val res = supabaseClient.signIn(cleanEmail, password)
+                val res = supabaseClient.signIn(cleanEmail, pass)
                 if (res.isSuccess) {
                     val session = res.getOrNull()
                     val cleanName = session?.user?.name?.takeIf { it.isNotBlank() }
@@ -218,35 +217,39 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         onSuccess: ((Boolean) -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
-        val cleanName = name.trim()
-        val cleanEmail = email.trim()
-
-        if (cleanName.isBlank()) {
-            val err = "Please enter your name."
+        val cleanName = InputCheck.exactName(name)
+        if (cleanName == null) {
+            val err = if (name.isBlank()) {
+                "Please enter your name."
+            } else {
+                "Name can use letters, spaces, hyphens, and apostrophes."
+            }
             _authUiState.value = AuthUiState(errorMessage = err)
             onError?.invoke(err)
             return
         }
 
-        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+        val cleanEmail = InputCheck.email(email)
+        if (cleanEmail == null) {
             val err = "Please enter a valid email address."
             _authUiState.value = AuthUiState(errorMessage = err)
             onError?.invoke(err)
             return
         }
 
-        if (password.isNullOrBlank() || password.length < 6) {
-            val err = "Password must be at least 6 characters."
-            _authUiState.value = AuthUiState(errorMessage = err)
-            onError?.invoke(err)
+        val passwordError = InputCheck.passwordProblem(password)
+        if (passwordError != null) {
+            _authUiState.value = AuthUiState(errorMessage = passwordError)
+            onError?.invoke(passwordError)
             return
         }
+        val pass = password.orEmpty()
 
         _authUiState.value = AuthUiState(isLoading = true)
 
         viewModelScope.launch {
             if (supabaseConfig.isConfigured()) {
-                val res = supabaseClient.signUp(cleanEmail, password, cleanName)
+                val res = supabaseClient.signUp(cleanEmail, pass, cleanName)
                 if (res.isSuccess) {
                     val session = res.getOrNull()
                     if (session != null && session.accessToken.isNotBlank()) {
@@ -290,10 +293,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         onSuccess: (() -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) {
-        val cleanEmail = email.trim()
-        if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
-            val err = "Please enter a valid email address."
-            onError?.invoke(err)
+        val cleanEmail = InputCheck.email(email)
+        if (cleanEmail == null) {
+            onError?.invoke("Please enter a valid email address.")
             return
         }
 
@@ -336,7 +338,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun saveSupabaseAnonKey(key: String) {
-        supabaseConfig.setAnonKey(key)
+        val clean = InputCheck.anonKey(key) ?: return
+        supabaseConfig.setAnonKey(clean)
         if (supabaseConfig.isConfigured()) {
             supabaseSyncManager.triggerSync()
         }
@@ -406,22 +409,41 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         settings = settingsManager.settings
         TrackingManager.setDwellMinutes(settingsManager.settings.value.dwellMinutes)
 
-        // Restore existing Supabase session if present
-        supabaseConfig.getSession()?.let { session ->
-            _userProfile.value = UserProfile(
-                name = session.user.name ?: session.user.email.substringBefore("@"),
-                email = session.user.email,
-                isGuest = false
-            )
-            _isAuthPromptVisible.value = false
+        viewModelScope.launch {
+            supabaseConfig.sessionFlow.collect { session ->
+                if (session == null && _userProfile.value?.isGuest == false) {
+                    _userProfile.value = null
+                    _isAuthPromptVisible.value = true
+                    _authUiState.value = AuthUiState(errorMessage = "Your session expired. Sign in again.")
+                }
+            }
         }
 
-        // Trigger sync if Supabase is configured
-        if (supabaseConfig.isConfigured()) {
-            viewModelScope.launch {
+        viewModelScope.launch {
+            val existing = supabaseConfig.getSession()
+            val fresh = supabaseClient.ensureFreshSession()
+            when {
+                fresh != null -> showSignedIn(fresh)
+                existing != null && supabaseConfig.getSession() != null -> showSignedIn(existing)
+                existing != null -> {
+                    _isAuthPromptVisible.value = true
+                    _authUiState.value = AuthUiState(errorMessage = "Your session expired. Sign in again.")
+                }
+            }
+            if (supabaseConfig.isConfigured()) {
                 supabaseSyncManager.syncAll()
             }
         }
+    }
+
+    private fun showSignedIn(session: SupabaseSession) {
+        _userProfile.value = UserProfile(
+            name = session.user.name?.takeIf { it.isNotBlank() }
+                ?: session.user.email.substringBefore("@"),
+            email = session.user.email,
+            isGuest = false
+        )
+        _isAuthPromptVisible.value = false
     }
 
     fun selectTab(tab: AppTab) {
@@ -433,6 +455,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun classifyTrip(trip: TripEntity, newType: String) {
+        if (newType != "Business" && newType != "Personal") return
         val previousType = trip.type
         val updated = trip.copy(type = newType)
         if (_justCompletedTrip.value?.id == trip.id) {
@@ -472,14 +495,15 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun saveTrip(trip: TripEntity) {
+        val clean = InputCheck.storedTrip(trip, strict = false) ?: return
         viewModelScope.launch {
-            val savedId = if (trip.id == 0L) {
-                repository.insertTrip(trip)
+            val savedId = if (clean.id == 0L) {
+                repository.insertTrip(clean)
             } else {
-                repository.updateTrip(trip)
-                trip.id
+                repository.updateTrip(clean)
+                clean.id
             }
-            val tripToSync = if (trip.id == 0L) trip.copy(id = savedId) else trip
+            val tripToSync = if (clean.id == 0L) clean.copy(id = savedId) else clean
             supabaseSyncManager.onTripSaved(tripToSync)
         }
     }
@@ -502,10 +526,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     ) {
         TrackingManager.updateActiveDraft(
             ActiveTripDraft(
-                category = category,
-                vehicle = vehicle,
-                note = note,
-                startPlaceName = startPlaceName
+                category = if (category == "Business" || category == "Personal") category else null,
+                vehicle = InputCheck.finishLabel(vehicle, 40) ?: "",
+                note = InputCheck.finishLabel(note, 160) ?: "",
+                startPlaceName = startPlaceName?.let { InputCheck.finishLabel(it, 80) }
             )
         )
     }
@@ -533,19 +557,55 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun setUnit(unit: String) {
-        settingsManager.setUnit(unit)
+        settingsManager.setUnit(InputCheck.distanceUnit(unit) ?: return)
     }
 
     fun setReimbursementRate(rate: Double) {
-        settingsManager.setReimbursementRate(rate)
+        settingsManager.setReimbursementRate(InputCheck.rate(rate) ?: return)
     }
 
     fun setVehicleName(name: String) {
-        settingsManager.setVehicleName(name)
+        settingsManager.setVehicleName(InputCheck.exactLabel(name, 40) ?: return)
     }
 
     fun setAnnualGoal(goal: Double) {
-        settingsManager.setAnnualGoal(goal)
+        settingsManager.setAnnualGoal(InputCheck.annualGoal(goal) ?: return)
+    }
+
+    fun readCarOdometer(address: String, onResult: (Result<Double>) -> Unit) {
+        val mac = InputCheck.bluetoothAddress(address)
+        if (mac == null) {
+            onResult(Result.failure(IOException("That adapter is no longer paired.")))
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { ObdBluetoothReader.readKm(getApplication(), mac) }
+            }
+            onResult(result)
+        }
+    }
+
+    fun saveOdometerReading(km: Double, source: String, logTrip: Boolean) {
+        val cleanKm = InputCheck.odometerKm(km) ?: return
+        val cleanSource = InputCheck.odometerSource(source) ?: return
+        if (cleanKm <= 0.0) return
+        val previous = settings.value
+        val delta = Odometer.tripKm(previous.odometerKm, cleanKm)
+        settingsManager.setOdometer(cleanKm, cleanSource)
+        if (logTrip && delta != null) {
+            val now = System.currentTimeMillis()
+            saveTrip(
+                TripEntity(
+                    startDate = previous.odometerAt.takeIf { it > 0L } ?: now,
+                    endDate = now,
+                    distanceKm = delta,
+                    type = null,
+                    purpose = "Odometer",
+                    vehicle = previous.vehicleName
+                )
+            )
+        }
     }
 
     fun clearAllTrips() {
@@ -628,7 +688,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             val escapedEnd = "\"${(t.endAddress ?: "").replace("\"", "\"\"")}\""
             val escapedPurpose = "\"${(t.purpose ?: "").replace("\"", "\"\"")}\""
             val escapedVehicle = "\"${(t.vehicle ?: "").replace("\"", "\"\"")}\""
-            val typeStr = t.type ?: "Unclassified"
+            val typeStr = "\"${(t.type ?: "Unclassified").replace("\"", "\"\"")}\""
 
             "$dateStr,$escapedStart,$escapedEnd,${String.format(Locale.US, "%.2f", dist)},$typeStr,$escapedPurpose,$escapedVehicle,${String.format(Locale.US, "%.2f", rate)},${String.format(Locale.US, "%.2f", estVal)}"
         }
@@ -641,7 +701,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         val csvData = generateCsv(tripsToExport, isMiles, rate)
 
         try {
-            val file = File(context.cacheDir, "Mileage_Report_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv")
+            val dir = File(context.cacheDir, "reports").apply { mkdirs() }
+            val file = File(dir, "Mileage_Report_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv")
             file.writeText(csvData)
 
             val uri = FileProvider.getUriForFile(
@@ -745,6 +806,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun processReceiptFromUri(context: Context, uri: Uri) {
+        if (uri.scheme != "content") {
+            reportReceiptCaptureError("Could not load that photo. Try taking it again.")
+            return
+        }
         viewModelScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 try {
@@ -771,17 +836,17 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val sampleBitmap = ReceiptExtractionService.createSampleGasReceiptBitmap()
             val sampleData = ExtractedReceiptData(
-                merchant = "Chevron Service Station",
-                totalAmount = 53.13,
+                merchant = "Petro-Canada",
+                totalAmount = 72.27,
                 currency = "$",
-                fuelType = "Regular 87 (Pump #06)",
-                gallonsOrLiters = 13.420,
-                unit = "gal",
-                pricePerUnit = 3.959,
+                fuelType = "Regular (Pump #06)",
+                gallonsOrLiters = 45.200,
+                unit = "L",
+                pricePerUnit = 1.599,
                 date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
                 paymentMethod = "Visa Contactless *6021",
-                summary = "Chevron fuel refill (Pump 06)",
-                rawText = "CHEVRON SERVICE STATION\nPUMP 06 REGULAR\n13.420 GAL @ 3.959/GAL\nTOTAL: $53.13"
+                summary = "Petro-Canada fuel refill (Pump 06)",
+                rawText = "PETRO-CANADA\nPUMP 06 REGULAR\n45.200 L @ 1.599/L\nTOTAL: $72.27"
             )
             processCapturedReceipt(context, sampleBitmap, prefilledData = sampleData)
         }
@@ -805,21 +870,27 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         tripId: Long? = null
     ) {
         val state = _receiptScanState.value
-        val imagePath = state.currentSavedImagePath ?: ""
-        val entity = GasReceiptEntity(
-            imagePath = imagePath,
-            merchant = merchant.ifBlank { "Gas Station" },
-            totalAmount = totalAmount,
-            currency = currency,
-            fuelType = fuelType,
-            gallonsOrLiters = gallonsOrLiters,
-            unit = state.extractedData?.unit ?: "gal",
-            pricePerUnit = pricePerUnit,
-            receiptDate = receiptDate,
-            paymentMethod = paymentMethod,
-            rawExtraction = state.extractedData?.rawText,
-            tripId = tripId
+        val entity = InputCheck.storedReceipt(
+            GasReceiptEntity(
+                imagePath = state.currentSavedImagePath ?: "",
+                merchant = merchant,
+                totalAmount = totalAmount,
+                currency = currency,
+                fuelType = fuelType,
+                gallonsOrLiters = gallonsOrLiters,
+                unit = state.extractedData?.unit ?: "L",
+                pricePerUnit = pricePerUnit,
+                receiptDate = receiptDate,
+                paymentMethod = paymentMethod,
+                rawExtraction = state.extractedData?.rawText,
+                tripId = tripId
+            ),
+            strict = true
         )
+        if (entity == null) {
+            reportReceiptCaptureError("Check the receipt fields and try again.")
+            return
+        }
 
         viewModelScope.launch {
             val insertedId = gasReceiptRepository.insertReceipt(entity)
@@ -834,9 +905,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteReceipt(receipt: GasReceiptEntity) {
         viewModelScope.launch {
-            if (receipt.imagePath.isNotBlank()) {
+            val image = InputCheck.receiptFile(getApplication<Application>().filesDir, receipt.imagePath)
+            if (image != null) {
                 try {
-                    File(receipt.imagePath).delete()
+                    image.delete()
                 } catch (_: Exception) {}
             }
             gasReceiptRepository.deleteReceipt(receipt)
@@ -851,21 +923,21 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             val day = 86400000L
 
             val b1 = ReceiptExtractionService.createSampleGasReceiptBitmap(
-                merchant = "SHELL SERVICE PLAZA",
-                gallons = 14.250,
-                pricePerGal = 3.899,
-                total = 55.56,
-                fuelType = "REGULAR 87 (PUMP #03)"
+                merchant = "ESSO",
+                litres = 52.340,
+                pricePerLitre = 1.549,
+                total = 81.07,
+                fuelType = "REGULAR (PUMP #03)"
             )
             val file1 = File(dir, "sample_receipt_1.jpg")
             FileOutputStream(file1).use { b1.compress(Bitmap.CompressFormat.JPEG, 85, it) }
 
             val b2 = ReceiptExtractionService.createSampleGasReceiptBitmap(
-                merchant = "CHEVRON HIGHWAY EXPRESS",
-                gallons = 11.800,
-                pricePerGal = 4.199,
-                total = 49.55,
-                fuelType = "PREMIUM 93 (PUMP #08)"
+                merchant = "ULTRAMAR",
+                litres = 48.150,
+                pricePerLitre = 1.629,
+                total = 78.44,
+                fuelType = "PREMIUM (PUMP #08)"
             )
             val file2 = File(dir, "sample_receipt_2.jpg")
             FileOutputStream(file2).use { b2.compress(Bitmap.CompressFormat.JPEG, 85, it) }
@@ -874,30 +946,30 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 GasReceiptEntity(
                     timestamp = now - 1 * day,
                     imagePath = file1.absolutePath,
-                    merchant = "Shell Service Plaza",
-                    totalAmount = 55.56,
+                    merchant = "Esso",
+                    totalAmount = 81.07,
                     currency = "$",
-                    fuelType = "Regular 87 (Pump 03)",
-                    gallonsOrLiters = 14.25,
-                    unit = "gal",
-                    pricePerUnit = 3.899,
+                    fuelType = "Regular (Pump 03)",
+                    gallonsOrLiters = 52.340,
+                    unit = "L",
+                    pricePerUnit = 1.549,
                     receiptDate = "2026-09-05",
                     paymentMethod = "Visa *4921",
-                    rawExtraction = "SHELL SERVICE PLAZA\nPUMP 03\nTOTAL: $55.56"
+                    rawExtraction = "ESSO\nPUMP 03\n52.340 L @ 1.549/L\nTOTAL: $81.07"
                 ),
                 GasReceiptEntity(
                     timestamp = now - 4 * day,
                     imagePath = file2.absolutePath,
-                    merchant = "Chevron Highway Express",
-                    totalAmount = 49.55,
+                    merchant = "Ultramar",
+                    totalAmount = 78.44,
                     currency = "$",
-                    fuelType = "Premium 93 (Pump 08)",
-                    gallonsOrLiters = 11.80,
-                    unit = "gal",
-                    pricePerUnit = 4.199,
+                    fuelType = "Premium (Pump 08)",
+                    gallonsOrLiters = 48.150,
+                    unit = "L",
+                    pricePerUnit = 1.629,
                     receiptDate = "2026-09-02",
                     paymentMethod = "Amex *1004",
-                    rawExtraction = "CHEVRON HIGHWAY EXPRESS\nPUMP 08\nTOTAL: $49.55"
+                    rawExtraction = "ULTRAMAR\nPUMP 08\n48.150 L @ 1.629/L\nTOTAL: $78.44"
                 )
             )
             for (r in list) {
@@ -907,9 +979,11 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private fun decodeReceiptBitmap(context: Context, uri: Uri): Bitmap? {
-        val resolver = context.contentResolver
+        val bytes = context.contentResolver.openInputStream(uri)?.use { readCapped(it) } ?: return null
+        if (!InputCheck.acceptReceiptImage(bytes)) return null
+
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         var sample = 1
@@ -918,14 +992,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        val decoded = resolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        } ?: return null
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
 
         val rotation = try {
-            resolver.openInputStream(uri)?.use { stream ->
-                ExifInterface(stream).rotationDegrees
-            } ?: 0
+            ExifInterface(ByteArrayInputStream(bytes)).rotationDegrees
         } catch (_: Exception) {
             0
         }
@@ -937,10 +1007,23 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         return rotated
     }
 
+    private fun readCapped(stream: InputStream): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val n = stream.read(buf)
+            if (n < 0) break
+            total += n
+            if (total > InputCheck.MAX_RECEIPT_BYTES) return null
+            out.write(buf, 0, n)
+        }
+        return out.toByteArray()
+    }
+
     private fun deleteCaptureFile(uri: Uri) {
-        val name = uri.lastPathSegment?.substringAfterLast('/') ?: return
-        if (!name.startsWith("capture_")) return
-        val file = File(getApplication<Application>().cacheDir, "receipt_captures/$name")
+        val name = uri.lastPathSegment ?: return
+        val file = InputCheck.captureFile(getApplication<Application>().cacheDir, name) ?: return
         if (file.exists()) file.delete()
     }
 }

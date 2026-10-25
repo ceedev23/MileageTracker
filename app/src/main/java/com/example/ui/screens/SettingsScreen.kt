@@ -31,6 +31,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import com.example.data.InputCheck
 import com.example.data.supabase.SyncStatus
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.MileageViewModel
+import com.example.ui.components.OdometerDialog
 import com.example.ui.theme.MileageBlue
 import com.example.ui.theme.MileageBlueContainer
 import com.example.ui.theme.SlateBorder
@@ -82,6 +84,7 @@ fun SettingsScreen(
     val userProfile by viewModel.userProfile.collectAsState()
 
     var showClearDialog by remember { mutableStateOf(false) }
+    var showOdometerDialog by remember { mutableStateOf(false) }
     var rateInput by remember(settings.reimbursementRate) {
         mutableStateOf(String.format(Locale.US, "%.2f", settings.reimbursementRate))
     }
@@ -523,9 +526,11 @@ fun SettingsScreen(
                     ) {
                         OutlinedTextField(
                             value = rateInput,
-                            onValueChange = {
-                                rateInput = it
-                                it.toDoubleOrNull()?.let { r -> viewModel.setReimbursementRate(r) }
+                            onValueChange = { next ->
+                                if (!InputCheck.decimalText(next, 2, 2)) return@OutlinedTextField
+                                rateInput = next
+                                val parsed = next.toDoubleOrNull() ?: return@OutlinedTextField
+                                InputCheck.rate(parsed)?.let { viewModel.setReimbursementRate(it) }
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
@@ -570,13 +575,40 @@ fun SettingsScreen(
 
                     OutlinedTextField(
                         value = vehicleInput,
-                        onValueChange = {
-                            vehicleInput = it
-                            viewModel.setVehicleName(it)
+                        onValueChange = { next ->
+                            val typed = InputCheck.keepTyped(next, 40)
+                            vehicleInput = typed
+                            InputCheck.exactLabel(typed, 40)?.let { viewModel.setVehicleName(it) }
                         },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Odometer",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SlateTextSecondary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = settings.odometerKm?.let { km ->
+                            val shown = if (settings.unit == "mi") km * 0.621371 else km
+                            val unit = if (settings.unit == "mi") "mi" else "km"
+                            val how = if (settings.odometerSource == "bluetooth") "synced from the car" else "entered manually"
+                            "${String.format(Locale.US, "%,.1f", shown)} $unit, $how"
+                        } ?: "Not set. Type the dash reading, or read it from a paired adapter.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SlateTextMuted
+                    )
+                    OutlinedButton(
+                        onClick = { showOdometerDialog = true },
+                        modifier = Modifier.fillMaxWidth().testTag("settings_odometer"),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Update odometer", fontSize = 13.sp)
+                    }
                 }
 
                 // Annual Driving Target
@@ -590,9 +622,11 @@ fun SettingsScreen(
 
                     OutlinedTextField(
                         value = goalInput,
-                        onValueChange = {
-                            goalInput = it
-                            it.toDoubleOrNull()?.let { g -> viewModel.setAnnualGoal(g) }
+                        onValueChange = { next ->
+                            if (!InputCheck.intText(next, 6)) return@OutlinedTextField
+                            goalInput = next
+                            val parsed = next.toDoubleOrNull() ?: return@OutlinedTextField
+                            InputCheck.annualGoal(parsed)?.let { viewModel.setAnnualGoal(it) }
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -667,6 +701,13 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showOdometerDialog) {
+        OdometerDialog(
+            viewModel = viewModel,
+            onDismiss = { showOdometerDialog = false }
+        )
     }
 
     // Confirmation dialog for clearing all data

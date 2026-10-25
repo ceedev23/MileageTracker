@@ -13,7 +13,12 @@ import com.example.data.supabase.SupabaseTripDto
 import com.example.data.supabase.SupabaseUser
 import com.example.data.supabase.SyncStatus
 import kotlinx.coroutines.test.runTest
-import org.json.JSONObject
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -24,6 +29,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.IOException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -37,6 +43,7 @@ class SupabaseIntegrationTest {
         app = ApplicationProvider.getApplicationContext()
         config = SupabaseConfig(app)
         config.clearSession()
+        config.saveLoginAttempts(0, 0)
     }
 
     @Test
@@ -47,8 +54,8 @@ class SupabaseIntegrationTest {
 
     @Test
     fun testSupabaseConfigAnonKeyAndSession() {
-        config.setAnonKey("test_anon_key_123")
-        assertEquals("test_anon_key_123", config.getAnonKey())
+        config.setAnonKey("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2")
+        assertEquals("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2", config.getAnonKey())
         assertTrue(config.isConfigured())
 
         val session = SupabaseSession(
@@ -123,7 +130,7 @@ class SupabaseIntegrationTest {
             currency = "$",
             fuelType = "Premium 91",
             gallonsOrLiters = 15.6,
-            unit = "gal",
+            unit = "L",
             pricePerUnit = 4.00,
             receiptDate = "2026-10-10",
             paymentMethod = "Mastercard *1234",
@@ -146,12 +153,14 @@ class SupabaseIntegrationTest {
         assertEquals(dto.totalAmount, parsedDto.totalAmount, 0.001)
         assertEquals(dto.merchant, parsedDto.merchant)
         assertEquals(dto.gallonsOrLiters, parsedDto.gallonsOrLiters)
+        assertEquals("L", parsedDto.unit)
 
         val convertedEntity = parsedDto.toGasReceiptEntity()
         assertEquals(receipt.id, convertedEntity.id)
         assertEquals(receipt.merchant, convertedEntity.merchant)
         assertEquals(receipt.totalAmount, convertedEntity.totalAmount, 0.001)
         assertEquals(receipt.tripId, convertedEntity.tripId)
+        assertEquals("L", convertedEntity.unit)
     }
 
     @Test
@@ -165,6 +174,7 @@ class SupabaseIntegrationTest {
 
         val state = syncManager.syncAll()
         assertEquals(SyncStatus.NOT_CONFIGURED, state.status)
+        assertEquals("Cloud backup isn't available.", state.message)
     }
 
     @Test
@@ -228,5 +238,127 @@ class SupabaseIntegrationTest {
 
         vm.signUp("John Doe", "valid@example.com", "123", onError = { reportedError = it })
         assertEquals("Password must be at least 6 characters.", reportedError)
+    }
+
+    @Test
+    fun accessTokenInsideSkewCountsAsExpired() {
+        val session = SupabaseSession(
+            accessToken = "token",
+            refreshToken = "refresh",
+            user = SupabaseUser("usr_1", "driver@example.com"),
+            expiresAt = 10_000L
+        )
+        assertTrue(session.isAccessExpired(now = 9_500L, skewMs = 60_000L))
+        assertFalse(session.isAccessExpired(now = 1_000L, skewMs = 1_000L))
+    }
+
+    @Test
+    fun signInLocksAfterFiveFailures() = runTest {
+        config.setAnonKey("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2")
+        var hits = 0
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            hits += 1
+            jsonResponse(
+                chain.request(),
+                400,
+                """{"error_code":"invalid_credentials","msg":"Invalid login credentials"}"""
+            )
+        }.build()
+        val client = SupabaseClient(config, http)
+        repeat(5) {
+            assertTrue(client.signIn("driver@example.com", "password123").isFailure)
+        }
+        val blocked = SupabaseClient(config, http).signIn("driver@example.com", "password123")
+        assertTrue(blocked.exceptionOrNull()?.message?.startsWith("Too many sign-in attempts") == true)
+        assertEquals(5, hits)
+    }
+
+    @Test
+    fun networkFailureDoesNotLockSignIn() = runTest {
+        config.setAnonKey("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2")
+        val http = OkHttpClient.Builder().addInterceptor { throw IOException("offline") }.build()
+        val client = SupabaseClient(config, http)
+        val failed = client.signIn("driver@example.com", "password123")
+        assertEquals("Sign in failed. Please try again.", failed.exceptionOrNull()?.message)
+        assertEquals(0, config.loginFailureCount())
+        assertEquals(0L, config.loginLockedUntil())
+    }
+
+    @Test
+    fun signInHidesServerErrorBody() = runTest {
+        config.setAnonKey("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2")
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            jsonResponse(
+                chain.request(),
+                500,
+                """{"error_code":"unexpected_failure","msg":"Database error querying schema","hint":"relation public.trips"}"""
+            )
+        }.build()
+        val message = SupabaseClient(config, http)
+            .signIn("driver@example.com", "password123")
+            .exceptionOrNull()
+            ?.message
+        assertEquals("Sign in failed. Please try again.", message)
+    }
+
+    @Test
+    fun expiredSessionRefreshesBeforeRequest() = runTest {
+        config.setAnonKey("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2")
+        config.saveSession(
+            SupabaseSession(
+                accessToken = "old-access",
+                refreshToken = "refresh-1",
+                user = SupabaseUser("usr_123", "driver@example.com", "Test Driver"),
+                expiresAt = 1L
+            )
+        )
+        var tripsAuth: String? = null
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            val request = chain.request()
+            if (request.url.queryParameter("grant_type") == "refresh_token") {
+                jsonResponse(
+                    request,
+                    200,
+                    """{"access_token":"new-access","refresh_token":"refresh-2","expires_in":3600,"user":{"id":"usr_123","email":"driver@example.com","user_metadata":{"full_name":"Test Driver"}}}"""
+                )
+            } else {
+                tripsAuth = request.header("Authorization")
+                jsonResponse(request, 200, "[]")
+            }
+        }.build()
+        val result = SupabaseClient(config, http).fetchTrips()
+        assertTrue(result.isSuccess)
+        assertEquals("Bearer new-access", tripsAuth)
+        assertEquals("new-access", config.getSession()?.accessToken)
+        assertTrue((config.getSession()?.expiresAt ?: 0L) > System.currentTimeMillis())
+    }
+
+    @Test
+    fun rejectedRefreshClearsSession() = runTest {
+        config.setAnonKey("eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJlMTIzNDU2")
+        config.saveSession(
+            SupabaseSession(
+                accessToken = "old-access",
+                refreshToken = "refresh-1",
+                user = SupabaseUser("usr_123", "driver@example.com"),
+                expiresAt = 1L
+            )
+        )
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            jsonResponse(chain.request(), 401, """{"error":"invalid_grant","msg":"expired"}""")
+        }.build()
+        val result = SupabaseClient(config, http).fetchTrips()
+        assertTrue(result.isFailure)
+        assertNull(config.getSession())
+    }
+
+    private fun jsonResponse(request: Request, code: Int, body: String): Response {
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(code)
+            .message("test")
+            .body(body.toResponseBody("application/json".toMediaType()))
+            .build()
     }
 }
