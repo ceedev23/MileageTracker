@@ -123,7 +123,7 @@ private val ZoomedCrop = object : ContentScale {
 
 /**
  * Onboarding and Auth Screen faithfully matching the provided UI design & flow:
- * - Screen 1: "HELLO" Welcome screen with the mountain road illustration,
+ * - Screen 1: "Get Started" Welcome screen with the mountain road illustration,
  *   rounded navy "Sign In" button and rounded white "Sign Up" button.
  * - Screen 2: "Sign In" screen with illustration header, curved white card,
  *   soft pill inputs for Email & Password, navy "Sign In" button, "Forgot password?",
@@ -334,11 +334,20 @@ private fun WelcomeLandingView(
                     Spacer(modifier = Modifier.height(18.dp))
 
                     Text(
-                        text = "HELLO",
+                        text = "Get Started",
                         fontSize = 42.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White,
                         letterSpacing = 0.2.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "It's Voom Time",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))

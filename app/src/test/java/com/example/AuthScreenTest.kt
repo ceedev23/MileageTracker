@@ -55,7 +55,9 @@ class AuthScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithText("HELLO").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Get Started").assertIsDisplayed()
+        composeTestRule.onNodeWithText("It's Voom Time").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Track drives, log gas receipts & claim\nmaximum tax deductions").assertIsDisplayed()
         composeTestRule.onNodeWithTag("welcome_sign_in_button").assertIsDisplayed()
         composeTestRule.onNodeWithTag("welcome_sign_up_button").assertIsDisplayed()
         composeTestRule.onNodeWithTag("auth_guest_button").assertIsDisplayed()
