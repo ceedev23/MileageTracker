@@ -93,6 +93,12 @@ enum class AuthStep {
     SIGN_UP
 }
 
+private enum class LandingDestination {
+    SIGN_IN,
+    SIGN_UP,
+    GUEST
+}
+
 private val NavyDark = Color(0xFF1E284A)
 private val InputBg = Color(0xFFF1F5F9)
 
@@ -139,7 +145,38 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     var currentStep by remember { mutableStateOf(initialStep) }
+    var pending by remember { mutableStateOf<LandingDestination?>(null) }
     val authUiState by viewModel.authUiState.collectAsState()
+
+    fun openDestination(dest: LandingDestination) {
+        when (dest) {
+            LandingDestination.SIGN_IN -> currentStep = AuthStep.SIGN_IN
+            LandingDestination.SIGN_UP -> currentStep = AuthStep.SIGN_UP
+            LandingDestination.GUEST -> viewModel.continueAsGuest()
+        }
+    }
+
+    fun leaveLanding(dest: LandingDestination) {
+        viewModel.clearAuthMessages()
+        if (viewModel.settings.value.onboardingSeen) {
+            openDestination(dest)
+        } else {
+            pending = dest
+        }
+    }
+
+    if (pending != null) {
+        OnboardingScreen(
+            onBackToLanding = { pending = null },
+            onDone = {
+                val dest = pending ?: return@OnboardingScreen
+                pending = null
+                viewModel.setOnboardingSeen(true)
+                openDestination(dest)
+            }
+        )
+        return
+    }
 
     // Intercept back button
     BackHandler {
@@ -169,15 +206,9 @@ fun AuthScreen(
         when (step) {
             AuthStep.WELCOME -> {
                 WelcomeLandingView(
-                    onNavigateToSignIn = {
-                        viewModel.clearAuthMessages()
-                        currentStep = AuthStep.SIGN_IN
-                    },
-                    onNavigateToSignUp = {
-                        viewModel.clearAuthMessages()
-                        currentStep = AuthStep.SIGN_UP
-                    },
-                    onContinueAsGuest = { viewModel.continueAsGuest() },
+                    onNavigateToSignIn = { leaveLanding(LandingDestination.SIGN_IN) },
+                    onNavigateToSignUp = { leaveLanding(LandingDestination.SIGN_UP) },
+                    onContinueAsGuest = { leaveLanding(LandingDestination.GUEST) },
                     canDismiss = canDismiss,
                     onDismiss = onDismiss
                 )

@@ -42,6 +42,7 @@ class AuthScreenTest {
         val app = ApplicationProvider.getApplicationContext<Application>()
         viewModel = MileageViewModel(app)
         viewModel.supabaseConfig.setAnonKey("")
+        viewModel.setOnboardingSeen(true)
     }
 
     @Test
@@ -168,6 +169,33 @@ class AuthScreenTest {
 
         composeTestRule.onNodeWithTag("auth_screen_app_logo").assertExists()
         composeTestRule.onNodeWithTag("auth_top_app_logo").assertExists()
+    }
+
+    @Test
+    fun testOnboardingFollowsLandingThenOpensSignIn() {
+        viewModel.setOnboardingSeen(false)
+        composeTestRule.setContent {
+            AuthScreen(
+                viewModel = viewModel,
+                onDismiss = {},
+                canDismiss = false,
+                initialStep = AuthStep.WELCOME
+            )
+        }
+
+        composeTestRule.onNodeWithTag("welcome_sign_in_button").performClick()
+        composeTestRule.onNodeWithText("Welcome to").assertIsDisplayed()
+        composeTestRule.onNodeWithText("MileageTracker").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("onboarding_next").performClick()
+        composeTestRule.onNodeWithText("Live Tracking").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("onboarding_back").performClick()
+        composeTestRule.onNodeWithText("Welcome to").assertIsDisplayed()
+
+        composeTestRule.onNodeWithTag("onboarding_skip").performClick()
+        composeTestRule.onNodeWithTag("auth_email_input").assertExists()
+        assertTrue(viewModel.settings.value.onboardingSeen)
     }
 
     @Test

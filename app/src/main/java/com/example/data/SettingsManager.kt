@@ -16,7 +16,8 @@ data class MileageSettings(
     val annualGoal: Double = 15000.0, // target annual distance in user's unit
     val odometerKm: Double? = null,
     val odometerAt: Long = 0L,
-    val odometerSource: String = ""
+    val odometerSource: String = "",
+    val onboardingSeen: Boolean = false
 )
 
 class SettingsManager(context: Context) {
@@ -36,7 +37,8 @@ class SettingsManager(context: Context) {
             annualGoal = prefs.getFloat("annual_goal", 15000f).toDouble(),
             odometerKm = prefs.getString("odometer_km", null)?.toDoubleOrNull(),
             odometerAt = prefs.getLong("odometer_at", 0L),
-            odometerSource = prefs.getString("odometer_source", "") ?: ""
+            odometerSource = prefs.getString("odometer_source", "") ?: "",
+            onboardingSeen = prefs.getBoolean("onboarding_seen", false)
         )
     }
 
@@ -86,5 +88,10 @@ class SettingsManager(context: Context) {
             .putString("odometer_source", cleanSource)
             .apply()
         _settings.value = _settings.value.copy(odometerKm = cleanKm, odometerAt = now, odometerSource = cleanSource)
+    }
+
+    fun setOnboardingSeen(seen: Boolean) {
+        prefs.edit().putBoolean("onboarding_seen", seen).apply()
+        _settings.value = _settings.value.copy(onboardingSeen = seen)
     }
 }

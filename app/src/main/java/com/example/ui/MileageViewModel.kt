@@ -364,6 +364,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun setOnboardingSeen(seen: Boolean) {
+        settingsManager.setOnboardingSeen(seen)
+    }
+
     fun dismissJustCompletedTrip() {
         _justCompletedTrip.value = null
     }
