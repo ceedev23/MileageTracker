@@ -33,6 +33,8 @@ import com.example.service.ExtractionResult
 import com.example.service.LiveTrackingState
 import com.example.service.ReceiptExtractionService
 import com.example.service.TrackingManager
+import com.example.service.TripNotifier
+import com.example.service.tripUpdates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -420,6 +422,20 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                     _isAuthPromptVisible.value = true
                     _authUiState.value = AuthUiState(errorMessage = "Your session expired. Sign in again.")
                 }
+            }
+        }
+
+        viewModelScope.launch {
+            val initial = repository.getAllTripsList()
+            var seen: Set<Long>? = initial.map { it.id }.toSet()
+            var skipEmptyReplay = seen.orEmpty().isNotEmpty()
+            TripNotifier.post(getApplication(), tripUpdates(null, initial))
+            trips.collect { list ->
+                if (skipEmptyReplay && list.isEmpty()) return@collect
+                skipEmptyReplay = false
+                val update = tripUpdates(seen, list)
+                seen = list.map { it.id }.toSet()
+                TripNotifier.post(getApplication(), update)
             }
         }
 

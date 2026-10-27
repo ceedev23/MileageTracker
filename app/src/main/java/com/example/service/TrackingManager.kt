@@ -1,10 +1,13 @@
 package com.example.service
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
+import androidx.core.content.ContextCompat
 import com.example.data.AppDatabase
 import com.example.data.InputCheck
 import com.example.data.LatLngPoint
@@ -187,11 +190,52 @@ object TrackingManager {
         )
     }
 
+    fun autoDetectEnabled(context: Context): Boolean {
+        return try {
+            context.getSharedPreferences("mileage_tracker_prefs", Context.MODE_PRIVATE)
+                .getBoolean("auto_detect", true)
+        } catch (_: Exception) {
+            true
+        }
+    }
+
+    fun hasLocationPermission(context: Context): Boolean {
+        val fine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        return fine || coarse
+    }
+
+    /** Keep auto-detect armed after process start. No-op until location permission exists. */
+    fun resumeAutoDetect(context: Context) {
+        if (!autoDetectEnabled(context) || !hasLocationPermission(context)) return
+        startMovementMonitoring(context)
+    }
+
+    fun noteMonitoring() {
+        if (_trackingState.value.isMonitoringMovement) return
+        _trackingState.value = _trackingState.value.copy(
+            isMonitoringMovement = true,
+            statusMessage = if (_trackingState.value.isTracking) {
+                _trackingState.value.statusMessage
+            } else {
+                "Auto-detection active: Monitoring movement"
+            }
+        )
+    }
+
     fun startMovementMonitoring(context: Context) {
         init(context)
         _trackingState.value = _trackingState.value.copy(
             isMonitoringMovement = true,
-            statusMessage = "Auto-detection active: Monitoring movement"
+            statusMessage = if (_trackingState.value.isTracking) {
+                _trackingState.value.statusMessage
+            } else {
+                "Auto-detection active: Monitoring movement"
+            }
         )
 
         try {

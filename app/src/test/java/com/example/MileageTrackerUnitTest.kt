@@ -1,6 +1,9 @@
 package com.example
 
+import com.example.data.LatLngPoint
 import com.example.data.TripEntity
+import com.example.service.DetectorState
+import com.example.service.TripDetector
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,6 +69,44 @@ class MileageTrackerUnitTest {
     assertEquals(1.549, receipt.pricePerUnit ?: 0.0, 0.001)
     val calculatedTotal = (receipt.gallonsOrLiters ?: 0.0) * (receipt.pricePerUnit ?: 0.0)
     assertEquals(81.07, calculatedTotal, 0.05)
+  }
+
+  @Test
+  fun `short gps steps while driving start a trip`() {
+    var started = false
+    val detector = TripDetector(
+      dwellMinutes = 5,
+      onTripStarted = { started = true },
+      onTripUpdated = {},
+      onTripEnded = {},
+      onTripDiscarded = {}
+    )
+    val t0 = 1_700_000_000_000L
+    val step = 12.0 / 111_195.0
+    repeat(6) { i ->
+      detector.processPoint(LatLngPoint(37.77 + i * step, -122.42, t0 + i * 1_500L, 0f))
+    }
+    assertTrue(started)
+    assertEquals(DetectorState.RECORDING, detector.state)
+  }
+
+  @Test
+  fun `a brief slow fix does not cancel a drive that is starting`() {
+    var started = false
+    val detector = TripDetector(
+      dwellMinutes = 5,
+      onTripStarted = { started = true },
+      onTripUpdated = {},
+      onTripEnded = {},
+      onTripDiscarded = {}
+    )
+    val t0 = 1_700_000_000_000L
+    detector.processPoint(LatLngPoint(37.77, -122.42, t0, 12f))
+    detector.processPoint(LatLngPoint(37.77005, -122.42, t0 + 2_000L, 0f))
+    assertEquals(DetectorState.MOVING, detector.state)
+    detector.processPoint(LatLngPoint(37.772, -122.42, t0 + 26_000L, 12f))
+    assertTrue(started)
+    assertEquals(DetectorState.RECORDING, detector.state)
   }
 
   @Test

@@ -26,7 +26,7 @@ import com.google.android.gms.location.Priority
 class TrackingService : Service() {
 
     companion object {
-        const val CHANNEL_ID = "mileage_tracking_channel"
+        const val CHANNEL_ID = "mileage_tracking_v2"
         const val NOTIFICATION_ID = 1001
         const val ACTION_START = "ACTION_START_TRACKING"
         const val ACTION_START_MONITORING = "ACTION_START_MONITORING"
@@ -36,6 +36,7 @@ class TrackingService : Service() {
     private var fusedLocationClient: FusedLocationProviderClient? = null
     private var locationCallback: LocationCallback? = null
     private var isLocationTrackingActive: Boolean = false
+    private var wasTracking: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -49,19 +50,32 @@ class TrackingService : Service() {
                 stopLocationUpdates()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
+                return START_NOT_STICKY
             }
-            ACTION_START_MONITORING -> {
+            ACTION_START -> {
+                wasTracking = true
                 val notification = buildNotification(
-                    title = "MileageTracker • Motion Detection Active",
-                    text = "Monitoring driving movement & GPS to auto-record trips"
+                    title = "Current trip",
+                    text = "Recording your drive",
+                    alert = true
                 )
                 startForeground(NOTIFICATION_ID, notification)
                 startLocationUpdates()
             }
             else -> {
+                // Monitoring start, or the system restarted this sticky service after the process died.
+                if (!TrackingManager.autoDetectEnabled(this) || !TrackingManager.hasLocationPermission(this)) {
+                    stopLocationUpdates()
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                TrackingManager.noteMonitoring()
+                wasTracking = false
                 val notification = buildNotification(
-                    title = "MileageTracker • Recording Trip",
-                    text = "Tracking your driving route and mileage..."
+                    title = "MileageTracker • Motion Detection Active",
+                    text = "Monitoring driving movement & GPS to auto-record trips",
+                    alert = true
                 )
                 startForeground(NOTIFICATION_ID, notification)
                 startLocationUpdates()
@@ -127,16 +141,16 @@ class TrackingService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Trip Tracking",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Shows notifications while monitoring or recording driving mileage"
+                description = "Shows the current trip while MileageTracker is recording or watching for a drive"
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
     }
 
-    private fun buildNotification(title: String, text: String): Notification {
+    private fun buildNotification(title: String, text: String, alert: Boolean = false): Notification {
         val openIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
@@ -165,6 +179,7 @@ class TrackingService : Service() {
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(!alert)
 
         if (isActivelyRecording) {
             builder.addAction(android.R.drawable.ic_media_pause, "Stop & Save Trip", stopPendingIntent)
@@ -175,11 +190,10 @@ class TrackingService : Service() {
 
     private fun updateNotification(point: LatLngPoint) {
         val state = TrackingManager.trackingState.value
+        val justStarted = state.isTracking && !wasTracking
+        wasTracking = state.isTracking
         val (title, text) = if (state.isTracking) {
-            Pair(
-                "MileageTracker • Recording Drive",
-                "${String.format("%.1f", state.distanceKm)} km • ${state.speedKmh.toInt()} km/h"
-            )
+            currentTripText(state.distanceKm, state.speedKmh)
         } else if (state.isMonitoringMovement) {
             Pair(
                 "MileageTracker • Auto-Detect Active",
@@ -190,7 +204,7 @@ class TrackingService : Service() {
         }
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(title, text))
+        manager.notify(NOTIFICATION_ID, buildNotification(title, text, alert = justStarted))
     }
 
     override fun onDestroy() {

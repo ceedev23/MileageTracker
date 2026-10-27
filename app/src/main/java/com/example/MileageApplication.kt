@@ -7,5 +7,6 @@ class MileageApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         TrackingManager.init(this)
+        TrackingManager.resumeAutoDetect(this)
     }
 }

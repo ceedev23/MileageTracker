@@ -29,6 +29,7 @@ class TripDetector(
         const val SPEED_THRESHOLD_KMH = 5.0f
         const val MIN_TRIP_KM = 0.25
         const val WARMUP_MS = 25_000L // 25 seconds of continuous movement
+        const val WARMUP_ABORT_MS = 15_000L // pause this long during warmup and it was not a drive
     }
 
     var dwellMinutes: Int = dwellMinutes
@@ -43,6 +44,7 @@ class TripDetector(
     private var movingSince: Long? = null
     private var stoppedSince: Long? = null
     private var lastIdlePoint: LatLngPoint? = null
+    private val speedWindow = ArrayDeque<LatLngPoint>()
 
     fun updateDwellMinutes(minutes: Int) {
         dwellMinutes = minutes.coerceIn(1, 30)
@@ -50,6 +52,7 @@ class TripDetector(
 
     fun processPoint(point: LatLngPoint) {
         val speedKmh = if (point.speedKmh > 0) point.speedKmh else estimateSpeed(point)
+        rememberPoint(point)
         val now = point.timestamp
 
         when (state) {
@@ -87,18 +90,22 @@ class TripDetector(
                 }
 
                 if (speedKmh <= SPEED_THRESHOLD_KMH) {
-                    // False positive / drift, return to IDLE
-                    state = DetectorState.IDLE
-                    currentTrip = null
-                    movingSince = null
-                    lastIdlePoint = point
-                } else if (now - (movingSince ?: now) >= WARMUP_MS || speedKmh >= 20.0f) {
-                    // Confirmed trip!
-                    state = DetectorState.RECORDING
-                    accumulateDistance(trip, point)
-                    onTripStarted(trip)
+                    // Pulling out of a spot often reports one slow fix; only cancel after a real pause.
+                    if (stoppedSince == null) stoppedSince = now
+                    if (now - (stoppedSince ?: now) >= WARMUP_ABORT_MS) {
+                        state = DetectorState.IDLE
+                        currentTrip = null
+                        movingSince = null
+                        stoppedSince = null
+                        lastIdlePoint = point
+                    }
                 } else {
+                    stoppedSince = null
                     accumulateDistance(trip, point)
+                    if (now - (movingSince ?: now) >= WARMUP_MS || speedKmh >= 20.0f) {
+                        state = DetectorState.RECORDING
+                        onTripStarted(trip)
+                    }
                 }
             }
 
@@ -166,6 +173,7 @@ class TripDetector(
         movingSince = null
         stoppedSince = null
         lastIdlePoint = null
+        speedWindow.clear()
         return trip
     }
 
@@ -175,6 +183,7 @@ class TripDetector(
         movingSince = null
         stoppedSince = null
         lastIdlePoint = null
+        speedWindow.clear()
     }
 
     private fun accumulateDistance(trip: ActiveTrip, point: LatLngPoint) {
@@ -193,11 +202,26 @@ class TripDetector(
         trip.endTime = point.timestamp
     }
 
+    private fun rememberPoint(point: LatLngPoint) {
+        speedWindow.addLast(point)
+        val cutoff = point.timestamp - 20_000L
+        while (speedWindow.isNotEmpty() && speedWindow.first().timestamp < cutoff) {
+            speedWindow.removeFirst()
+        }
+    }
+
     private fun estimateSpeed(point: LatLngPoint): Float {
-        val last = currentTrip?.lastPoint ?: lastIdlePoint ?: return 0f
-        val dKm = haversineDistanceKm(last.latitude, last.longitude, point.latitude, point.longitude)
-        if (dKm < 0.015) return 0f // Filter out stationary GPS noise jitter (< 15 meters)
-        val dtMillis = maxOf(1000L, point.timestamp - last.timestamp)
+        // Fixes are often < 15m apart, so measure across the recent window instead of one step.
+        val now = point.timestamp
+        val window = speedWindow.filter { now - it.timestamp in 1_000L..20_000L }
+        val prior = currentTrip?.lastPoint ?: lastIdlePoint
+        val anchor = window.lastOrNull { now - it.timestamp >= 4_000L }
+            ?: window.firstOrNull()
+            ?: prior?.takeIf { now - it.timestamp in 1_000L..20_000L }
+            ?: return 0f
+        val dKm = haversineDistanceKm(anchor.latitude, anchor.longitude, point.latitude, point.longitude)
+        if (dKm < 0.015) return 0f
+        val dtMillis = maxOf(1000L, now - anchor.timestamp)
         val dtHours = dtMillis.toDouble() / 3_600_000.0
         return (dKm / dtHours).toFloat()
     }

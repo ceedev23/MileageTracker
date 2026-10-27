@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -83,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.R
+import com.example.service.TripNotifier
+import com.example.service.tripUpdates
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.components.ReceiptScanDialog
@@ -92,6 +95,9 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+
+private var notificationPermissionRequested = false
+private var locationPermissionRequested = false
 
 @Composable
 fun HomeScreen(
@@ -129,10 +135,40 @@ fun HomeScreen(
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
     }
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            TripNotifier.post(context, tripUpdates(null, viewModel.trips.value))
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (notificationPermissionRequested) return@LaunchedEffect
+        notificationPermissionRequested = true
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     // Auto-start movement monitoring when enabled and permitted
     LaunchedEffect(settings.autoDetect, hasLocationPermission) {
-        if (settings.autoDetect && hasLocationPermission) {
+        if (!settings.autoDetect) return@LaunchedEffect
+        if (hasLocationPermission) {
             viewModel.startMovementMonitoring(context)
+        } else if (!locationPermissionRequested) {
+            locationPermissionRequested = true
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
     }
 
