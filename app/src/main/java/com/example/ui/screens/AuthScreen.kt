@@ -69,8 +69,6 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.ScaleFactor
-import kotlin.math.max
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -114,18 +112,6 @@ private val WelcomeSkyScrim = Brush.verticalGradient(
     0.38f to Color.Transparent,
     1.00f to Color.Transparent
 )
-
-private val ZoomedCrop = object : ContentScale {
-    override fun computeScaleFactor(
-        srcSize: androidx.compose.ui.geometry.Size,
-        dstSize: androidx.compose.ui.geometry.Size
-    ): ScaleFactor {
-        val widthScale = dstSize.width / srcSize.width
-        val heightScale = dstSize.height / srcSize.height
-        val scale = max(widthScale, heightScale) * 1.45f
-        return ScaleFactor(scale, scale)
-    }
-}
 
 /**
  * Onboarding and Auth Screen faithfully matching the provided UI design & flow:
@@ -520,10 +506,11 @@ private fun SignInFormView(
             ) {
                 // Background image illustration
                 Image(
-                    painter = painterResource(id = R.drawable.img_auth_hero),
-                    contentDescription = "Car and city skyline",
+                    painter = painterResource(id = R.drawable.img_home_hero),
+                    contentDescription = "Minimalist mountain road illustration",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ZoomedCrop
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.BottomCenter
                 )
 
                 // Top Header Bar with Back Button & App Logo Badge
@@ -1117,10 +1104,11 @@ private fun SignUpFormView(
             ) {
                 // Background image illustration
                 Image(
-                    painter = painterResource(id = R.drawable.img_auth_hero),
-                    contentDescription = "Car and city skyline",
+                    painter = painterResource(id = R.drawable.img_home_hero),
+                    contentDescription = "Minimalist mountain road illustration",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ZoomedCrop
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.BottomCenter
                 )
 
                 // Top Header Bar with Back Button & App Logo Badge
