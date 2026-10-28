@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
+import com.example.R
 import com.example.data.TripEntity
 import java.util.Locale
 
@@ -87,7 +88,7 @@ object TripNotifier {
         val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setSmallIcon(R.drawable.ic_stat_logo)
             .setContentIntent(open)
             .setAutoCancel(true)
             .setOnlyAlertOnce(silent)
