@@ -673,6 +673,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 val reading = database.odometerReadingDao().find(id) ?: return@runCatching
                 database.odometerReadingDao().delete(id)
                 reading.photoPath?.let { withContext(Dispatchers.IO) { com.example.service.OdometerPhotoStore.delete(getApplication(), it) } }
+                Unit
             })
         }
     }
