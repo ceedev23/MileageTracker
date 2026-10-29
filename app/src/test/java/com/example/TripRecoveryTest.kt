@@ -99,9 +99,26 @@ class TripRecoveryTest {
     fun `failed database write retains checkpoint for next restart`() = runBlocking {
         val checkpoint = checkpoint()
         store.write(checkpoint)
-        database.close()
-        assertTrue(runCatching { TripRecovery(database, store).save(checkpoint) }.isFailure)
+        // Room can reopen a closed database. Reject the actual INSERT instead, so
+        // this exercises the transaction failure and checkpoint-retention path.
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER reject_trip_save BEFORE INSERT ON trips " +
+                "BEGIN SELECT RAISE(ABORT, 'Simulated trip write failure'); END"
+        )
+        try {
+            val failure = runCatching { TripRecovery(database, store).save(checkpoint) }.exceptionOrNull()
+            assertNotNull("The trip INSERT must fail", failure)
+            assertTrue(failure!!.message.orEmpty().contains("Simulated trip write failure"))
+            assertTrue(database.tripDao().getAllTripsList().isEmpty())
+            assertNull(database.tripRecoveryDao().find(checkpoint.key))
+        } finally {
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER reject_trip_save")
+        }
         assertEquals(checkpoint, TripCheckpointStore(directory).readAll().single())
+        // Once storage works again, the retained checkpoint can be recovered once.
+        assertNotNull(TripRecovery(database, TripCheckpointStore(directory)).save(checkpoint))
+        assertEquals(1, database.tripDao().getAllTripsList().size)
+        assertTrue(store.readAll().isEmpty())
     }
 
     @Test
