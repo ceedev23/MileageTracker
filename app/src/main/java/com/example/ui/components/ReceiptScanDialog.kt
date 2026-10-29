@@ -50,6 +50,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.service.ReceiptField
+import com.example.service.ExtractedReceiptData
 import com.example.data.InputCheck
 import com.example.data.fuelPriceFieldLabel
 import com.example.data.fuelVolumeLabel
@@ -116,6 +118,7 @@ fun ReceiptScanDialog(
     }
 
     val extracted = scanState.extractedData
+    var editedFields by remember(extracted) { mutableStateOf(emptySet<ReceiptField>()) }
 
     var merchantInput by remember(extracted) {
         mutableStateOf(extracted?.merchant?.let { InputCheck.finishLabel(it, 80) } ?: "")
@@ -441,7 +444,7 @@ fun ReceiptScanDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "TOTAL AMOUNT",
+                                text = if (ReceiptField.TOTAL !in editedFields && extracted?.calculatedFields?.contains(ReceiptField.TOTAL) == true) "CALCULATED TOTAL — REVIEW" else "TOTAL AMOUNT",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF6EE7B7),
@@ -472,7 +475,7 @@ fun ReceiptScanDialog(
                         (extracted.totalAmount > 0.0 || extracted.gallonsOrLiters != null || !extracted.merchant.isNullOrBlank())
                     ) {
                         Text(
-                            text = "Read from your photo. Review the details, then save.",
+                            text = "Suggested receipt details may contain errors. Check every field against your photo before saving.",
                             style = MaterialTheme.typography.bodySmall,
                             color = DriveGreen,
                             modifier = Modifier.fillMaxWidth()
@@ -510,7 +513,8 @@ fun ReceiptScanDialog(
                     // Total Amount Field
                     OutlinedTextField(
                         value = totalAmountInput,
-                        onValueChange = { if (InputCheck.decimalText(it, 4, 2)) totalAmountInput = it },
+                        onValueChange = { if (InputCheck.decimalText(it, 4, 2)) { totalAmountInput = it; editedFields = editedFields + ReceiptField.TOTAL } },
+                        supportingText = { ReceiptFieldReviewHint(extracted, ReceiptField.TOTAL, ReceiptField.TOTAL in editedFields) },
                         label = { Text("Total Amount ($)") },
                         leadingIcon = {
                             Icon(Icons.Default.Payment, contentDescription = null, tint = DriveGreen)
@@ -532,7 +536,8 @@ fun ReceiptScanDialog(
                     ) {
                         OutlinedTextField(
                             value = gallonsInput,
-                            onValueChange = { if (InputCheck.decimalText(it, 3, 3)) gallonsInput = it },
+                            onValueChange = { if (InputCheck.decimalText(it, 3, 3)) { gallonsInput = it; editedFields = editedFields + ReceiptField.VOLUME } },
+                            supportingText = { ReceiptFieldReviewHint(extracted, ReceiptField.VOLUME, ReceiptField.VOLUME in editedFields) },
                             label = { Text(fuelVolumeLabel(extracted?.unit)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier
@@ -544,7 +549,8 @@ fun ReceiptScanDialog(
 
                         OutlinedTextField(
                             value = pricePerUnitInput,
-                            onValueChange = { if (InputCheck.decimalText(it, 2, 3)) pricePerUnitInput = it },
+                            onValueChange = { if (InputCheck.decimalText(it, 2, 3)) { pricePerUnitInput = it; editedFields = editedFields + ReceiptField.UNIT_PRICE } },
+                            supportingText = { ReceiptFieldReviewHint(extracted, ReceiptField.UNIT_PRICE, ReceiptField.UNIT_PRICE in editedFields) },
                             label = { Text(fuelPriceFieldLabel(extracted?.unit)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier
@@ -576,7 +582,8 @@ fun ReceiptScanDialog(
 
                         OutlinedTextField(
                             value = dateInput,
-                            onValueChange = { if (InputCheck.dateText(it)) dateInput = it },
+                            onValueChange = { if (InputCheck.dateText(it)) { dateInput = it; editedFields = editedFields + ReceiptField.DATE } },
+                            supportingText = { ReceiptFieldReviewHint(extracted, ReceiptField.DATE, ReceiptField.DATE in editedFields) },
                             label = { Text("Date") },
                             leadingIcon = {
                                 Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -692,4 +699,17 @@ fun ReceiptScanDialog(
             }
         }
     }
+}
+
+/** These are provenance/review hints, not invented OCR confidence scores. */
+@Composable
+internal fun ReceiptFieldReviewHint(data: ExtractedReceiptData?, field: ReceiptField, edited: Boolean) {
+    if (data == null || edited) return
+    val message = when {
+        field in data.calculatedFields -> "Calculated from other amounts. Check against the photo."
+        field in data.reviewFields && field == ReceiptField.DATE -> "Ambiguous day/month order. Confirm the date."
+        field in data.reviewFields -> "Check against the photo: amounts may include tax or discounts, or be misread."
+        else -> null
+    }
+    if (message != null) Text(message, color = MaterialTheme.colorScheme.error)
 }

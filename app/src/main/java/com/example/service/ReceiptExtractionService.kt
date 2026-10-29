@@ -18,6 +18,8 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 
+enum class ReceiptField { TOTAL, VOLUME, UNIT_PRICE, DATE }
+
 data class ExtractedReceiptData(
     val merchant: String? = null,
     val totalAmount: Double = 0.0,
@@ -29,7 +31,9 @@ data class ExtractedReceiptData(
     val date: String? = null,
     val paymentMethod: String? = null,
     val summary: String? = null,
-    val rawText: String? = null
+    val rawText: String? = null,
+    val calculatedFields: Set<ReceiptField> = emptySet(),
+    val reviewFields: Set<ReceiptField> = emptySet()
 )
 
 sealed class ExtractionResult {

@@ -74,7 +74,11 @@ object ReceiptTextParser {
         val volume = findVolume(searchTexts)
         var gallons = volume?.value
         val unit = volume?.unit ?: unitFromText(normalized)
-        var total = findTotal(lines)
+        val totalHit = findTotal(lines)
+        var total = totalHit?.amount
+        val calculatedFields = mutableSetOf<ReceiptField>()
+        val reviewFields = mutableSetOf<ReceiptField>()
+        if (totalHit?.subtotal == true) reviewFields += ReceiptField.TOTAL
         var price = findPrice(searchTexts, gallons, total)
 
         if (gallons != null && (gallons < 0.2 || gallons > 250.0)) gallons = null
@@ -83,15 +87,37 @@ object ReceiptTextParser {
 
         if (total == null && gallons != null && price != null) {
             total = roundTo(gallons * price, 2)
+            calculatedFields += ReceiptField.TOTAL
         }
         if (price == null && total != null && gallons != null && gallons > 0.0) {
             val computed = total / gallons
-            if (computed in 0.4..15.0) price = roundTo(computed, 3)
+            if (computed in 0.4..15.0) {
+                price = roundTo(computed, 3)
+                calculatedFields += ReceiptField.UNIT_PRICE
+            }
         }
         if (gallons == null && total != null && price != null && price > 0.0) {
             val computed = total / price
-            if (computed in 0.2..250.0) gallons = roundTo(computed, 3)
+            if (computed in 0.2..250.0) {
+                gallons = roundTo(computed, 3)
+                calculatedFields += ReceiptField.VOLUME
+            }
         }
+
+        // A mismatch can be taxes, discounts or an OCR error; ask for review,
+        // rather than silently "correcting" a value read from the receipt.
+        if (calculatedFields.isEmpty() && total != null && gallons != null && price != null &&
+            abs(total - gallons * price) > maxOf(0.05, gallons * 0.0005 + price * 0.0005)) {
+            reviewFields += setOf(ReceiptField.TOTAL, ReceiptField.VOLUME, ReceiptField.UNIT_PRICE)
+        }
+        val date = findDate(lines)
+        if (date != null && lines.any { line ->
+            (mdyDate.find(line) ?: mdyShortDate.find(line))?.let { match ->
+                val a = match.groupValues[1].toInt()
+                val b = match.groupValues[2].toInt()
+                a in 1..12 && b in 1..12 && a != b
+            } == true
+        }) reviewFields += ReceiptField.DATE
 
         return ExtractedReceiptData(
             merchant = findMerchant(lines),
@@ -101,10 +127,12 @@ object ReceiptTextParser {
             gallonsOrLiters = gallons,
             unit = unit,
             pricePerUnit = price,
-            date = findDate(lines),
+            date = date,
             paymentMethod = findPayment(normalized),
             summary = null,
-            rawText = original.take(8000)
+            rawText = original.take(8000),
+            calculatedFields = calculatedFields.toSet(),
+            reviewFields = reviewFields.toSet()
         )
     }
 
@@ -127,8 +155,10 @@ object ReceiptTextParser {
         return value
     }
 
-    private fun findTotal(lines: List<String>): Double? {
-        data class Candidate(val priority: Int, val index: Int, val amount: Double)
+    private data class TotalHit(val amount: Double, val subtotal: Boolean)
+
+    private fun findTotal(lines: List<String>): TotalHit? {
+        data class Candidate(val priority: Int, val index: Int, val amount: Double, val subtotal: Boolean)
         val candidates = mutableListOf<Candidate>()
         lines.forEachIndexed { index, line ->
             val upper = line.uppercase(Locale.US)
@@ -143,9 +173,9 @@ object ReceiptTextParser {
                 isSubtotal -> 1
                 else -> 0
             }
-            if (priority > 0) candidates += Candidate(priority, index, amount)
+            if (priority > 0) candidates += Candidate(priority, index, amount, isSubtotal)
         }
-        return candidates.maxWithOrNull(compareBy<Candidate> { it.priority }.thenBy { it.index })?.amount
+        return candidates.maxWithOrNull(compareBy<Candidate> { it.priority }.thenBy { it.index })?.let { TotalHit(it.amount, it.subtotal) }
     }
 
     private fun amountForLabel(lines: List<String>, index: Int): Double? {

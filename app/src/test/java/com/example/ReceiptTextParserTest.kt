@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.service.ReceiptTextParser
+import com.example.service.ReceiptField
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -197,5 +198,70 @@ class ReceiptTextParserTest {
     )
     assertEquals("L", unlabeled.unit)
     assertEquals(45.200, unlabeled.gallonsOrLiters ?: 0.0, 0.001)
+  }
+
+  @Test
+  fun `missing total is calculated and marked rather than presented as read`() {
+    val parsed = ReceiptTextParser.parse("ESSO\n45.200 L @ 1.599")
+    assertEquals(72.27, parsed.totalAmount, 0.001)
+    assertEquals(setOf(ReceiptField.TOTAL), parsed.calculatedFields)
+  }
+
+  @Test
+  fun `missing unit price is marked calculated`() {
+    val parsed = ReceiptTextParser.parse("ESSO\nLITRES 40.000\nTOTAL ${'$'}80.00")
+    assertEquals(2.0, parsed.pricePerUnit ?: 0.0, 0.001)
+    assertEquals(setOf(ReceiptField.UNIT_PRICE), parsed.calculatedFields)
+  }
+
+  @Test
+  fun `missing volume is marked calculated`() {
+    val parsed = ReceiptTextParser.parse("ESSO\nPRICE/L ${'$'}1.600\nTOTAL ${'$'}80.00")
+    assertEquals(50.0, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(setOf(ReceiptField.VOLUME), parsed.calculatedFields)
+  }
+
+  @Test
+  fun `direct amounts remain unchanged and rounding is not flagged`() {
+    val parsed = ReceiptTextParser.parse("ESSO\n45.200 L @ 1.599\nTOTAL ${'$'}72.27")
+    assertEquals(72.27, parsed.totalAmount, 0.001)
+    assertEquals(45.2, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(1.599, parsed.pricePerUnit ?: 0.0, 0.001)
+    assertEquals(emptySet<ReceiptField>(), parsed.calculatedFields)
+    assertEquals(emptySet<ReceiptField>(), parsed.reviewFields)
+  }
+
+  @Test
+  fun `mismatched direct amounts are flagged without rewriting receipt figures`() {
+    val parsed = ReceiptTextParser.parse("ESSO\n40.000 L @ 2.000\nTOTAL ${'$'}90.00")
+    assertEquals(90.0, parsed.totalAmount, 0.001)
+    assertEquals(40.0, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(2.0, parsed.pricePerUnit ?: 0.0, 0.001)
+    assertEquals(emptySet<ReceiptField>(), parsed.calculatedFields)
+    assertEquals(setOf(ReceiptField.TOTAL, ReceiptField.VOLUME, ReceiptField.UNIT_PRICE), parsed.reviewFields)
+  }
+
+  @Test
+  fun `subtotal fallback is flagged for review`() {
+    val parsed = ReceiptTextParser.parse("ESSO\nSUBTOTAL ${'$'}40.00\nTAX ${'$'}5.20")
+    assertEquals(40.0, parsed.totalAmount, 0.001)
+    assertEquals(setOf(ReceiptField.TOTAL), parsed.reviewFields)
+  }
+
+  @Test
+  fun `ambiguous date is flagged while interpretation stays unchanged`() {
+    val parsed = ReceiptTextParser.parse("ESSO\nDATE 04/05/2026\nTOTAL ${'$'}20.00")
+    assertEquals("2026-04-05", parsed.date)
+    assertEquals(setOf(ReceiptField.DATE), parsed.reviewFields)
+    for (date in listOf("2026-04-05", "13/05/2026", "05/05/2026")) {
+      assertEquals(emptySet<ReceiptField>(), ReceiptTextParser.parse("ESSO\nDATE $date\nTOTAL ${'$'}20.00").reviewFields)
+    }
+  }
+
+  @Test
+  fun `empty receipt has no calculated fields or fake confidence markers`() {
+    val parsed = ReceiptTextParser.parse("")
+    assertEquals(emptySet<ReceiptField>(), parsed.calculatedFields)
+    assertEquals(emptySet<ReceiptField>(), parsed.reviewFields)
   }
 }
