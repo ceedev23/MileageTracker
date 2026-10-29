@@ -57,6 +57,16 @@ class TripDwellEndTripTest {
         TrackingManager.resetForTesting()
     }
 
+    private fun waitForClassification(tripId: Long, expectedType: String) {
+        // UI idleness does not await Room's asynchronous write. Keep the wait
+        // bounded and inspect the exact stored row, so a failed update still fails.
+        composeTestRule.waitUntil(5000) {
+            runBlocking {
+                AppDatabase.getDatabase(app).tripDao().getTripById(tripId)?.type == expectedType
+            }
+        }
+    }
+
     @Test
     fun testDwellSettingSynchronizesFromSettings() {
         // Change dwell time via settings
@@ -151,7 +161,7 @@ class TripDwellEndTripTest {
 
         // Classify trip as Business via viewModel or UI
         viewModel.classifyTrip(entity.copy(id = insertedId), "Business")
-        composeTestRule.waitForIdle()
+        waitForClassification(insertedId, "Business")
 
         // Verify trip was classified as Business
         val trips = runBlocking {
@@ -210,7 +220,7 @@ class TripDwellEndTripTest {
         assertNull("Saved trip should be unclassified initially", savedTrips[0].type)
 
         viewModel.classifyTrip(savedTrips[0], "Personal")
-        composeTestRule.waitForIdle()
+        waitForClassification(savedTrips[0].id, "Personal")
 
         val classifiedTrips = runBlocking {
             AppDatabase.getDatabase(app).tripDao().getAllTrips().first()
