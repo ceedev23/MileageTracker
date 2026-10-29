@@ -73,6 +73,7 @@ object TrackingManager {
     private var activeCheckpointKey: String? = null
     private var latestSaveKey: String? = null
     private var lastCheckpointAt = 0L
+    private val checkpointRouteCache = CheckpointRouteCache()
     private const val CHECKPOINT_INTERVAL_MS = 10_000L
 
     var onTripSavedCallback: ((TripEntity) -> Unit)? = null
@@ -266,7 +267,7 @@ object TrackingManager {
             },
             purpose = draft.note.ifBlank { "Drive" },
             vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
-            pathJson = serializePoints(trip.points)
+            pathJson = checkpointRouteCache.serialized(trip, ::serializePoints)
         )
 
     @Synchronized
@@ -538,6 +539,7 @@ object TrackingManager {
     }
 
     private fun clearLiveTripExtras() {
+        checkpointRouteCache.clear()
         activeDraft = ActiveTripDraft()
         startGeocodeStarted = false
     }

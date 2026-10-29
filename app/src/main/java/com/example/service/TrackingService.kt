@@ -12,6 +12,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
@@ -23,6 +25,11 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+
+internal fun trackingLocationRequest(cadence: LocationCadence): LocationRequest =
+    LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, cadence.intervalMs)
+        .setMinUpdateIntervalMillis(cadence.minimumIntervalMs)
+        .build()
 
 class TrackingService : Service() {
 
@@ -38,6 +45,11 @@ class TrackingService : Service() {
     private var locationCallback: LocationCallback? = null
     private var isLocationTrackingActive: Boolean = false
     private var wasTracking: Boolean = false
+    private val powerPolicy = TrackingPowerPolicy()
+    private val notificationGate = TrackingNotificationGate()
+    private var requestedCadence: LocationCadence? = null
+    private var confirmedCadence: LocationCadence? = null
+    private var requestVersion = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -61,7 +73,8 @@ class TrackingService : Service() {
                     alert = true
                 )
                 startForeground(NOTIFICATION_ID, notification)
-                startLocationUpdates()
+                powerPolicy.reset()
+                startLocationUpdates(LocationCadence.ACTIVE)
             }
             else -> {
                 // Monitoring start, or the system restarted this sticky service after the process died.
@@ -79,55 +92,74 @@ class TrackingService : Service() {
                     alert = true
                 )
                 startForeground(NOTIFICATION_ID, notification)
-                startLocationUpdates()
+                powerPolicy.reset()
+                startLocationUpdates(LocationCadence.ACTIVE)
             }
         }
         return START_STICKY
     }
 
     @SuppressLint("MissingPermission")
-    private fun startLocationUpdates() {
+    private fun startLocationUpdates(cadence: LocationCadence) {
         if (!hasLocationPermission()) return
-        if (isLocationTrackingActive) return
+        if (isLocationTrackingActive && requestedCadence == cadence) return
+        val client = fusedLocationClient ?: return
+        val locationRequest = trackingLocationRequest(cadence)
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000L)
-            .setMinUpdateIntervalMillis(1500L)
-            .build()
-
-        locationCallback = object : LocationCallback() {
+        if (locationCallback == null) locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
+                if (locationCallback !== this || !isLocationTrackingActive) return
                 val now = System.currentTimeMillis()
+                var lastPoint: LatLngPoint? = null
                 for (location in result.locations) {
                     val speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0f
                     val locTime = location.time
                     val timestamp = if (locTime > 0 && kotlin.math.abs(now - locTime) < 30_000L) locTime else now
-                    val point = LatLngPoint(
-                        latitude = location.latitude,
-                        longitude = location.longitude,
-                        timestamp = timestamp,
-                        speedKmh = speedKmh
-                    )
+                    val point = LatLngPoint(location.latitude, location.longitude, timestamp, speedKmh)
+                    // Every delivered point still reaches the detector, regardless of notification cadence.
                     TrackingManager.processGpsPoint(point)
-                    updateNotification(point)
+                    lastPoint = point
+                }
+                if (lastPoint != null) {
+                    startLocationUpdates(powerPolicy.cadence(TrackingManager.trackingState.value, lastPoint, SystemClock.elapsedRealtime()))
+                    updateNotification()
                 }
             }
         }
-
+        val callback = locationCallback ?: return
+        val version = ++requestVersion
+        requestedCadence = cadence
+        isLocationTrackingActive = true
         try {
-            locationCallback?.let {
-                fusedLocationClient?.requestLocationUpdates(locationRequest, it, Looper.getMainLooper())
-                isLocationTrackingActive = true
-            }
-        } catch (e: SecurityException) {
-            e.printStackTrace()
+            // Updating the SAME callback replaces its request; no remove/re-register gap is needed.
+            client.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
+                .addOnSuccessListener {
+                    if (requestVersion == version) confirmedCadence = cadence
+                }
+                .addOnFailureListener {
+                    if (requestVersion == version) {
+                        requestedCadence = confirmedCadence
+                        isLocationTrackingActive = confirmedCadence != null
+                        Log.w("TrackingService", "Location cadence update failed")
+                    }
+                }
+        } catch (_: SecurityException) {
+            requestedCadence = confirmedCadence
+            isLocationTrackingActive = confirmedCadence != null
+            Log.w("TrackingService", "Location permission unavailable")
         }
     }
 
     private fun stopLocationUpdates() {
-        locationCallback?.let {
-            fusedLocationClient?.removeLocationUpdates(it)
-        }
+        ++requestVersion
         isLocationTrackingActive = false
+        requestedCadence = null
+        confirmedCadence = null
+        val callback = locationCallback
+        locationCallback = null
+        if (callback != null) fusedLocationClient?.removeLocationUpdates(callback)
+        powerPolicy.reset()
+        notificationGate.reset()
     }
 
     private fun hasLocationPermission(): Boolean {
@@ -189,7 +221,7 @@ class TrackingService : Service() {
         return builder.build()
     }
 
-    private fun updateNotification(point: LatLngPoint) {
+    private fun updateNotification() {
         val state = TrackingManager.trackingState.value
         val justStarted = state.isTracking && !wasTracking
         wasTracking = state.isTracking
@@ -204,8 +236,13 @@ class TrackingService : Service() {
             Pair("MileageTracker", "Ready to track")
         }
 
+        val identity = "${state.isTracking}:${state.isMonitoringMovement}:${state.detectorState}:${state.tripStartedAtMs}"
+        val content = "$title\n$text"
+        val elapsed = SystemClock.elapsedRealtime()
+        if (!notificationGate.shouldPost(identity, content, elapsed)) return
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(title, text, alert = justStarted))
+        notificationGate.posted(identity, content, elapsed)
     }
 
     override fun onDestroy() {

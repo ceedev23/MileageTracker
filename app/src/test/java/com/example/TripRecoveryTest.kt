@@ -176,4 +176,36 @@ class TripRecoveryTest {
             context.deleteDatabase(name)
         }
     }
+
+    @Test
+    fun `identical checkpoint avoids another write but changed end time is saved`() {
+        val original = checkpoint()
+        assertTrue(store.write(original))
+        assertFalse(store.write(original))
+        val updated = original.copy(trip = original.trip.copy(endDate = original.trip.endDate + 10000))
+        assertTrue(store.write(updated))
+        assertEquals(updated, store.readAll().single())
+        assertTrue(store.write(updated.copy(completed = true)))
+        assertTrue(store.readAll().single().completed)
+    }
+
+    @Test
+    fun `removed checkpoint is written again even if snapshot is identical`() {
+        val original = checkpoint()
+        assertTrue(store.write(original))
+        store.remove(original.key)
+        assertTrue(store.write(original))
+        assertEquals(original, store.readAll().single())
+    }
+
+    @Test
+    fun `failed checkpoint write remains eligible for retry`() {
+        val blocked = File(directory, "blocked").apply { parentFile!!.mkdirs(); writeText("not a directory") }
+        val failing = TripCheckpointStore(blocked)
+        val original = checkpoint()
+        try { failing.write(original); fail("Should reject unwritable directory") } catch (_: IllegalStateException) {}
+        blocked.delete()
+        assertTrue(failing.write(original))
+        assertEquals(original, failing.readAll().single())
+    }
 }

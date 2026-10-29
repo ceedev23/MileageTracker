@@ -10,8 +10,12 @@ data class TripCheckpoint(val key: String, val trip: TripEntity, val completed: 
 
 /** One atomic file per trip: finishing one trip cannot erase a newer active checkpoint. */
 class TripCheckpointStore(private val directory: File) {
+    private var lastWritten: TripCheckpoint? = null
     @Synchronized
-    fun write(checkpoint: TripCheckpoint) {
+    fun write(checkpoint: TripCheckpoint): Boolean {
+        // Only byte-for-byte equivalent logical snapshots are skipped. A new end
+        // time, route, distance, note or completion marker must still be persisted.
+        if (lastWritten == checkpoint && File(directory, "${checkpoint.key}.json").isFile) return false
         check(directory.isDirectory || directory.mkdirs()) { "Cannot create trip checkpoint directory" }
         val trip = checkpoint.trip
         val json = JSONObject().apply {
@@ -33,6 +37,8 @@ class TripCheckpointStore(private val directory: File) {
         try {
             stream.write(json.toString().toByteArray(Charsets.UTF_8))
             file.finishWrite(stream)
+            lastWritten = checkpoint
+            return true
         } catch (error: Exception) {
             file.failWrite(stream)
             throw error
@@ -70,7 +76,10 @@ class TripCheckpointStore(private val directory: File) {
     }
 
     @Synchronized
-    fun remove(key: String) = atomicFile(key).delete()
+    fun remove(key: String) {
+        atomicFile(key).delete()
+        if (lastWritten?.key == key) lastWritten = null
+    }
 
     private fun atomicFile(key: String): AtomicFile {
         require(UUID.fromString(key).toString() == key)
