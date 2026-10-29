@@ -526,6 +526,52 @@ class SupabaseClient(
         }
     }
 
+    /** Receipt storage always requires a real session; never fall back to the anon key. */
+    suspend fun receiptObject(method: String, key: String, bytes: ByteArray? = null): Result<ByteArray> =
+        withContext(Dispatchers.IO) {
+            try {
+                val session = ensureFreshSession() ?: throw IOException("Sign in to back up receipt photos.")
+                require(ReceiptPhotoBackup.validKey(key, session.user.id)) { "Invalid receipt object" }
+                val path = if (method == "GET") "object/authenticated" else "object"
+                val suffix = if (method == "DELETE") "receipt-photos" else "receipt-photos/$key"
+                val builder = Request.Builder().url("${baseUrl()}/storage/v1/$path/$suffix")
+                headers(session.accessToken).forEach { (k, v) -> builder.header(k, v) }
+                when (method) {
+                    "POST" -> {
+                        requireNotNull(bytes)
+                        ReceiptPhotoBackup.validateImage(bytes)
+                        builder.header("Content-Type", "image/jpeg").header("x-upsert", "true")
+                            .post(bytes.toRequestBody("image/jpeg".toMediaType()))
+                    }
+                    "GET" -> builder.get()
+                    "DELETE" -> builder.delete(JSONObject().put("prefixes", JSONArray().put(key)).toString().toRequestBody(jsonMediaType))
+                    else -> throw IOException("Unsupported receipt operation")
+                }
+                httpClient.newCall(builder.build()).execute().use { response ->
+                    if (!response.isSuccessful && !(method == "DELETE" && response.code == 404)) throw IOException("Receipt photo operation failed. Try syncing again.")
+                    if (method != "GET") return@withContext Result.success(ByteArray(0))
+                    val body = response.body ?: throw IOException("Receipt photo was empty.")
+                    require(body.contentLength() <= ReceiptPhotoBackup.MAX_BYTES) { "Receipt photo is too large" }
+                    val output = java.io.ByteArrayOutputStream()
+                    body.byteStream().use { input ->
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            require(output.size() + count <= ReceiptPhotoBackup.MAX_BYTES) { "Receipt photo is too large" }
+                            output.write(buffer, 0, count)
+                        }
+                    }
+                    Result.success(output.toByteArray().also { ReceiptPhotoBackup.validateImage(it) })
+                }
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Do not log document bytes, object paths, credentials or provider response bodies.
+                Result.failure(IOException("Receipt photo backup or restore failed. Your local photo is kept. Try syncing again."))
+            }
+        }
+
     // Known auth codes only. Anything else is logged by the caller and replaced with a fixed sentence.
     fun extractErrorMessage(jsonBody: String): String? {
         return try {

@@ -171,7 +171,9 @@ data class SupabaseReceiptDto(
         json.put("client_id", clientId)
         if (userId != null) json.put("user_id", userId)
         json.put("timestamp", timestamp)
-        json.put("image_path", imagePath)
+        // Never send a phone's private filesystem path. Omitting this field also
+        // preserves an existing cloud image when photo backup is switched off.
+        if (imagePath.startsWith(ReceiptPhotoBackup.PREFIX)) json.put("image_path", imagePath)
         if (merchant != null) json.put("merchant", merchant) else json.put("merchant", JSONObject.NULL)
         json.put("total_amount", totalAmount)
         json.put("currency", currency)

@@ -22,7 +22,8 @@ class SupabaseSyncManager(
     private val tripRepository: TripRepository,
     private val receiptRepository: GasReceiptRepository,
     val supabaseClient: SupabaseClient,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val photos: ReceiptPhotoBackup? = null
 ) {
     // Full syncs and individual changes must not race to publish their status.
     private val syncMutex = Mutex()
@@ -61,6 +62,7 @@ class SupabaseSyncManager(
         )
         try {
             val userId = supabaseClient.config.getSession()?.user?.id
+            photos?.drainDeletions()
             val localTrips = tripRepository.getAllTripsList()
             val localReceipts = receiptRepository.getAllReceiptsList()
 
@@ -71,7 +73,7 @@ class SupabaseSyncManager(
                 uploadedTrips++
             }
             for (receipt in localReceipts) {
-                supabaseClient.upsertReceipt(SupabaseReceiptDto.fromGasReceiptEntity(receipt, userId)).getOrThrow()
+                uploadReceipt(receipt, userId)
                 uploadedReceipts++
             }
 
@@ -83,7 +85,8 @@ class SupabaseSyncManager(
                 }
             }
             val remoteReceipts = supabaseClient.fetchReceipts().getOrThrow().map {
-                requireNotNull(InputCheck.storedReceipt(it.toGasReceiptEntity(), strict = false)) {
+                requireNotNull(InputCheck.storedReceipt(
+                    photos?.restore(it, receiptRepository.getReceiptById(it.clientId)) ?: it.toGasReceiptEntity(), strict = false)) {
                     "Cloud receipt could not be validated"
                 }
             }
@@ -168,11 +171,24 @@ class SupabaseSyncManager(
     fun onReceiptSaved(receipt: GasReceiptEntity) = enqueueChange {
         receiptRepository.getReceiptById(receipt.id)?.let { current ->
             val userId = supabaseClient.config.getSession()?.user?.id
-            supabaseClient.upsertReceipt(SupabaseReceiptDto.fromGasReceiptEntity(current, userId)).getOrThrow()
+            photos?.drainDeletions()
+            uploadReceipt(current, userId)
         }
     }
 
+    suspend fun deleteReceiptLocally(receipt: GasReceiptEntity) = syncMutex.withLock {
+        photos?.queueDeletion(receipt.id)
+        receiptRepository.deleteReceipt(receipt)
+    }
+
+    private suspend fun uploadReceipt(receipt: GasReceiptEntity, userId: String?) {
+        val cloudPath = photos?.upload(receipt)
+        val dto = SupabaseReceiptDto.fromGasReceiptEntity(receipt, userId).copy(imagePath = cloudPath.orEmpty())
+        supabaseClient.upsertReceipt(dto).getOrThrow()
+    }
+
     fun onReceiptDeleted(receipt: GasReceiptEntity) = enqueueChange {
-        check(supabaseClient.deleteReceipt(receipt.id).getOrThrow()) { "Cloud receipt deletion was not confirmed" }
+        if (photos != null) photos.drainDeletions()
+        else check(supabaseClient.deleteReceipt(receipt.id).getOrThrow()) { "Cloud receipt deletion was not confirmed" }
     }
 }

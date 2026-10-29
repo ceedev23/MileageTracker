@@ -112,6 +112,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     val supabaseConfig: SupabaseConfig = SupabaseConfig(application)
     val supabaseClient: SupabaseClient = SupabaseClient(supabaseConfig)
+    val receiptPhotoBackup = com.example.data.supabase.ReceiptPhotoBackup(application, supabaseClient)
     val supabaseSyncManager: SupabaseSyncManager
     val supabaseSyncState: StateFlow<SupabaseSyncState>
 
@@ -335,6 +336,11 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         _authUiState.value = AuthUiState()
     }
 
+    fun setReceiptPhotoBackup(enabled: Boolean) {
+        receiptPhotoBackup.setEnabled(enabled)
+        supabaseSyncManager.triggerSync()
+    }
+
     fun syncWithSupabase() {
         supabaseSyncManager.triggerSync()
     }
@@ -390,7 +396,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             tripRepository = repository,
             receiptRepository = gasReceiptRepository,
             supabaseClient = supabaseClient,
-            scope = viewModelScope
+            scope = viewModelScope,
+            photos = receiptPhotoBackup
         )
         supabaseSyncState = supabaseSyncManager.syncState
 
@@ -925,13 +932,13 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteReceipt(receipt: GasReceiptEntity) {
         viewModelScope.launch {
+            supabaseSyncManager.deleteReceiptLocally(receipt)
             val image = InputCheck.receiptFile(getApplication<Application>().filesDir, receipt.imagePath)
             if (image != null) {
                 try {
                     image.delete()
                 } catch (_: Exception) {}
             }
-            gasReceiptRepository.deleteReceipt(receipt)
             supabaseSyncManager.onReceiptDeleted(receipt)
         }
     }

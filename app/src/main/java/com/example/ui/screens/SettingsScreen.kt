@@ -83,6 +83,8 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
 
+    var showReceiptBackupConsent by remember { mutableStateOf(false) }
+    var photoBackupEnabled by remember(userProfile) { mutableStateOf(viewModel.receiptPhotoBackup.enabled()) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showOdometerDialog by remember { mutableStateOf(false) }
     var rateInput by remember(settings.reimbursementRate) {
@@ -294,6 +296,29 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = SlateTextSecondary
                 )
+
+                if (signedIn) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Receipt photo backup", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (!viewModel.receiptPhotoBackup.available) "Photo backup is not available yet. Photos stay on this device."
+                                else if (photoBackupEnabled) "Included in the next successful full sync."
+                                else "Off. Receipt photos are not included in cloud backup.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = photoBackupEnabled,
+                            enabled = viewModel.receiptPhotoBackup.available && syncState.status != SyncStatus.SYNCING,
+                            onCheckedChange = { checked ->
+                                if (checked) showReceiptBackupConsent = true
+                                else { viewModel.setReceiptPhotoBackup(false); photoBackupEnabled = false }
+                            }
+                        )
+                    }
+                    Text("Turning backup off stops photo uploads and restores; it does not erase existing cloud photos. Delete a receipt to remove its cloud copy at the next successful sync. Keep an export for your tax records.", style = MaterialTheme.typography.bodySmall)
+                }
 
                 if (backupAvailable && signedIn) {
                     Button(
@@ -711,6 +736,20 @@ fun SettingsScreen(
     }
 
     // Confirmation dialog for clearing all data
+    if (showReceiptBackupConsent) {
+        AlertDialog(
+            onDismissRequest = { showReceiptBackupConsent = false },
+            title = { Text("Back up receipt photos?") },
+            text = { Text("Upload your receipt photos to private Supabase storage to restore them on another device. Storage region: ${viewModel.receiptPhotoBackup.region}. Supabase and its providers may process information elsewhere under their data processing terms. Only your signed-in account can access photos through the app. Photos may contain personal or payment details. Backup is optional; you can turn it off anytime. Deleting a receipt queues removal of its cloud copy when online. Keep copies for your tax obligations.") },
+            confirmButton = { Button(onClick = {
+                viewModel.setReceiptPhotoBackup(true)
+                photoBackupEnabled = true
+                showReceiptBackupConsent = false
+            }) { Text("Enable photo backup") } },
+            dismissButton = { OutlinedButton(onClick = { showReceiptBackupConsent = false }) { Text("Keep off") } }
+        )
+    }
+
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
