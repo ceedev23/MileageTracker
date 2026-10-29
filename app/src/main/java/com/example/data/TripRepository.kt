@@ -15,6 +15,8 @@ class TripRepository(private val tripDao: TripDao) {
 
     suspend fun updateTrip(trip: TripEntity) = tripDao.updateTrip(trip)
 
+    suspend fun classifyTrips(ids: List<Long>, type: String) = tripDao.classifyTrips(ids, type)
+
     suspend fun deleteTrip(trip: TripEntity) = tripDao.deleteTrip(trip)
 
     suspend fun deleteTripById(id: Long) = tripDao.deleteTripById(id)

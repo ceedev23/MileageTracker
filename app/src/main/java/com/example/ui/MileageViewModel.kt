@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import androidx.room.withTransaction
 import androidx.core.content.FileProvider
 import androidx.exifinterface.media.ExifInterface
 import androidx.lifecycle.AndroidViewModel
@@ -117,6 +118,9 @@ data class ReportExportUiState(
 )
 
 class MileageViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = AppDatabase.getDatabase(application)
+    val odometerReadings = database.odometerReadingDao().observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val vehicleExpenses = database.vehicleExpenseDao().observe().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val repository: TripRepository
     private val gasReceiptRepository: GasReceiptRepository
     private val settingsManager: SettingsManager
@@ -405,6 +409,20 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         repository = TripRepository(database.tripDao())
         gasReceiptRepository = GasReceiptRepository(database.gasReceiptDao())
         settingsManager = SettingsManager(application)
+        viewModelScope.launch {
+            database.withTransaction {
+                val old = settingsManager.settings.value
+                val dao = database.odometerReadingDao()
+                val prefs = application.getSharedPreferences("odometer_history_migration", Context.MODE_PRIVATE)
+                if (!prefs.getBoolean("done", false)) {
+                    if (old.odometerKm != null && old.odometerAt > 0 && dao.latest(old.vehicleName) == null) {
+                        dao.insert(com.example.data.OdometerReadingEntity(vehicle = old.vehicleName, recordedAt = old.odometerAt,
+                            readingKm = old.odometerKm, source = old.odometerSource))
+                    }
+                    prefs.edit().putBoolean("done", true).commit()
+                }
+            }
+        }
 
         supabaseSyncManager = SupabaseSyncManager(
             tripRepository = repository,
@@ -511,6 +529,18 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 delay(4500L)
                 _undoAction.value = null
             }
+        }
+    }
+
+    fun classifyTrips(ids: Set<Long>, type: String, onResult: (Result<Int>) -> Unit) {
+        if (ids.isEmpty() || type !in listOf("Business", "Personal")) return
+        viewModelScope.launch {
+            val saved = runCatching { repository.classifyTrips(ids.toList(), type) }
+            saved.onSuccess { updated ->
+                _undoAction.value = null
+                onResult(Result.success(updated.size))
+                updated.forEach { supabaseSyncManager.onTripSaved(it) }
+            }.onFailure { onResult(Result.failure(it)) }
         }
     }
 
@@ -627,26 +657,77 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun saveOdometerReading(km: Double, source: String, logTrip: Boolean) {
-        val cleanKm = InputCheck.odometerKm(km) ?: return
-        val cleanSource = InputCheck.odometerSource(source) ?: return
-        if (cleanKm <= 0.0) return
-        val previous = settings.value
-        val delta = Odometer.tripKm(previous.odometerKm, cleanKm)
-        settingsManager.setOdometer(cleanKm, cleanSource)
-        if (logTrip && delta != null) {
-            val now = System.currentTimeMillis()
-            saveTrip(
-                TripEntity(
-                    startDate = previous.odometerAt.takeIf { it > 0L } ?: now,
-                    endDate = now,
-                    distanceKm = delta,
-                    type = null,
-                    purpose = "Odometer",
-                    vehicle = previous.vehicleName
-                )
-            )
+    fun importOdometerPhoto(uri: Uri, onResult: (Result<Pair<String, String>>) -> Unit) {
+        viewModelScope.launch {
+            onResult(withContext(Dispatchers.IO) { runCatching { com.example.service.OdometerPhotoStore.import(getApplication(), uri) } })
         }
+    }
+
+    fun discardOdometerPhoto(path: String) {
+        viewModelScope.launch(Dispatchers.IO) { com.example.service.OdometerPhotoStore.delete(getApplication(), path) }
+    }
+
+    fun deleteOdometerReading(id: Long, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            onResult(runCatching {
+                val reading = database.odometerReadingDao().find(id) ?: return@runCatching
+                database.odometerReadingDao().delete(id)
+                reading.photoPath?.let { withContext(Dispatchers.IO) { com.example.service.OdometerPhotoStore.delete(getApplication(), it) } }
+            })
+        }
+    }
+
+    fun saveOdometerReading(km: Double, source: String, logTrip: Boolean,
+        photoPath: String? = null, photoReviewed: Boolean = false,
+        onResult: (Result<Unit>) -> Unit = {}) {
+        val cleanKm = InputCheck.odometerKm(km)
+        val cleanSource = InputCheck.odometerSource(source)
+        if (cleanKm == null || cleanSource == null || cleanKm <= 0.0) {
+            onResult(Result.failure(IllegalArgumentException("Enter a valid odometer reading"))); return
+        }
+        val vehicle = settings.value.vehicleName
+        viewModelScope.launch {
+            var tripToSync: TripEntity? = null
+            val result = runCatching {
+                if (photoPath != null) require(photoReviewed && com.example.service.OdometerPhotoStore.file(getApplication(), photoPath) != null) {
+                    "Review the reading and units against the photo before saving"
+                }
+                database.withTransaction {
+                    val dao = database.odometerReadingDao()
+                    val previous = dao.latest(vehicle)
+                    require(previous == null || cleanKm >= previous.readingKm) { "Reading is below the last reading for this vehicle. Check the vehicle and units." }
+                    val now = System.currentTimeMillis()
+                    val delta = Odometer.tripKm(previous?.readingKm, cleanKm)
+                    if (logTrip && previous != null && delta != null) {
+                        val overlapping = repository.getAllTripsList().any {
+                            (it.vehicle == vehicle || it.vehicle.isNullOrBlank()) && it.endDate > previous.recordedAt && it.startDate < now
+                        }
+                        require(!overlapping) { "Trips already exist in this interval. Save the reading without logging another trip to avoid double counting." }
+                        val trip = TripEntity(startDate = previous.recordedAt, endDate = now, distanceKm = delta,
+                            type = null, purpose = "Odometer", vehicle = vehicle)
+                        tripToSync = trip.copy(id = repository.insertTrip(trip))
+                    }
+                    dao.insert(com.example.data.OdometerReadingEntity(vehicle = vehicle, recordedAt = now,
+                        readingKm = cleanKm, source = cleanSource, photoPath = photoPath, photoReviewed = photoReviewed))
+                }
+                settingsManager.setOdometer(cleanKm, cleanSource)
+            }
+            onResult(result)
+            if (result.isSuccess) tripToSync?.let { supabaseSyncManager.onTripSaved(it) }
+        }
+    }
+
+    fun saveVehicleExpenses(expense: com.example.data.VehicleExpenseEntity, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch {
+            onResult(runCatching {
+                com.example.service.CanadianVehicleExpenses.calculate(expense, repository.getAllTripsList())
+                database.vehicleExpenseDao().save(expense)
+            })
+        }
+    }
+
+    fun deleteVehicleExpenses(vehicle: String, year: Int, onResult: (Result<Unit>) -> Unit) {
+        viewModelScope.launch { onResult(runCatching { database.vehicleExpenseDao().delete(vehicle, year) }) }
     }
 
     fun clearAllTrips() {

@@ -56,17 +56,36 @@ fun OdometerDialog(
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
 
-    var readingText by remember {
-        val saved = settings.odometerKm
-        val shown = saved?.let { if (isMiles) it * 0.621371 else it }
-        mutableStateOf(shown?.let { String.format(Locale.US, "%.1f", it) } ?: "")
-    }
+    var readingText by remember { mutableStateOf("") }
+    var deleteReadingId by remember { mutableStateOf<Long?>(null) }
     var source by remember { mutableStateOf("manual") }
-    var logTrip by remember { mutableStateOf(true) }
+    var logTrip by remember { mutableStateOf(false) }
+    val readings by viewModel.odometerReadings.collectAsState()
+    val latest = readings.firstOrNull { it.vehicle == settings.vehicleName }
+    var photoPath by remember { mutableStateOf<String?>(null) }
+    var photoText by remember { mutableStateOf("") }
+    var photoReviewed by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var messageIsError by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var devices by remember { mutableStateOf<List<ObdDevice>?>(null) }
+
+    fun dismiss() {
+        photoPath?.let { viewModel.discardOdometerPhoto(it) }
+        onDismiss()
+    }
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            busy = true
+            viewModel.importOdometerPhoto(uri) { result ->
+                busy = false
+                result.onSuccess { (path, text) ->
+                    photoPath?.let { viewModel.discardOdometerPhoto(it) }
+                    photoPath = path; photoText = text; photoReviewed = false
+                }.onFailure { messageIsError = true; message = it.message ?: "Could not read photo" }
+            }
+        }
+    }
 
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     var hasPermission by remember {
@@ -90,10 +109,24 @@ fun OdometerDialog(
 
     val entered = readingText.replace(",", "").toDoubleOrNull()
     val enteredKm = entered?.let { if (isMiles) it / 0.621371 else it }
-    val deltaKm = enteredKm?.let { Odometer.tripKm(settings.odometerKm, it) }
+    val deltaKm = enteredKm?.let { Odometer.tripKm(latest?.readingKm, it) }
+
+    deleteReadingId?.let { id ->
+        AlertDialog(onDismissRequest = { if (!busy) deleteReadingId = null },
+            title = { Text("Delete odometer reading?") },
+            text = { Text("This removes the saved reading and its local photo. Existing trip records will remain.") },
+            confirmButton = { TextButton(enabled = !busy, onClick = {
+                busy = true
+                viewModel.deleteOdometerReading(id) { result ->
+                    busy = false; deleteReadingId = null
+                    result.onFailure { messageIsError = true; message = "Could not delete reading" }
+                }
+            }) { Text("Delete") } },
+            dismissButton = { TextButton(enabled = !busy, onClick = { deleteReadingId = null }) { Text("Cancel") } })
+    }
 
     AlertDialog(
-        onDismissRequest = { if (!busy) onDismiss() },
+        onDismissRequest = { if (!busy) dismiss() },
         title = { Text("Odometer", fontWeight = FontWeight.Bold) },
         text = {
             Column(
@@ -104,7 +137,7 @@ fun OdometerDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = settings.odometerKm?.let { km ->
+                    text = latest?.readingKm?.let { km ->
                         val shown = if (isMiles) km * 0.621371 else km
                         "Last saved ${String.format(Locale.US, "%,.1f", shown)} $unitLabel"
                     } ?: "No reading saved yet",
@@ -118,6 +151,7 @@ fun OdometerDialog(
                         readingText = next
                         source = "manual"
                         message = null
+                        photoReviewed = false
                     },
                     label = { Text("Odometer ($unitLabel)") },
                     singleLine = true,
@@ -125,6 +159,25 @@ fun OdometerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy
                 )
+                Text("Vehicle: ${settings.vehicleName}")
+                OutlinedButton(onClick = { photoLauncher.launch("image/*") }, enabled = !busy) { Text("Attach odometer photo") }
+                if (photoPath != null) {
+                    coil.compose.AsyncImage(model = photoPath, contentDescription = "Odometer photo for manual review", modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp))
+                    Text("Photo stays on this device and is excluded from Android backup. OCR does not verify authenticity.")
+                    Text(if (photoText.isBlank()) "No text detected. Check the photo manually." else "Detected text (check manually): ${photoText.take(300)}")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = photoReviewed, onCheckedChange = { photoReviewed = it }, enabled = !busy)
+                        Text("I checked the entered number and km/mi against the photo")
+                    }
+                }
+                Text("Reading history (local only)", fontWeight = FontWeight.Bold)
+                readings.filter { it.vehicle == settings.vehicleName }.take(20).forEach { reading ->
+                    val shown = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
+                    Text("${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(reading.recordedAt))}: ${String.format(Locale.US, "%.1f", shown)} $unitLabel · ${reading.source}${if (reading.photoReviewed) " · photo reviewed" else ""}")
+                    TextButton(enabled = !busy, onClick = {
+                        deleteReadingId = reading.id
+                    }) { Text("Delete reading and photo") }
+                }
                 if (deltaKm != null) {
                     val shownDelta = if (isMiles) deltaKm * 0.621371 else deltaKm
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,6 +235,7 @@ fun OdometerDialog(
                                             val shown = if (isMiles) km * 0.621371 else km
                                             readingText = String.format(Locale.US, "%.1f", shown)
                                             source = "bluetooth"
+                                            photoReviewed = false
                                             messageIsError = false
                                             message = "Read from ${device.name}. Save to keep it."
                                         }.onFailure { error ->
@@ -212,10 +266,14 @@ fun OdometerDialog(
                         message = "Enter the number on the dash."
                         return@Button
                     }
-                    viewModel.saveOdometerReading(km, source, logTrip && deltaKm != null)
-                    onDismiss()
+                    busy = true
+                    viewModel.saveOdometerReading(km, source, logTrip && deltaKm != null, photoPath, photoReviewed) { result ->
+                        busy = false
+                        result.onSuccess { photoPath = null; onDismiss() }
+                            .onFailure { messageIsError = true; message = it.message ?: "Could not save reading" }
+                    }
                 },
-                enabled = !busy,
+                enabled = !busy && (photoPath == null || photoReviewed),
                 colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White),
                 elevation = null
             ) {
@@ -223,7 +281,7 @@ fun OdometerDialog(
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
+            OutlinedButton(onClick = { dismiss() }, enabled = !busy) { Text("Cancel") }
         }
     )
 }

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -84,6 +85,13 @@ fun TripsScreen(
     var tripToEdit by remember { mutableStateOf<TripEntity?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
     var tripToDelete by remember { mutableStateOf<TripEntity?>(null) }
+
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var selectMode by remember { mutableStateOf(false) }
+    var showShifts by remember { mutableStateOf(false) }
+    var bulkType by remember { mutableStateOf<String?>(null) }
+    var bulkBusy by remember { mutableStateOf(false) }
+    var bulkMessage by remember { mutableStateOf<String?>(null) }
 
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
@@ -220,6 +228,23 @@ fun TripsScreen(
                     }
                 }
 
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { selectMode = !selectMode; selectedIds = emptySet() }, enabled = !bulkBusy) {
+                        Text(if (selectMode) "Cancel selection" else "Select trips")
+                    }
+                    TextButton(onClick = { showShifts = true }, enabled = !bulkBusy && trips.isNotEmpty()) { Text("Select shift") }
+                    if (selectMode) TextButton(onClick = { selectedIds = filteredTrips.map { it.id }.toSet() }, enabled = !bulkBusy) { Text("Select visible") }
+                }
+                if (selectedIds.isNotEmpty()) {
+                    Text("${selectedIds.size} selected", modifier = Modifier.padding(horizontal = 16.dp))
+                    Row(Modifier.padding(horizontal = 16.dp)) {
+                        listOf("Business", "Personal").forEach { type ->
+                            TextButton(onClick = { bulkType = type }, enabled = !bulkBusy) { Text("Mark $type") }
+                        }
+                    }
+                }
+                bulkMessage?.let { Text(it, modifier = Modifier.padding(horizontal = 16.dp)) }
+
                 // Trips List or Empty State
                 if (filteredTrips.isEmpty()) {
                     Box(
@@ -291,6 +316,12 @@ fun TripsScreen(
                             items = filteredTrips,
                             key = { it.id }
                         ) { trip ->
+                            if (selectMode) Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(checked = trip.id in selectedIds, enabled = !bulkBusy, onCheckedChange = { checked ->
+                                    selectedIds = if (checked) selectedIds + trip.id else selectedIds - trip.id
+                                })
+                                Text("Select trip ${trip.id}")
+                            }
                             SwipeableTripCard(
                                 trip = trip,
                                 isMiles = isMiles,
@@ -316,6 +347,41 @@ fun TripsScreen(
                     .padding(bottom = 16.dp)
             )
         }
+    }
+
+    if (showShifts) {
+        AlertDialog(onDismissRequest = { showShifts = false }, title = { Text("Suggested shifts") },
+            text = {
+                LazyColumn(Modifier.height(320.dp)) {
+                    item { Text("Same vehicle, breaks up to 4 hours, maximum 16 hours. Review selected trips before applying.") }
+                    items(com.example.service.TripShifts.group(trips)) { shift ->
+                        TextButton(onClick = {
+                            selectedIds = shift.trips.map { it.id }.toSet()
+                            viewModel.setFilter(TripFilter.ALL)
+                            selectMode = true; showShifts = false
+                        }) {
+                            val format = java.text.SimpleDateFormat("MMM d HH:mm", Locale.getDefault())
+                            Text("${format.format(java.util.Date(shift.start))} – ${format.format(java.util.Date(shift.end))} · ${shift.trips.size} trips · ${shift.trips.first().vehicle.orEmpty()}")
+                        }
+                    }
+                }
+            }, confirmButton = { TextButton(onClick = { showShifts = false }) { Text("Close") } })
+    }
+    bulkType?.let { type ->
+        AlertDialog(onDismissRequest = { if (!bulkBusy) bulkType = null },
+            title = { Text("Mark ${selectedIds.size} trips $type?") },
+            text = { Text("This replaces the classification of every selected trip. Individual trip records stay separate.") },
+            confirmButton = { TextButton(enabled = !bulkBusy, onClick = {
+                bulkBusy = true
+                viewModel.classifyTrips(selectedIds, type) { result ->
+                    bulkBusy = false; bulkType = null
+                    result.onSuccess { count ->
+                        selectedIds = emptySet(); selectMode = false
+                        bulkMessage = "$count trips saved as $type. Cloud sync status is shown in Settings."
+                    }.onFailure { bulkMessage = "Could not save classifications. Try again." }
+                }
+            }) { Text(if (bulkBusy) "Saving…" else "Apply") } },
+            dismissButton = { TextButton(enabled = !bulkBusy, onClick = { bulkType = null }) { Text("Cancel") } })
     }
 
     // Edit/Add Dialog

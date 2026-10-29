@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -27,6 +28,14 @@ interface TripDao {
 
     @Update
     suspend fun updateTrip(trip: TripEntity)
+
+    @Transaction
+    suspend fun classifyTrips(ids: List<Long>, type: String): List<TripEntity> {
+        require(type == "Business" || type == "Personal")
+        val updated = ids.distinct().mapNotNull { getTripById(it) }.map { it.copy(type = type) }
+        updated.forEach { updateTrip(it) }
+        return updated
+    }
 
     @Delete
     suspend fun deleteTrip(trip: TripEntity)

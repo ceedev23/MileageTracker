@@ -75,6 +75,9 @@ fun ReportScreen(
     val settings by viewModel.settings.collectAsState()
     val exportState by viewModel.reportExportState.collectAsState()
 
+    var showCanadianExpenses by remember { mutableStateOf(false) }
+    if (showCanadianExpenses) com.example.ui.components.CanadianExpenseDialog(viewModel) { showCanadianExpenses = false }
+
     var selectedPeriod by remember { mutableStateOf(ReportPeriod.ALL) }
     var showCsvPreview by remember { mutableStateOf(false) }
     var previewSnapshot by remember { mutableStateOf<ReportSnapshot?>(null) }
@@ -121,6 +124,10 @@ fun ReportScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
+        }
+
+        OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Canadian actual vehicle expenses")
         }
 
         // Period Filters
