@@ -58,7 +58,7 @@ class ReceiptPhotoBackup(
         // Numeric, account/project-scoped filename remains compatible with the existing viewer.
         val dir = File(filesDir, "receipts").apply { check(exists() || mkdirs()) }
         val number = java.math.BigInteger(digest(namespace() + "/" + objectKey), 16).toString()
-        val target = File(dir, "receipt_$number.jpg")
+        val target = localFile ?: File(dir, "receipt_$number.jpg")
         val temporary = File.createTempFile("restore_", ".tmp", dir)
         try {
             temporary.outputStream().use { output -> output.write(bytes); output.fd.sync() }

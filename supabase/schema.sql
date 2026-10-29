@@ -100,12 +100,8 @@ CREATE POLICY "Authenticated users can manage their gas receipts"
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Anon users can access unassigned gas receipts"
-    ON public.gas_receipts
-    FOR ALL
-    TO anon
-    USING (user_id IS NULL OR user_id = auth.uid())
-    WITH CHECK (user_id IS NULL OR user_id = auth.uid());
+-- Guest receipts stay on-device; do not grant anonymous receipt access.
+-- For private photo storage, also apply receipt_photo_storage.sql.
 
 -- User Settings Policies:
 CREATE POLICY "Users can manage their own settings"

@@ -109,6 +109,14 @@ class ReceiptPhotoBackupTest {
         assertArrayEquals(jpeg, file!!.readBytes())
         assertFalse(restored.imagePath.contains("receipt-photo:"))
     }
+    @Test fun `restoring an existing receipt does not leave a second local photo`() = runBlocking {
+        photos.setEnabled(true)
+        val before = image.parentFile!!.listFiles()!!.map { it.name }.toSet()
+        val restored = photos.restore(dto(), receipt())
+        assertEquals(image.absolutePath, restored.imagePath)
+        assertEquals(before, image.parentFile!!.listFiles()!!.map { it.name }.toSet())
+        assertArrayEquals(jpeg, image.readBytes())
+    }
     @Test fun `legacy remote local paths are not treated as photos on new phone`() = runBlocking {
         val restored = photos.restore(dto().copy(imagePath = "/data/other-phone/receipts/receipt_123.jpg"), null)
         assertEquals("", restored.imagePath)
