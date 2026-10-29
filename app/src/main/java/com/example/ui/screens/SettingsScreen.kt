@@ -245,8 +245,8 @@ fun SettingsScreen(
         val backupDetail = when {
             !backupAvailable -> "Backup isn't available in this version."
             !signedIn -> "Sign in to back up trips and receipts to your account."
-            syncState.status == SyncStatus.ERROR -> "The last backup didn't finish. Trips on this device are unchanged."
-            syncState.status == SyncStatus.SUCCESS -> "Trips and receipts are backed up to your account."
+            syncState.status == SyncStatus.ERROR -> "The last sync did not finish. Some changes may not be backed up. Try syncing again."
+            syncState.status == SyncStatus.SUCCESS -> "Trip and receipt details are synced to your account."
             syncState.status == SyncStatus.SYNCING -> "Backing up trips and receipts."
             else -> "Back up trips and receipts to your account."
         }
