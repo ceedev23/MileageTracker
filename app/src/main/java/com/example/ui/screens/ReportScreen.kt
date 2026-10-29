@@ -49,7 +49,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.GasReceiptEntity
+import com.example.service.ReportPeriod
+import com.example.service.ReportSnapshot
+import com.example.service.AccountantReportExporter
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.theme.BusinessBlue
@@ -60,15 +62,7 @@ import com.example.ui.theme.SlateBorder
 import com.example.ui.theme.SlateTextMuted
 import com.example.ui.theme.SlateTextPrimary
 import com.example.ui.theme.SlateTextSecondary
-import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Locale
-
-enum class ReportPeriod(val label: String) {
-    ALL("All Time"),
-    THIS_MONTH("This Month"),
-    THIS_YEAR("This Year")
-}
 
 @Composable
 fun ReportScreen(
@@ -79,25 +73,19 @@ fun ReportScreen(
     val trips by viewModel.trips.collectAsState()
     val receipts by viewModel.receipts.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val exportState by viewModel.reportExportState.collectAsState()
 
     var selectedPeriod by remember { mutableStateOf(ReportPeriod.ALL) }
     var showCsvPreview by remember { mutableStateOf(false) }
+    var previewSnapshot by remember { mutableStateOf<ReportSnapshot?>(null) }
 
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
     val rate = settings.reimbursementRate
 
-    // Filter trips by period
-    val now = Calendar.getInstance()
-    val currentMonth = now.get(Calendar.MONTH)
-    val currentYear = now.get(Calendar.YEAR)
-
-    val filteredTrips = trips.filter { trip ->
-        matchesReportPeriod(trip.startDate, selectedPeriod, currentMonth, currentYear)
-    }
-    val filteredReceipts = receipts.filter { receipt ->
-        matchesReportPeriod(receiptTimeMillis(receipt), selectedPeriod, currentMonth, currentYear)
-    }
+    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate)
+    val filteredTrips = reportSnapshot.trips
+    val filteredReceipts = reportSnapshot.receipts
     val periodGasExpenses = filteredReceipts.sumOf { it.totalAmount }
 
     val totalKm = filteredTrips.sumOf { it.distanceKm }
@@ -129,7 +117,7 @@ fun ReportScreen(
                 color = SlateTextPrimary
             )
             Text(
-                text = "CRA & IRS standard mileage deduction calculations",
+                text = "Trip records, fuel expenses and rate-based estimates for review",
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
@@ -163,7 +151,7 @@ fun ReportScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "ESTIMATED TAX DEDUCTION",
+                    text = "RATE-BASED ESTIMATE",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.8f),
@@ -391,7 +379,7 @@ fun ReportScreen(
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "Official Log Export (CSV)",
+                        text = "Accountant Export (ZIP)",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = SlateTextPrimary
@@ -399,7 +387,7 @@ fun ReportScreen(
                 }
 
                 Text(
-                    text = "Generate a spreadsheet with date, start address, destination, distances, purpose, and reimbursement calculations ready for tax filing.",
+                    text = "Package trip and fuel-expense spreadsheets with available receipt photos. Missing photos are listed before sharing and inside the ZIP. Expenses and estimates need tax review.",
                     style = MaterialTheme.typography.bodySmall,
                     color = SlateTextSecondary
                 )
@@ -409,18 +397,20 @@ fun ReportScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { showCsvPreview = true },
+                        onClick = { previewSnapshot = reportSnapshot; showCsvPreview = true },
+                        enabled = !exportState.isPreparing,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Preview CSV", fontSize = 13.sp)
+                        Text("Preview", fontSize = 13.sp)
                     }
 
                     Button(
-                        onClick = { viewModel.shareCsvReport(context, filteredTrips) },
+                        onClick = { viewModel.prepareAccountantReport(reportSnapshot) },
+                        enabled = !exportState.isPreparing,
                         modifier = Modifier
                             .weight(1.2f)
-                            .testTag("export_csv_button"),
+                            .testTag("export_accountant_zip_button"),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MileageBlue,
@@ -430,19 +420,47 @@ fun ReportScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export & Share", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text(if (exportState.isPreparing) "Preparing..." else "Export ZIP", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
     }
 
+    exportState.error?.let { message ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissReportExport() },
+            title = { Text("Export not shared") }, text = { Text(message) },
+            confirmButton = { Button(onClick = { viewModel.dismissReportExport() }) { Text("Close") } }
+        )
+    }
+    exportState.bundle?.let { bundle ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissReportExport() },
+            title = { Text(if (bundle.missingPhotos.isEmpty()) "Review export" else "Photos missing from export") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Text("${bundle.periodLabel}: ${bundle.tripCount} trips, ${bundle.receiptCount} fuel expenses, ${bundle.photoCount} photos.")
+                    if (bundle.missingPhotos.isNotEmpty()) {
+                        Text("${bundle.missingPhotos.size} photos could not be included. See missing_photos.csv in the ZIP. Restore the photos or use the original phone for a complete package.")
+                    }
+                    Text("Receipt photos may contain personal or payment information. Share only with your intended recipient. These records do not certify tax compliance.")
+                }
+            },
+            confirmButton = { Button(onClick = { viewModel.shareAccountantReport(context) }) {
+                Text(if (bundle.missingPhotos.isEmpty()) "Share ZIP" else "Share with missing photos")
+            } },
+            dismissButton = { OutlinedButton(onClick = { viewModel.dismissReportExport() }) { Text("Cancel") } }
+        )
+    }
+
     // CSV Preview Dialog
     if (showCsvPreview) {
-        val previewData = viewModel.generateCsv(filteredTrips, isMiles, rate)
+        val snapshot = previewSnapshot ?: reportSnapshot
+        val previewData = "TRIPS\n" + AccountantReportExporter.tripCsv(snapshot) + "\nFUEL EXPENSES\n" + AccountantReportExporter.expenseCsv(snapshot)
         AlertDialog(
             onDismissRequest = { showCsvPreview = false },
-            title = { Text("CSV Report Preview") },
+            title = { Text("${snapshot.period.label}: Export Preview") },
             text = {
                 Box(
                     modifier = Modifier
@@ -465,7 +483,7 @@ fun ReportScreen(
                 Button(
                     onClick = {
                         showCsvPreview = false
-                        viewModel.shareCsvReport(context, filteredTrips)
+                        viewModel.prepareAccountantReport(snapshot)
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MileageBlue,
@@ -473,7 +491,7 @@ fun ReportScreen(
                     ),
                     elevation = null
                 ) {
-                    Text("Share", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("Prepare ZIP", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -483,35 +501,6 @@ fun ReportScreen(
             }
         )
     }
-}
-
-private fun matchesReportPeriod(
-    timeMillis: Long,
-    period: ReportPeriod,
-    currentMonth: Int,
-    currentYear: Int
-): Boolean {
-    val calendar = Calendar.getInstance().apply { this.timeInMillis = timeMillis }
-    return when (period) {
-        ReportPeriod.ALL -> true
-        ReportPeriod.THIS_MONTH ->
-            calendar.get(Calendar.MONTH) == currentMonth && calendar.get(Calendar.YEAR) == currentYear
-        ReportPeriod.THIS_YEAR -> calendar.get(Calendar.YEAR) == currentYear
-    }
-}
-
-private fun receiptTimeMillis(receipt: GasReceiptEntity): Long {
-    val raw = receipt.receiptDate?.trim().orEmpty()
-    if (raw.length >= 10) {
-        try {
-            return SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
-                .parse(raw.take(10))
-                ?.time
-                ?: receipt.timestamp
-        } catch (_: Exception) {
-        }
-    }
-    return receipt.timestamp
 }
 
 private fun receiptSummary(count: Int, period: ReportPeriod): String {

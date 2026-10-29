@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -25,6 +26,10 @@ import com.example.data.supabase.SupabaseSession
 import com.example.data.supabase.SupabaseSyncManager
 import com.example.data.supabase.SupabaseSyncState
 import com.example.data.supabase.SyncStatus
+import com.example.service.AccountantReportExporter
+import com.example.service.AccountantReportBundle
+import com.example.service.ReportSnapshot
+import com.example.service.ReportPeriod
 import com.example.service.ActiveTripDraft
 import com.example.service.ObdBluetoothReader
 import com.example.service.Odometer
@@ -105,6 +110,12 @@ data class AuthUiState(
     val infoMessage: String? = null
 )
 
+data class ReportExportUiState(
+    val isPreparing: Boolean = false,
+    val bundle: AccountantReportBundle? = null,
+    val error: String? = null
+)
+
 class MileageViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: TripRepository
     private val gasReceiptRepository: GasReceiptRepository
@@ -121,6 +132,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     val totalGasExpenses: StateFlow<Double?>
     val settings: StateFlow<MileageSettings>
     val trackingState: StateFlow<LiveTrackingState> = TrackingManager.trackingState
+
+    private val _reportExportState = MutableStateFlow(ReportExportUiState())
+    val reportExportState: StateFlow<ReportExportUiState> = _reportExportState.asStateFlow()
 
     private val _currentTab = MutableStateFlow(AppTab.HOME)
     val currentTab: StateFlow<AppTab> = _currentTab.asStateFlow()
@@ -703,57 +717,46 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun generateCsv(tripsList: List<TripEntity>, isMiles: Boolean, rate: Double): String {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-        val unitLabel = if (isMiles) "Miles" else "Kilometers"
-        val header = "Date,Start Address,End Address,Distance ($unitLabel),Type,Purpose,Vehicle,Rate/Unit,Estimated Deduction ($)\n"
-        val rows = tripsList.joinToString("\n") { t ->
-            val dateStr = dateFormat.format(Date(t.startDate))
-            val dist = if (isMiles) t.distanceKm * 0.621371 else t.distanceKm
-            val estVal = if (t.type == "Business") dist * rate else 0.0
-            val escapedStart = "\"${(t.startAddress ?: "").replace("\"", "\"\"")}\""
-            val escapedEnd = "\"${(t.endAddress ?: "").replace("\"", "\"\"")}\""
-            val escapedPurpose = "\"${(t.purpose ?: "").replace("\"", "\"\"")}\""
-            val escapedVehicle = "\"${(t.vehicle ?: "").replace("\"", "\"\"")}\""
-            val typeStr = "\"${(t.type ?: "Unclassified").replace("\"", "\"\"")}\""
+    fun generateCsv(tripsList: List<TripEntity>, isMiles: Boolean, rate: Double): String =
+        AccountantReportExporter.tripCsv(ReportSnapshot.create(tripsList, emptyList(), ReportPeriod.ALL, isMiles, rate))
 
-            "$dateStr,$escapedStart,$escapedEnd,${String.format(Locale.US, "%.2f", dist)},$typeStr,$escapedPurpose,$escapedVehicle,${String.format(Locale.US, "%.2f", rate)},${String.format(Locale.US, "%.2f", estVal)}"
+    fun prepareAccountantReport(snapshot: ReportSnapshot) {
+        if (_reportExportState.value.isPreparing) return
+        _reportExportState.value = ReportExportUiState(isPreparing = true)
+        viewModelScope.launch {
+            try {
+                val app = getApplication<Application>()
+                val bundle = withContext(Dispatchers.IO) {
+                    AccountantReportExporter.create(snapshot, app.filesDir, app.cacheDir)
+                }
+                _reportExportState.value = ReportExportUiState(bundle = bundle)
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _reportExportState.value = ReportExportUiState(error = "Could not create the export package. Nothing was shared. Try again.")
+            }
         }
-        return header + rows
     }
 
-    fun shareCsvReport(context: Context, tripsToExport: List<TripEntity> = trips.value) {
-        val isMiles = settings.value.unit == "mi"
-        val rate = settings.value.reimbursementRate
-        val csvData = generateCsv(tripsToExport, isMiles, rate)
+    fun dismissReportExport() { _reportExportState.value = ReportExportUiState() }
 
+    fun shareAccountantReport(context: Context) {
+        val bundle = _reportExportState.value.bundle ?: return
         try {
-            val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-            val file = File(dir, "Mileage_Report_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv")
-            file.writeText(csvData)
-
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                file
-            )
-
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
+            check(bundle.file.isFile)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", bundle.file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "Mileage Tax Report")
-                putExtra(Intent.EXTRA_TEXT, "Attached is the CRA/IRS compliant mileage report from MileageTracker.")
+                putExtra(Intent.EXTRA_SUBJECT, "Mileage and Fuel Expense Records")
+                putExtra(Intent.EXTRA_TEXT, "Trip and fuel-expense records with available receipt images. Review missing_photos.csv for unavailable photos.")
+                clipData = ClipData.newRawUri("Accountant report", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(shareIntent, "Share Mileage Report"))
-        } catch (e: Exception) {
-            // Fallback to sharing text directly if file provider is not configured
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "Mileage Tax Report (CSV)")
-                putExtra(Intent.EXTRA_TEXT, csvData)
-            }
-            context.startActivity(Intent.createChooser(shareIntent, "Share Mileage Report"))
+            context.startActivity(Intent.createChooser(intent, "Share Accountant Package"))
+            dismissReportExport()
+        } catch (_: Exception) {
+            _reportExportState.value = ReportExportUiState(error = "Could not open sharing. Your receipt records are unchanged. Try exporting again.")
         }
     }
 
