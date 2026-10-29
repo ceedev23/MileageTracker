@@ -18,6 +18,7 @@ class TrackingLocationRequestTest {
         assertEquals(Priority.PRIORITY_HIGH_ACCURACY, request.priority)
         assertEquals(3000L, request.intervalMillis)
         assertEquals(1500L, request.minUpdateIntervalMillis)
+        assertEquals(0L, request.maxUpdateAgeMillis)
         assertFalse(request.isBatched)
     }
     @Test fun `parked request stays accurate and unbatched with bounded slower interval`() {
@@ -25,6 +26,7 @@ class TrackingLocationRequestTest {
         assertEquals(Priority.PRIORITY_HIGH_ACCURACY, request.priority)
         assertEquals(10000L, request.intervalMillis)
         assertEquals(5000L, request.minUpdateIntervalMillis)
+        assertEquals(0L, request.maxUpdateAgeMillis)
         assertFalse(request.isBatched)
     }
 }

@@ -29,6 +29,7 @@ import com.google.android.gms.location.Priority
 internal fun trackingLocationRequest(cadence: LocationCadence): LocationRequest =
     LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, cadence.intervalMs)
         .setMinUpdateIntervalMillis(cadence.minimumIntervalMs)
+        .setMaxUpdateAgeMillis(0L) // Do not replay a cached initial fix when changing cadence.
         .build()
 
 class TrackingService : Service() {
