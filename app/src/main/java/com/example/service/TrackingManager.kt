@@ -12,6 +12,7 @@ import com.example.data.AppDatabase
 import com.example.data.InputCheck
 import com.example.data.LatLngPoint
 import com.example.data.TripEntity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -70,6 +71,7 @@ object TrackingManager {
     private var startGeocodeStarted = false
     private var checkpointStore: TripCheckpointStore? = null
     private var activeCheckpointKey: String? = null
+    private var latestSaveKey: String? = null
     private var lastCheckpointAt = 0L
     private const val CHECKPOINT_INTERVAL_MS = 10_000L
 
@@ -95,6 +97,7 @@ object TrackingManager {
         tripDetector = TripDetector(
             dwellMinutes = currentDwellMinutes,
             onTripStarted = { trip ->
+                latestSaveKey = null
                 activeCheckpointKey = UUID.randomUUID().toString()
                 lastCheckpointAt = 0L
                 startTimeMs = trip.startTime
@@ -126,10 +129,25 @@ object TrackingManager {
                 val liveStart = _trackingState.value.startAddress
                 val key = activeCheckpointKey ?: UUID.randomUUID().toString()
                 val checkpoint = TripCheckpoint(key, checkpointEntity(trip, draft, liveStart), completed = true)
-                persistCheckpoint(checkpoint)
+                val checkpointWritten = persistCheckpoint(checkpoint)
                 activeCheckpointKey = null
+                latestSaveKey = key
+                stopTimer()
+                clearLiveTripExtras()
+                _trackingState.value = _trackingState.value.copy(
+                    isTracking = false,
+                    detectorState = DetectorState.IDLE,
+                    distanceKm = 0.0,
+                    speedKmh = 0f,
+                    elapsedSeconds = 0L,
+                    path = emptyList(),
+                    startAddress = null,
+                    tripStartedAtMs = 0L,
+                    statusMessage = "Saving trip..."
+                )
                 scope.launch {
-                    try {
+                    var hasRecoveryCheckpoint = checkpointWritten
+                    val saved = try {
                         val pathJson = serializePoints(trip.points)
                         val (startAddr, endAddr) = if (ctx != null && trip.points.isNotEmpty()) {
                             reverseGeocodeTrip(ctx, trip.points.first(), trip.points.last())
@@ -152,34 +170,40 @@ object TrackingManager {
                                 pathJson = pathJson
                             ),
                             strict = false
-                        ) ?: return@launch
+                        ) ?: error("Trip could not be validated for saving")
                         val finalCheckpoint = checkpoint.copy(trip = entity)
                         withContext(Dispatchers.IO) {
                             // A checkpoint disk error must not prevent an otherwise valid Room save.
-                            runCatching { store.write(finalCheckpoint) }.onFailure { it.printStackTrace() }
+                            runCatching { store.write(finalCheckpoint) }
+                                .onSuccess { hasRecoveryCheckpoint = true }
+                                .onFailure { it.printStackTrace() }
                             recovery.save(finalCheckpoint)
-                        }?.let { saved ->
-                            withContext(Dispatchers.Main) {
-                                onTripSavedCallback?.invoke(saved)
-                            }
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        updateSaveStatus(key, if (hasRecoveryCheckpoint) {
+                            "Trip save failed. Checkpoint retained; reopen the app to retry."
+                        } else {
+                            "Trip save failed. Recovery checkpoint unavailable."
+                        })
+                        return@launch
+                    }
+                    if (saved != null) {
+                        updateSaveStatus(key, "Trip saved (${String.format(Locale.US, "%.1f", saved.distanceKm)} km)")
+                        // Notification errors must not turn a committed save into a reported failure.
+                        try {
+                            withContext(Dispatchers.Main) { onTripSavedCallback?.invoke(saved) }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    } else {
+                        updateSaveStatus(key, "Trip save already processed")
                     }
                 }
-                stopTimer()
-                clearLiveTripExtras()
-                _trackingState.value = _trackingState.value.copy(
-                    isTracking = false,
-                    detectorState = DetectorState.IDLE,
-                    distanceKm = 0.0,
-                    speedKmh = 0f,
-                    elapsedSeconds = 0L,
-                    path = emptyList(),
-                    startAddress = null,
-                    tripStartedAtMs = 0L,
-                    statusMessage = "Trip saved (${String.format(Locale.US, "%.1f", trip.distanceKm)} km)"
-                )
 
                 // If not in auto-detection monitoring mode, stop the foreground service
                 if (!_trackingState.value.isMonitoringMovement) {
@@ -245,15 +269,23 @@ object TrackingManager {
             pathJson = serializePoints(trip.points)
         )
 
-    private fun persistCheckpoint(checkpoint: TripCheckpoint) {
-        try {
-            checkpointStore?.write(checkpoint)
+    @Synchronized
+    private fun updateSaveStatus(key: String, message: String) {
+        if (latestSaveKey != key || _trackingState.value.showsLiveDrive()) return
+        _trackingState.value = _trackingState.value.copy(statusMessage = message)
+    }
+
+    private fun persistCheckpoint(checkpoint: TripCheckpoint): Boolean {
+        return try {
+            checkNotNull(checkpointStore).write(checkpoint)
             lastCheckpointAt = SystemClock.elapsedRealtime()
+            true
         } catch (error: Exception) {
             error.printStackTrace()
             _trackingState.value = _trackingState.value.copy(
                 statusMessage = "Recording - recovery checkpoint could not be saved"
             )
+            false
         }
     }
 
@@ -438,6 +470,7 @@ object TrackingManager {
 
     @Synchronized
     fun resetForTesting() {
+        latestSaveKey = null
         activeCheckpointKey?.let { checkpointStore?.remove(it) }
         activeCheckpointKey = null
         stopTimer()
