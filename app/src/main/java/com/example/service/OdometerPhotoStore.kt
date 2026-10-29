@@ -13,7 +13,7 @@ import java.util.UUID
 
 /** Local-only evidence. Re-encoding strips metadata; OCR is a review aid, never proof of authenticity. */
 object OdometerPhotoStore {
-    fun import(context: Context, uri: Uri): Pair<String, String> {
+    fun importPhoto(context: Context, uri: Uri): Pair<String, String> {
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
             val output = java.io.ByteArrayOutputStream()
             val buffer = ByteArray(8192)

@@ -659,7 +659,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     fun importOdometerPhoto(uri: Uri, onResult: (Result<Pair<String, String>>) -> Unit) {
         viewModelScope.launch {
-            onResult(withContext(Dispatchers.IO) { runCatching { com.example.service.OdometerPhotoStore.import(getApplication(), uri) } })
+            onResult(withContext(Dispatchers.IO) { runCatching { com.example.service.OdometerPhotoStore.importPhoto(getApplication(), uri) } })
         }
     }
 
