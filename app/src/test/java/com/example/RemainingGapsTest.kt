@@ -14,7 +14,7 @@ import java.util.Calendar
 import java.util.TimeZone
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [28])
+@Config(sdk = [34], application = android.app.Application::class)
 class RemainingGapsTest {
     private val zone = TimeZone.getTimeZone("UTC")
     private fun time(year: Int, month: Int = 6, day: Int = 1) = Calendar.getInstance(zone).apply {
