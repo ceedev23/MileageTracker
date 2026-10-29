@@ -26,13 +26,19 @@ data class ReportSnapshot(
     val isMiles: Boolean,
     val rate: Double,
     val createdAt: Long,
-    val timeZoneId: String
+    val timeZoneId: String,
+    val workProfile: com.example.data.WorkProfile = com.example.data.WorkProfile.GENERAL,
+    val workPurpose: String? = null,
+    val businessOnly: Boolean = false
 ) {
     companion object {
         fun create(
             trips: List<TripEntity>, receipts: List<GasReceiptEntity>, period: ReportPeriod,
             isMiles: Boolean, rate: Double, now: Long = System.currentTimeMillis(),
-            zone: TimeZone = TimeZone.getDefault()
+            zone: TimeZone = TimeZone.getDefault(),
+            workProfile: com.example.data.WorkProfile = com.example.data.WorkProfile.GENERAL,
+            workPurpose: String? = null,
+            businessOnly: Boolean = false
         ): ReportSnapshot {
             val start = Calendar.getInstance(zone).apply {
                 timeInMillis = now
@@ -45,10 +51,14 @@ data class ReportSnapshot(
                 add(if (period == ReportPeriod.THIS_YEAR) Calendar.YEAR else Calendar.MONTH, 1)
             }
             fun included(time: Long) = period == ReportPeriod.ALL || (time >= start.timeInMillis && time < end.timeInMillis)
+            val selectedTrips = trips.filter { included(it.startDate) && (workPurpose == null || it.purpose == workPurpose) && (!businessOnly || it.type == "Business") }
+                .sortedWith(compareBy<TripEntity> { it.startDate }.thenBy { it.id })
+            val selectedIds = selectedTrips.map { it.id }.toSet()
             return ReportSnapshot(
-                trips.filter { included(it.startDate) }.sortedWith(compareBy<TripEntity> { it.startDate }.thenBy { it.id }),
-                receipts.filter { included(receiptTime(it, zone)) }.sortedWith(compareBy<GasReceiptEntity> { receiptTime(it, zone) }.thenBy { it.id }),
-                period, isMiles, rate, now, zone.id
+                selectedTrips,
+                receipts.filter { included(receiptTime(it, zone)) && ((workPurpose == null && !businessOnly) || it.tripId in selectedIds) }
+                    .sortedWith(compareBy<GasReceiptEntity> { receiptTime(it, zone) }.thenBy { it.id }),
+                period, isMiles, rate, now, zone.id, workProfile, workPurpose, businessOnly
             )
         }
     }
@@ -88,7 +98,7 @@ object AccountantReportExporter {
         SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone(zone) }.format(Date(time))
 
     fun tripCsv(snapshot: ReportSnapshot): String = buildString {
-        append("Trip ID,Date,Start Address,End Address,Distance (${if (snapshot.isMiles) "Miles" else "Kilometers"}),Type,Purpose,Vehicle,Rate/Unit,Rate-based Estimate\r\n")
+        append("Trip ID,Date,Start Address,End Address,Distance (${if (snapshot.isMiles) "Miles" else "Kilometers"}),Type,${snapshot.workProfile.purposeLabel.replace(" / ", "-")},Vehicle,Rate/Unit,Rate-based Estimate\r\n")
         for (trip in snapshot.trips) {
             val distance = if (snapshot.isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
             append(listOf(trip.id.toString(), text(date(trip.startDate, snapshot.timeZoneId)), text(trip.startAddress),
@@ -172,6 +182,9 @@ object AccountantReportExporter {
                 entry("missing_photos.csv", "Receipt ID,Issue\r\n" + missing.joinToString("") { "${it.receiptId},${text(it.reason)}\r\n" })
                 entry("README.txt", """
                     MileageTracker accountant export
+                    Work profile: ${snapshot.workProfile.label}
+                    Purpose filter: ${snapshot.workPurpose ?: "All purposes"}
+                    Trip classification: ${if (snapshot.businessOnly) "Business only" else "All classifications"}
                     Period: ${snapshot.period.label}
                     Generated (UTC): ${date(snapshot.createdAt, "UTC")}
                     Record dates use timezone: ${snapshot.timeZoneId}
@@ -181,6 +194,9 @@ object AccountantReportExporter {
                     MISSING receipt photos: ${missing.size}
 
                     trips.csv and fuel_expenses.csv contain the selected report records.
+                    When a purpose or Business-only filter is selected, only selected trips and
+                    fuel expenses linked to those selected trips are included. Unlinked fuel
+                    expenses are excluded from a purpose-filtered report.
                     Each included image is linked by receipt ID in fuel_expenses.csv.
                     Check missing_photos.csv before relying on this package as complete evidence.
                     Photos missing from this device are not fetched automatically during export.

@@ -54,7 +54,8 @@ fun TripEditDialog(
     trip: TripEntity?,
     isMiles: Boolean,
     onDismiss: () -> Unit,
-    onSave: (TripEntity) -> Unit
+    onSave: (TripEntity) -> Unit,
+    workProfile: com.example.data.WorkProfile = com.example.data.WorkProfile.GENERAL
 ) {
     val initialDist = if (trip != null) {
         val d = if (isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
@@ -208,10 +209,17 @@ fun TripEditDialog(
                         purpose = InputCheck.keepTyped(it, 160)
                         formError = null
                     },
-                    label = { Text("Purpose / Notes") },
+                    label = { Text(workProfile.purposeLabel) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Text(workProfile.purposeHint, style = MaterialTheme.typography.bodySmall)
+                if (purpose.isBlank()) {
+                    workProfile.quickPurposes.forEach { suggestion ->
+                        androidx.compose.material3.TextButton(onClick = { purpose = suggestion }) { Text(suggestion) }
+                    }
+                }
 
                 OutlinedTextField(
                     value = vehicle,

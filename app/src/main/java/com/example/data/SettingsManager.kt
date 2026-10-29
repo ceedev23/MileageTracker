@@ -17,6 +17,7 @@ data class MileageSettings(
     val odometerKm: Double? = null,
     val odometerAt: Long = 0L,
     val odometerSource: String = "",
+    val workProfile: WorkProfile = WorkProfile.GENERAL,
     val onboardingSeen: Boolean = false
 )
 
@@ -38,8 +39,14 @@ class SettingsManager(context: Context) {
             odometerKm = prefs.getString("odometer_km", null)?.toDoubleOrNull(),
             odometerAt = prefs.getLong("odometer_at", 0L),
             odometerSource = prefs.getString("odometer_source", "") ?: "",
+            workProfile = WorkProfile.fromId(prefs.getString("work_profile", null)),
             onboardingSeen = prefs.getBoolean("onboarding_seen", false)
         )
+    }
+
+    fun setWorkProfile(profile: WorkProfile) {
+        prefs.edit().putString("work_profile", profile.id).apply()
+        _settings.value = _settings.value.copy(workProfile = profile)
     }
 
     fun setAutoDetect(enabled: Boolean) {

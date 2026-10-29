@@ -100,7 +100,8 @@ fun LiveDriveScreen(
     onVehicleChange: (String) -> Unit,
     onStop: () -> Unit,
     onDraftChange: (category: String?, vehicle: String, note: String, startPlaceName: String?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    workProfile: com.example.data.WorkProfile = com.example.data.WorkProfile.GENERAL
 ) {
     val unitLabel = if (isMiles) "mi" else "km"
     val displayDistance = if (isMiles) trackingState.distanceKm * 0.621371 else trackingState.distanceKm
@@ -718,7 +719,7 @@ fun LiveDriveScreen(
                                         Box {
                                             if (note.isEmpty()) {
                                                 Text(
-                                                    text = "Write a note",
+                                                    text = workProfile.purposeLabel,
                                                     color = Color(0xFF94A3B8),
                                                     fontSize = 13.5.sp
                                                 )

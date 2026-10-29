@@ -389,6 +389,7 @@ fun TripsScreen(
         TripEditDialog(
             trip = tripToEdit,
             isMiles = isMiles,
+            workProfile = settings.workProfile,
             onDismiss = { showEditDialog = false },
             onSave = { updated ->
                 viewModel.saveTrip(updated)

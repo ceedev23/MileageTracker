@@ -627,6 +627,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         settingsManager.setDwellMinutes(current + delta)
     }
 
+    fun setWorkProfile(profile: com.example.data.WorkProfile) { settingsManager.setWorkProfile(profile) }
+
     fun setUnit(unit: String) {
         settingsManager.setUnit(InputCheck.distanceUnit(unit) ?: return)
     }
@@ -800,7 +802,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun generateCsv(tripsList: List<TripEntity>, isMiles: Boolean, rate: Double): String =
-        AccountantReportExporter.tripCsv(ReportSnapshot.create(tripsList, emptyList(), ReportPeriod.ALL, isMiles, rate))
+        AccountantReportExporter.tripCsv(ReportSnapshot.create(tripsList, emptyList(), ReportPeriod.ALL, isMiles, rate, workProfile = settings.value.workProfile))
 
     fun prepareAccountantReport(snapshot: ReportSnapshot) {
         if (_reportExportState.value.isPreparing) return

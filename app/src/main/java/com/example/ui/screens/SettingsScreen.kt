@@ -133,10 +133,16 @@ fun SettingsScreen(
                 color = SlateTextPrimary
             )
             Text(
-                text = "Tracking sensitivity, units & tax rates",
+                text = "Work profile, tracking, units & custom rate",
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                com.example.ui.components.WorkProfilePicker(settings.workProfile) { viewModel.setWorkProfile(it) }
+            }
         }
 
         // Account & Profile Section
@@ -538,7 +544,7 @@ fun SettingsScreen(
                 // Reimbursement Rate
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Tax Reimbursement Rate ($ / ${settings.unit})",
+                        text = "Custom reimbursement / estimate rate ($ / ${settings.unit})",
                         style = MaterialTheme.typography.bodySmall,
                         color = SlateTextSecondary,
                         fontWeight = FontWeight.Medium

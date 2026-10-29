@@ -417,6 +417,7 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
     TripEditDialog(
       trip = null,
       isMiles = settings.unit == "mi",
+      workProfile = settings.workProfile,
       onDismiss = { showManualTripDialog = false },
       onSave = { newTrip ->
         viewModel.saveTrip(newTrip)

@@ -78,6 +78,9 @@ fun ReportScreen(
     var showCanadianExpenses by remember { mutableStateOf(false) }
     if (showCanadianExpenses) com.example.ui.components.CanadianExpenseDialog(viewModel) { showCanadianExpenses = false }
 
+    var businessOnly by remember(settings.workProfile) { mutableStateOf(settings.workProfile != com.example.data.WorkProfile.GENERAL) }
+    var workPurpose by remember { mutableStateOf<String?>(null) }
+    var showPurposePicker by remember { mutableStateOf(false) }
     var selectedPeriod by remember { mutableStateOf(ReportPeriod.ALL) }
     var showCsvPreview by remember { mutableStateOf(false) }
     var previewSnapshot by remember { mutableStateOf<ReportSnapshot?>(null) }
@@ -86,7 +89,7 @@ fun ReportScreen(
     val unitLabel = if (isMiles) "mi" else "km"
     val rate = settings.reimbursementRate
 
-    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate)
+    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate, workProfile = settings.workProfile, workPurpose = workPurpose, businessOnly = businessOnly)
     val filteredTrips = reportSnapshot.trips
     val filteredReceipts = reportSnapshot.receipts
     val periodGasExpenses = filteredReceipts.sumOf { it.totalAmount }
@@ -114,13 +117,13 @@ fun ReportScreen(
         // Header
         Column {
             Text(
-                text = "Tax & Mileage Report",
+                text = settings.workProfile.reportTitle,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = SlateTextPrimary
             )
             Text(
-                text = "Trip records, fuel expenses and rate-based estimates for review",
+                text = settings.workProfile.reportHint,
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
@@ -129,6 +132,17 @@ fun ReportScreen(
         OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Canadian actual vehicle expenses")
         }
+
+        Text("Work profile: ${settings.workProfile.label}. The custom rate is a reference estimate; use your employer or agency policy when submitting a claim.", style = MaterialTheme.typography.bodySmall)
+
+        OutlinedButton(onClick = { showPurposePicker = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Purpose / work label: ${workPurpose ?: "All"}")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Checkbox(checked = businessOnly, onCheckedChange = { businessOnly = it })
+            Text("Business trips only (exclude personal and pending trips)")
+        }
+        if (workPurpose != null || businessOnly) Text("Only selected trips and fuel receipts linked to those trips are included. Unlinked and other receipts are excluded. Check the preview before sharing.", style = MaterialTheme.typography.bodySmall)
 
         // Period Filters
         Row(
@@ -459,6 +473,18 @@ fun ReportScreen(
             } },
             dismissButton = { OutlinedButton(onClick = { viewModel.dismissReportExport() }) { Text("Cancel") } }
         )
+    }
+
+    if (showPurposePicker) {
+        AlertDialog(onDismissRequest = { showPurposePicker = false }, title = { Text(settings.workProfile.purposeLabel) },
+            text = {
+                Column(Modifier.height(300.dp).verticalScroll(rememberScrollState())) {
+                    androidx.compose.material3.TextButton(onClick = { workPurpose = null; showPurposePicker = false }) { Text("All purposes") }
+                    trips.mapNotNull { it.purpose?.takeIf(String::isNotBlank) }.distinct().sorted().forEach { purpose ->
+                        androidx.compose.material3.TextButton(onClick = { workPurpose = purpose; showPurposePicker = false }) { Text(purpose) }
+                    }
+                }
+            }, confirmButton = { androidx.compose.material3.TextButton(onClick = { showPurposePicker = false }) { Text("Close") } })
     }
 
     // CSV Preview Dialog

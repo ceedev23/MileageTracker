@@ -286,6 +286,7 @@ fun HomeScreen(
                     isMiles = isMiles,
                     reimbursementRate = settings.reimbursementRate,
                     vehicleName = settings.vehicleName,
+                    workProfile = settings.workProfile,
                     onVehicleChange = { viewModel.setVehicleName(it) },
                     onStop = { viewModel.stopManualTracking(context) },
                     onDraftChange = { category, vehicle, note, startPlaceName ->
@@ -302,6 +303,19 @@ fun HomeScreen(
                         .testTag("home_screen"),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    if (settings.workProfile != com.example.data.WorkProfile.GENERAL) {
+                        androidx.compose.material3.Surface(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(12.dp)) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(settings.workProfile.label, fontWeight = FontWeight.Bold)
+                                Text(settings.workProfile.purposeHint, style = MaterialTheme.typography.bodySmall)
+                                Row {
+                                    androidx.compose.material3.TextButton(onClick = { viewModel.selectTab(com.example.ui.AppTab.TRIPS) }) { Text("Review trips") }
+                                    androidx.compose.material3.TextButton(onClick = { viewModel.selectTab(com.example.ui.AppTab.REPORT) }) { Text("Prepare report") }
+                                }
+                            }
+                        }
+                    }
+
                     // 1. TOP U-SHAPED HERO CARD + CONCENTRIC CURVED PROGRESS ARC
                     AnimatedVisibility(
                         visible = unclassifiedTrips.isEmpty(),
