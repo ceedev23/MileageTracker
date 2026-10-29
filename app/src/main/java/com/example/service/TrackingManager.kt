@@ -25,6 +25,9 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
+import java.util.UUID
+import java.io.File
+import android.os.SystemClock
 
 data class LiveTrackingState(
     val isTracking: Boolean = false,
@@ -65,13 +68,21 @@ object TrackingManager {
     private var startTimeMs: Long = 0L
     private var activeDraft = ActiveTripDraft()
     private var startGeocodeStarted = false
+    private var checkpointStore: TripCheckpointStore? = null
+    private var activeCheckpointKey: String? = null
+    private var lastCheckpointAt = 0L
+    private const val CHECKPOINT_INTERVAL_MS = 10_000L
 
     var onTripSavedCallback: ((TripEntity) -> Unit)? = null
 
+    @Synchronized
     fun init(context: Context) {
         if (tripDetector != null && appContext != null) return
         appContext = context.applicationContext
         val db = AppDatabase.getDatabase(context)
+        val store = TripCheckpointStore(File(context.noBackupFilesDir, "trip_checkpoints"))
+        checkpointStore = store
+        val recovery = TripRecovery(db, store)
 
         val savedDwell = try {
             val prefs = context.getSharedPreferences("mileage_tracker_prefs", Context.MODE_PRIVATE)
@@ -84,6 +95,8 @@ object TrackingManager {
         tripDetector = TripDetector(
             dwellMinutes = currentDwellMinutes,
             onTripStarted = { trip ->
+                activeCheckpointKey = UUID.randomUUID().toString()
+                lastCheckpointAt = 0L
                 startTimeMs = trip.startTime
                 val existingStart = _trackingState.value.startAddress
                 if (existingStart == null) startGeocodeStarted = false
@@ -97,6 +110,7 @@ object TrackingManager {
                     tripStartedAtMs = trip.startTime
                 )
                 if (existingStart == null) maybeGeocodeStart(trip.points.firstOrNull())
+                checkpointActiveTrip(force = true)
                 startTimer()
             },
             onTripUpdated = { trip ->
@@ -110,6 +124,10 @@ object TrackingManager {
                 val ctx = appContext
                 val draft = activeDraft
                 val liveStart = _trackingState.value.startAddress
+                val key = activeCheckpointKey ?: UUID.randomUUID().toString()
+                val checkpoint = TripCheckpoint(key, checkpointEntity(trip, draft, liveStart), completed = true)
+                persistCheckpoint(checkpoint)
+                activeCheckpointKey = null
                 scope.launch {
                     try {
                         val pathJson = serializePoints(trip.points)
@@ -135,10 +153,15 @@ object TrackingManager {
                             ),
                             strict = false
                         ) ?: return@launch
-                        val insertedId = db.tripDao().insertTrip(entity)
-                        val saved = entity.copy(id = insertedId)
-                        withContext(Dispatchers.Main) {
-                            onTripSavedCallback?.invoke(saved)
+                        val finalCheckpoint = checkpoint.copy(trip = entity)
+                        withContext(Dispatchers.IO) {
+                            // A checkpoint disk error must not prevent an otherwise valid Room save.
+                            runCatching { store.write(finalCheckpoint) }.onFailure { it.printStackTrace() }
+                            recovery.save(finalCheckpoint)
+                        }?.let { saved ->
+                            withContext(Dispatchers.Main) {
+                                onTripSavedCallback?.invoke(saved)
+                            }
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -173,6 +196,8 @@ object TrackingManager {
                 }
             },
             onTripDiscarded = { trip ->
+                activeCheckpointKey?.let { store.remove(it) }
+                activeCheckpointKey = null
                 stopTimer()
                 clearLiveTripExtras()
                 _trackingState.value = _trackingState.value.copy(
@@ -188,6 +213,57 @@ object TrackingManager {
                 )
             }
         )
+        // Snapshot the previous process's files before a new trip can create its checkpoint.
+        val interrupted = store.readAll()
+        scope.launch(Dispatchers.IO) {
+            for (checkpoint in interrupted) {
+                try {
+                    val saved = recovery.save(checkpoint)
+                    if (saved != null) {
+                        withContext(Dispatchers.Main) { onTripSavedCallback?.invoke(saved) }
+                    }
+                } catch (error: Exception) {
+                    // Retain failed imports on disk so the next process start can retry.
+                    error.printStackTrace()
+                }
+            }
+        }
+    }
+
+    private fun checkpointEntity(trip: ActiveTrip, draft: ActiveTripDraft, origin: String?): TripEntity =
+        TripEntity(
+            startDate = trip.startTime,
+            endDate = trip.endTime.coerceAtLeast(trip.startTime),
+            distanceKm = trip.distanceKm,
+            type = draft.category,
+            startAddress = draft.startPlaceName?.takeIf { it.isNotBlank() } ?: origin,
+            endAddress = trip.lastPoint?.let {
+                String.format(Locale.US, "Last recorded: %.4f, %.4f", it.latitude, it.longitude)
+            },
+            purpose = draft.note.ifBlank { "Drive" },
+            vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
+            pathJson = serializePoints(trip.points)
+        )
+
+    private fun persistCheckpoint(checkpoint: TripCheckpoint) {
+        try {
+            checkpointStore?.write(checkpoint)
+            lastCheckpointAt = SystemClock.elapsedRealtime()
+        } catch (error: Exception) {
+            error.printStackTrace()
+            _trackingState.value = _trackingState.value.copy(
+                statusMessage = "Recording - recovery checkpoint could not be saved"
+            )
+        }
+    }
+
+    private fun checkpointActiveTrip(force: Boolean = false) {
+        val detector = tripDetector ?: return
+        if (detector.state != DetectorState.RECORDING) return
+        val trip = detector.currentTrip ?: return
+        val key = activeCheckpointKey ?: return
+        if (!force && SystemClock.elapsedRealtime() - lastCheckpointAt < CHECKPOINT_INTERVAL_MS) return
+        persistCheckpoint(TripCheckpoint(key, checkpointEntity(trip, activeDraft, _trackingState.value.startAddress)))
     }
 
     fun autoDetectEnabled(context: Context): Boolean {
@@ -270,7 +346,9 @@ object TrackingManager {
         }
     }
 
+    @Synchronized
     fun startManualTracking(context: Context) {
+        if (_trackingState.value.isTracking) return
         init(context)
         startTimeMs = System.currentTimeMillis()
         val detector = tripDetector ?: return
@@ -304,6 +382,7 @@ object TrackingManager {
         }
     }
 
+    @Synchronized
     fun stopManualTracking(context: Context) {
         val detector = tripDetector
         stopTimer()
@@ -312,6 +391,8 @@ object TrackingManager {
         if (active != null && active.distanceKm > 0.05) {
             detector.endTrip()
         } else {
+            activeCheckpointKey?.let { checkpointStore?.remove(it) }
+            activeCheckpointKey = null
             detector?.reset()
             clearLiveTripExtras()
             _trackingState.value = _trackingState.value.copy(
@@ -344,6 +425,7 @@ object TrackingManager {
         }
     }
 
+    @Synchronized
     fun updateActiveDraft(draft: ActiveTripDraft) {
         activeDraft = ActiveTripDraft(
             category = if (draft.category == "Business" || draft.category == "Personal") draft.category else null,
@@ -351,15 +433,20 @@ object TrackingManager {
             note = InputCheck.finishLabel(draft.note, 160) ?: "",
             startPlaceName = draft.startPlaceName?.let { InputCheck.finishLabel(it, 80) }
         )
+        checkpointActiveTrip(force = true)
     }
 
+    @Synchronized
     fun resetForTesting() {
+        activeCheckpointKey?.let { checkpointStore?.remove(it) }
+        activeCheckpointKey = null
         stopTimer()
         tripDetector?.reset()
         clearLiveTripExtras()
         _trackingState.value = LiveTrackingState()
     }
 
+    @Synchronized
     fun processGpsPoint(point: LatLngPoint) {
         tripDetector?.processPoint(point)
         val isTracking = _trackingState.value.isTracking
@@ -386,6 +473,7 @@ object TrackingManager {
                 path = listOf(point)
             )
         }
+        checkpointActiveTrip()
     }
 
     fun setDwellMinutes(minutes: Int) {
@@ -404,7 +492,9 @@ object TrackingManager {
                 _trackingState.value = _trackingState.value.copy(
                     elapsedSeconds = elapsed.coerceAtLeast(0L)
                 )
-                tripDetector?.checkDwellTimeout(System.currentTimeMillis())
+                synchronized(this@TrackingManager) {
+                    tripDetector?.checkDwellTimeout(System.currentTimeMillis())
+                }
             }
         }
     }
