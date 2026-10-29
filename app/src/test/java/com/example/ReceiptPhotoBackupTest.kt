@@ -79,7 +79,8 @@ class ReceiptPhotoBackupTest {
         assertFalse(photos.enabled())
         signIn(user)
         assertTrue(photos.enabled())
-        config.setUrl("https://anotherproject.supabase.co")
+        config.setUrl("https://abcdefghijklmnopqrst.supabase.co")
+        assertEquals("https://abcdefghijklmnopqrst.supabase.co", config.getUrl())
         assertFalse(photos.enabled())
     }
     @Test fun `unavailable deployment cannot enable uploads`() {
