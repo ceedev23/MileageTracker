@@ -158,17 +158,20 @@ class TripRecoveryTest {
             val before = Room.databaseBuilder(context, AppDatabase::class.java, name).build()
             val id = before.tripDao().insertTrip(checkpoint().trip)
             before.close()
-            // Recreate the previous schema: the only v3 addition is the import receipt table.
+            // Recreate v2, before the recovery table and v4 history/expense tables.
             SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, 0).use {
                 it.execSQL("DROP TABLE trip_recoveries")
+                it.execSQL("DROP TABLE odometer_readings")
+                it.execSQL("DROP TABLE vehicle_expenses")
                 it.execSQL("DROP TABLE room_master_table")
                 it.version = 2
             }
             val after = Room.databaseBuilder(context, AppDatabase::class.java, name)
-                .addMigrations(AppDatabase.MIGRATION_2_3).build()
+                .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4).build()
             try {
                 assertEquals(2.35, after.tripDao().getTripById(id)!!.distanceKm, 0.00001)
                 assertNull(after.tripRecoveryDao().find("not-imported"))
+                assertNull(after.odometerReadingDao().latest("My Car"))
             } finally {
                 after.close()
             }
