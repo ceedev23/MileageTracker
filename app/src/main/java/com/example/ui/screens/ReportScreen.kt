@@ -126,7 +126,7 @@ fun ReportScreen(
             )
         }
 
-        OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
+        if (settings.taxCountry == "CA") OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Canadian actual vehicle expenses")
         }
 

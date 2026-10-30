@@ -496,6 +496,13 @@ fun SettingsScreen(
                     color = SlateTextPrimary
                 )
 
+                Text("Tax country", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    UnitOptionButton("Canada", settings.taxCountry == "CA", { viewModel.setTaxCountry("CA") }, Modifier.weight(1f))
+                    UnitOptionButton("United States", settings.taxCountry == "US", { viewModel.setTaxCountry("US") }, Modifier.weight(1f))
+                }
+                Text("Country sets the default distance unit. Changing units does not change tax country or convert money. US deduction methods are not yet implemented.", style = MaterialTheme.typography.bodySmall)
+
                 // Distance Unit
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
@@ -514,9 +521,6 @@ fun SettingsScreen(
                             isSelected = settings.unit == "km",
                             onClick = {
                                 viewModel.setUnit("km")
-                                if (settings.reimbursementRate == IRS_RATE_PER_MILE) {
-                                    viewModel.setReimbursementRate(CRA_RATE_PER_KM)
-                                }
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -526,9 +530,6 @@ fun SettingsScreen(
                             isSelected = settings.unit == "mi",
                             onClick = {
                                 viewModel.setUnit("mi")
-                                if (settings.reimbursementRate == CRA_RATE_PER_KM) {
-                                    viewModel.setReimbursementRate(IRS_RATE_PER_MILE)
-                                }
                             },
                             modifier = Modifier.weight(1f)
                         )
@@ -538,7 +539,7 @@ fun SettingsScreen(
                 // Reimbursement Rate
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Tax Reimbursement Rate ($ / ${settings.unit})",
+                        text = "Custom reimbursement rate ($ / ${settings.unit})",
                         style = MaterialTheme.typography.bodySmall,
                         color = SlateTextSecondary,
                         fontWeight = FontWeight.Medium
@@ -562,31 +563,8 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         )
 
-                        // Quick Presets
-                        OutlinedButton(
-                            onClick = {
-                                val preset = if (settings.unit == "km") CRA_RATE_PER_KM else IRS_RATE_PER_MILE
-                                rateInput = String.format(Locale.US, "%.2f", preset)
-                                viewModel.setReimbursementRate(preset)
-                            },
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text(
-                                text = if (settings.unit == "km") "2026 CRA (0.73)" else "2026 IRS (0.76)",
-                                fontSize = 12.sp
-                            )
-                        }
                     }
-
-                    Text(
-                        text = if (settings.unit == "km") {
-                            "2026 CRA rate for the first 5,000 km. Each kilometre after that is $0.67."
-                        } else {
-                            "2026 IRS business rate for July 1 through December 31."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextMuted
-                    )
+                    Text("Custom reimbursement only; not a self-employed tax deduction calculation. Check this rate after changing units or country.", style = MaterialTheme.typography.bodySmall, color = SlateTextMuted)
                 }
 
                 // Vehicle Name

@@ -627,6 +627,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         settingsManager.setDwellMinutes(current + delta)
     }
 
+    fun setTaxCountry(country: String) {
+        settingsManager.setTaxCountry(country)
+    }
+
     fun setUnit(unit: String) {
         settingsManager.setUnit(InputCheck.distanceUnit(unit) ?: return)
     }

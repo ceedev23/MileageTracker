@@ -132,6 +132,7 @@ fun AuthScreen(
 ) {
     var currentStep by remember { mutableStateOf(initialStep) }
     var pending by remember { mutableStateOf<LandingDestination?>(null) }
+    var countryDestination by remember { mutableStateOf<LandingDestination?>(null) }
     val authUiState by viewModel.authUiState.collectAsState()
 
     fun openDestination(dest: LandingDestination) {
@@ -142,10 +143,39 @@ fun AuthScreen(
         }
     }
 
+    fun proceedAfterIntro(dest: LandingDestination) {
+        if (viewModel.settings.value.taxCountrySelected) openDestination(dest)
+        else countryDestination = dest
+    }
+
+    if (countryDestination != null) {
+        AlertDialog(
+            onDismissRequest = { countryDestination = null },
+            title = { Text("Choose your tax country") },
+            text = { Text("Canada defaults to kilometres; United States defaults to miles. You can change your country and distance unit in Settings.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val dest = countryDestination ?: return@TextButton
+                    viewModel.setTaxCountry("CA")
+                    countryDestination = null
+                    openDestination(dest)
+                }) { Text("Canada") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    val dest = countryDestination ?: return@TextButton
+                    viewModel.setTaxCountry("US")
+                    countryDestination = null
+                    openDestination(dest)
+                }) { Text("United States") }
+            }
+        )
+    }
+
     fun leaveLanding(dest: LandingDestination) {
         viewModel.clearAuthMessages()
         if (viewModel.settings.value.onboardingSeen) {
-            openDestination(dest)
+            proceedAfterIntro(dest)
         } else {
             pending = dest
         }
@@ -158,7 +188,7 @@ fun AuthScreen(
                 val dest = pending ?: return@OnboardingScreen
                 pending = null
                 viewModel.setOnboardingSeen(true)
-                openDestination(dest)
+                proceedAfterIntro(dest)
             }
         )
         return

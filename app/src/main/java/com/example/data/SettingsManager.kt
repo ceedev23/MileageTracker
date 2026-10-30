@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 data class MileageSettings(
     val autoDetect: Boolean = true,
     val dwellMinutes: Int = 5,
+    val taxCountry: String = "CA",
+    val taxCountrySelected: Boolean = false,
     val unit: String = "km", // "km" or "mi"
     val reimbursementRate: Double = 0.73, // 2026 CRA rate for the first 5,000 km
     val vehicleName: String = "Primary Vehicle",
@@ -31,6 +33,8 @@ class SettingsManager(context: Context) {
         return MileageSettings(
             autoDetect = prefs.getBoolean("auto_detect", true),
             dwellMinutes = prefs.getInt("dwell_minutes", 5),
+            taxCountry = prefs.getString("tax_country", "CA").orEmpty().takeIf { it in setOf("CA", "US") } ?: "CA",
+            taxCountrySelected = prefs.getBoolean("tax_country_selected", false),
             unit = prefs.getString("distance_unit", "km") ?: "km",
             reimbursementRate = prefs.getFloat("reimbursement_rate", 0.73f).toDouble(),
             vehicleName = prefs.getString("vehicle_name", "Primary Vehicle") ?: "Primary Vehicle",
@@ -54,10 +58,30 @@ class SettingsManager(context: Context) {
         TrackingManager.setDwellMinutes(clamped)
     }
 
+    /** Country is explicit; GPS/location never changes it. Stored trip/odometer km stay canonical. */
+    fun setTaxCountry(country: String) {
+        if (country != "CA" && country != "US") return
+        val old = _settings.value
+        val unit = if (country == "US") "mi" else "km"
+        val goal = convertGoal(old.annualGoal, old.unit, unit)
+        prefs.edit().putString("tax_country", country)
+            .putBoolean("tax_country_selected", true)
+            .putString("distance_unit", unit)
+            .putFloat("annual_goal", goal.toFloat()).apply()
+        _settings.value = old.copy(taxCountry = country, taxCountrySelected = true, unit = unit, annualGoal = goal)
+    }
+
+    private fun convertGoal(goal: Double, from: String, to: String): Double = when {
+        from == to -> goal
+        to == "mi" -> goal / 1.609344
+        else -> goal * 1.609344
+    }
+
     fun setUnit(unit: String) {
         val clean = InputCheck.distanceUnit(unit) ?: return
-        prefs.edit().putString("distance_unit", clean).apply()
-        _settings.value = _settings.value.copy(unit = clean)
+        val goal = convertGoal(_settings.value.annualGoal, _settings.value.unit, clean)
+        prefs.edit().putString("distance_unit", clean).putFloat("annual_goal", goal.toFloat()).apply()
+        _settings.value = _settings.value.copy(unit = clean, annualGoal = goal)
     }
 
     fun setReimbursementRate(rate: Double) {
