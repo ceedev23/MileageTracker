@@ -3,6 +3,8 @@
     <style name="Theme.MyApplication.Starting" parent="Theme.MyApplication">
         <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="android:windowSplashScreenBackground">@color/splash_blue</item>
+        <!-- Keep the road directly on the splash blue, without an icon backdrop. -->
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_road</item>
         <item name="android:statusBarColor">@color/splash_blue</item>
         <item name="android:navigationBarColor">@color/splash_blue</item>
