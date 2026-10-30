@@ -85,8 +85,9 @@ fun ReportScreen(
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
     val rate = settings.reimbursementRate
+    var craTerritory by remember { mutableStateOf(false) }
 
-    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate)
+    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate, taxCountry = settings.taxCountry, craTerritory = craTerritory)
     val filteredTrips = reportSnapshot.trips
     val filteredReceipts = reportSnapshot.receipts
     val periodGasExpenses = filteredReceipts.sumOf { it.totalAmount }
@@ -99,7 +100,19 @@ fun ReportScreen(
     val businessDist = if (isMiles) businessKm * 0.621371 else businessKm
     val personalDist = if (isMiles) personalKm * 0.621371 else personalKm
 
-    val estimatedTaxValue = businessDist * rate
+    val craYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val craEstimate = if (settings.taxCountry == "CA") {
+        val eligible = filteredTrips.filter { it.type == "Business" }
+        val years = eligible.groupBy {
+            java.util.Calendar.getInstance().apply { timeInMillis = it.startDate }.get(java.util.Calendar.YEAR)
+        }
+        years.entries.sumOf { (year, yearTrips) ->
+            if (year in 2022..2026) com.example.service.CraMileageAllowance.annual(
+                year, craTerritory, yearTrips.sumOf { it.distanceKm }
+            ).amountCad.toDouble() else 0.0
+        }
+    } else 0.0
+    val estimatedTaxValue = if (settings.taxCountry == "CA") craEstimate else businessDist * rate
     val businessRatio = if (totalDist > 0) (businessDist / totalDist).toFloat() else 0f
     val personalRatio = if (totalDist > 0) 1f - businessRatio else 0f
 
@@ -130,6 +143,18 @@ fun ReportScreen(
             Text("Canadian actual vehicle expenses")
         }
 
+        if (settings.taxCountry == "CA") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Checkbox(checked = craTerritory, onCheckedChange = { craTerritory = it })
+                Text("Travel in Yukon, Northwest Territories or Nunavut")
+            }
+            Text(
+                "CRA employee automobile allowance estimate (2022–2026). Annual 5,000 km threshold; not a self-employed tax deduction. For filtered periods, earlier business kilometres may affect the tier.",
+                style = MaterialTheme.typography.bodySmall,
+                color = SlateTextSecondary
+            )
+        }
+
         // Period Filters
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -158,7 +183,7 @@ fun ReportScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "RATE-BASED ESTIMATE",
+                    text = if (settings.taxCountry == "CA") "CRA EMPLOYEE ALLOWANCE ESTIMATE" else "RATE-BASED ESTIMATE",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.8f),
@@ -179,7 +204,7 @@ fun ReportScreen(
                 val businessDistStr = String.format(Locale.getDefault(), "%.1f", businessDist)
                 val rateStr = String.format(Locale.getDefault(), "$%.2f", rate)
                 Text(
-                    text = "Based on $businessDistStr $unitLabel business @ $rateStr/unit",
+                    text = if (settings.taxCountry == "CA") "Based on $businessDistStr $unitLabel business; tiered CRA annual rates" else "Based on $businessDistStr $unitLabel business @ $rateStr/unit",
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.9f)
                 )
