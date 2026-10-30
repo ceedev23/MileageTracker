@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -40,9 +41,11 @@ class AuthScreenTest {
     @Before
     fun setUp() {
         val app = ApplicationProvider.getApplicationContext<Application>()
+        app.getSharedPreferences("mileage_tracker_prefs", Context.MODE_PRIVATE).edit().clear().commit()
         viewModel = MileageViewModel(app)
         viewModel.supabaseConfig.setAnonKey("")
         viewModel.setOnboardingSeen(true)
+        viewModel.setTaxCountry("CA")
     }
 
     @Test
@@ -196,6 +199,49 @@ class AuthScreenTest {
         composeTestRule.onNodeWithTag("onboarding_skip").performClick()
         composeTestRule.onNodeWithTag("auth_email_input").assertExists()
         assertTrue(viewModel.settings.value.onboardingSeen)
+    }
+
+    @Test
+    fun testFirstRunCanadaSelectionContinuesToSignIn() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        app.getSharedPreferences("mileage_tracker_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        viewModel = MileageViewModel(app)
+        viewModel.supabaseConfig.setAnonKey("")
+        viewModel.setOnboardingSeen(false)
+        composeTestRule.setContent {
+            AuthScreen(viewModel = viewModel, onDismiss = {}, initialStep = AuthStep.WELCOME)
+        }
+
+        composeTestRule.onNodeWithTag("welcome_sign_in_button").performClick()
+        composeTestRule.onNodeWithTag("onboarding_skip").performClick()
+        composeTestRule.onNodeWithText("Choose your tax country").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("auth_email_input").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Canada", useUnmergedTree = true).performClick()
+        composeTestRule.onNodeWithTag("auth_email_input").assertExists()
+        assertEquals("CA", viewModel.settings.value.taxCountry)
+        assertEquals("km", viewModel.settings.value.unit)
+        assertTrue(viewModel.settings.value.taxCountrySelected)
+    }
+
+    @Test
+    fun testFirstRunUSSelectionContinuesAsGuest() {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        app.getSharedPreferences("mileage_tracker_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        viewModel = MileageViewModel(app)
+        viewModel.supabaseConfig.setAnonKey("")
+        viewModel.setOnboardingSeen(true)
+        composeTestRule.setContent {
+            AuthScreen(viewModel = viewModel, onDismiss = {}, initialStep = AuthStep.WELCOME)
+        }
+
+        composeTestRule.onNodeWithTag("auth_guest_button").performClick()
+        composeTestRule.onNodeWithText("Choose your tax country").assertIsDisplayed()
+        assertFalse(viewModel.userProfile.value?.isGuest == true)
+        composeTestRule.onNodeWithText("United States", useUnmergedTree = true).performClick()
+        assertTrue(viewModel.userProfile.value!!.isGuest)
+        assertEquals("US", viewModel.settings.value.taxCountry)
+        assertEquals("mi", viewModel.settings.value.unit)
+        assertTrue(viewModel.settings.value.taxCountrySelected)
     }
 
     @Test
