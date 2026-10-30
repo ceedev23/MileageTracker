@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
   private val viewModel: MileageViewModel by viewModels()
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    setTheme(R.style.Theme_MyApplication)
     super.onCreate(savedInstanceState)
     enableEdgeToEdge(
       statusBarStyle = SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT),

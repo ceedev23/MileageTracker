@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MyApplication.Starting" parent="Theme.MyApplication">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_blue</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_road</item>
+        <item name="android:statusBarColor">@color/splash_blue</item>
+        <item name="android:navigationBarColor">@color/splash_blue</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

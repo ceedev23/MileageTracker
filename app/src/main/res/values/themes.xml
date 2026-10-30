@@ -9,4 +9,11 @@
         <item name="android:windowBackground">#FFF8FAFC</item>
         <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
     </style>
+    <style name="Theme.MyApplication.Starting" parent="Theme.MyApplication">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@color/splash_blue</item>
+        <item name="android:navigationBarColor">@color/splash_blue</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">false</item>
+    </style>
 </resources>
