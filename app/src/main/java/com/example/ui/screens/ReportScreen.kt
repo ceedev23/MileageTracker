@@ -100,7 +100,6 @@ fun ReportScreen(
     val businessDist = if (isMiles) businessKm * 0.621371 else businessKm
     val personalDist = if (isMiles) personalKm * 0.621371 else personalKm
 
-    val craYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val craEstimate = if (settings.taxCountry == "CA") {
         val eligible = filteredTrips.filter { it.type == "Business" }
         val years = eligible.groupBy {
