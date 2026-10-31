@@ -582,9 +582,9 @@ fun HomeScreen(
                                                     modifier = Modifier
                                                         .size(8.dp)
                                                         .clip(CircleShape)
-                                                        .alpha(if (trackingState.isTracking) pulseAlpha else 1.0f)
+                                                        .alpha(if (trackingState.isMoving) pulseAlpha else 1.0f)
                                                         .background(
-                                                            if (trackingState.isTracking || settings.autoDetect) {
+                                                            if (trackingState.isMoving) {
                                                                 Color(0xFF1D63FF)
                                                             } else {
                                                                 Color(0xFF94A3B8)
@@ -592,9 +592,7 @@ fun HomeScreen(
                                                         )
                                                 )
                                                 Text(
-                                                    text = if (trackingState.isTracking) {
-                                                        "Driving"
-                                                    } else if (settings.autoDetect) {
+                                                    text = if (trackingState.isMoving) {
                                                         "Tracking is on"
                                                     } else {
                                                         "Tracking is off"

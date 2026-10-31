@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
+import com.example.data.LatLngPoint
 import com.example.service.TrackingManager
 import com.example.ui.MileageViewModel
 import com.example.ui.screens.HomeScreen
@@ -57,6 +58,7 @@ class HomeScreenMovingModeTest {
         composeTestRule.onNodeWithTag("home_profile_avatar").assertExists()
         composeTestRule.onNodeWithTag("home_total_driven_dial").assertExists()
         composeTestRule.onNodeWithText("TOTAL DRIVEN").assertExists()
+        composeTestRule.onNodeWithText("Tracking is off").assertExists()
         composeTestRule.onNodeWithText("Resets Dec 31").assertExists()
         composeTestRule.onNodeWithText("Your trips will appear here").assertExists()
         // Driving mode layout is not active
@@ -66,6 +68,9 @@ class HomeScreenMovingModeTest {
     @Test
     fun testMovingModeShowsLiveTrackingScreen() {
         viewModel.startManualTracking(app)
+        TrackingManager.processGpsPoint(
+            LatLngPoint(37.77, -122.42, timestamp = System.currentTimeMillis(), speedKmh = 25f)
+        )
 
         composeTestRule.setContent {
             HomeScreen(viewModel = viewModel)
@@ -88,8 +93,10 @@ class HomeScreenMovingModeTest {
 
     @Test
     fun testStoppingDriveReturnsToStandardDashboard() {
-        // Start tracking
         viewModel.startManualTracking(app)
+        TrackingManager.processGpsPoint(
+            LatLngPoint(37.77, -122.42, timestamp = System.currentTimeMillis(), speedKmh = 25f)
+        )
 
         composeTestRule.setContent {
             HomeScreen(viewModel = viewModel)

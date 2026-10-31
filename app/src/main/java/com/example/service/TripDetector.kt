@@ -50,9 +50,12 @@ class TripDetector(
         dwellMinutes = minutes.coerceIn(1, 30)
     }
 
+    fun effectiveSpeedKmh(point: LatLngPoint): Float =
+        if (point.speedKmh > 0f) point.speedKmh else estimateSpeed(point)
+
     fun processPoint(point: LatLngPoint) {
-        val speedKmh = if (point.speedKmh > 0) point.speedKmh else estimateSpeed(point)
         rememberPoint(point)
+        val speedKmh = effectiveSpeedKmh(point)
         val now = point.timestamp
 
         when (state) {
@@ -225,6 +228,20 @@ class TripDetector(
         val dtHours = dtMillis.toDouble() / 3_600_000.0
         return (dKm / dtHours).toFloat()
     }
+}
+
+/** Tracking stays on through a brief slow fix, then turns off after [TripDetector.WARMUP_ABORT_MS] stopped. */
+fun movingAfter(
+    wasMoving: Boolean,
+    detectorState: DetectorState,
+    speedKmh: Float,
+    stillForMs: Long
+): Boolean {
+    if (speedKmh > TripDetector.SPEED_THRESHOLD_KMH) return true
+    if (detectorState == DetectorState.IDLE) return false
+    if (detectorState == DetectorState.MOVING) return stillForMs < TripDetector.WARMUP_ABORT_MS
+    if (!wasMoving) return false
+    return stillForMs < TripDetector.WARMUP_ABORT_MS
 }
 
 fun haversineDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

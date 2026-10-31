@@ -190,7 +190,13 @@ class TripDwellEndTripTest {
         // 2. Driver stops (speed = 0)
         val stopTime = t0 + 30000L
         TrackingManager.processGpsPoint(LatLngPoint(37.7841, -122.4194, timestamp = stopTime, speedKmh = 0f))
-        assertTrue("Live drive still shows during dwell delay", TrackingManager.trackingState.value.showsLiveDrive())
+        assertTrue("A single slow fix does not turn tracking off", TrackingManager.trackingState.value.showsLiveDrive())
+
+        TrackingManager.processGpsPoint(
+            LatLngPoint(37.7841, -122.4194, timestamp = stopTime + TripDetector.WARMUP_ABORT_MS, speedKmh = 0f)
+        )
+        assertFalse("Tracking turns off once the driver has stopped", TrackingManager.trackingState.value.showsLiveDrive())
+        assertTrue("Trip stays open until the dwell delay", TrackingManager.trackingState.value.isTracking)
 
         // 3. Driver remains stopped for the 2 minutes set under 'End trip after stopping'
         val dwellExpiredTime = stopTime + (2 * 60 * 1000L) + 1000L

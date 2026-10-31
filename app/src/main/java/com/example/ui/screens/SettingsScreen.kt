@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
@@ -87,6 +88,7 @@ fun SettingsScreen(
     var photoBackupEnabled by remember(userProfile) { mutableStateOf(viewModel.receiptPhotoBackup.enabled()) }
     var showClearDialog by remember { mutableStateOf(false) }
     var showOdometerDialog by remember { mutableStateOf(false) }
+    var legalDoc by remember { mutableStateOf<LegalDoc?>(null) }
     var rateInput by remember(settings.reimbursementRate) {
         mutableStateOf(String.format(Locale.US, "%.2f", settings.reimbursementRate))
     }
@@ -114,6 +116,16 @@ fun SettingsScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasBackgroundLocation = granted
+    }
+
+    val openLegal = legalDoc
+    if (openLegal != null) {
+        LegalScreen(
+            doc = openLegal,
+            onBack = { legalDoc = null },
+            modifier = modifier
+        )
+        return
     }
 
     Column(
@@ -704,6 +716,32 @@ fun SettingsScreen(
                 }
             }
         }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LegalRow(
+                    title = "Terms of Service",
+                    tag = "settings_terms",
+                    onClick = { legalDoc = LegalDoc.TERMS }
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(SlateBorder)
+                )
+                LegalRow(
+                    title = "Privacy Policy",
+                    tag = "settings_privacy",
+                    onClick = { legalDoc = LegalDoc.PRIVACY }
+                )
+            }
+        }
     }
 
     if (showOdometerDialog) {
@@ -757,6 +795,35 @@ fun SettingsScreen(
         )
     }
 
+}
+
+@Composable
+private fun LegalRow(
+    title: String,
+    tag: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .testTag(tag),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = SlateTextPrimary
+        )
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = SlateTextMuted
+        )
+    }
 }
 
 @Composable

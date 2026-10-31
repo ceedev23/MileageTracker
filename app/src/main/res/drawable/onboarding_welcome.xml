@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="320dp"
+    android:viewportWidth="240"
+    android:viewportHeight="320">
+    <!-- Front-view car. Glass and headlights use the card blue so they read as cutouts. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M58,128 C58,112 74,100 96,98 L144,98 C166,100 182,112 182,128 C188,146 196,164 200,184 C206,206 204,226 190,238 C176,248 152,252 120,252 C88,252 64,248 50,238 C36,226 34,206 40,184 C44,164 52,146 58,128 Z" />
+    <path
+        android:fillColor="#3B72FF"
+        android:pathData="M92,138 L148,138 C154,138 160,146 162,154 L168,172 C170,180 164,184 156,184 L84,184 C76,184 70,180 72,172 L78,154 C80,146 86,138 92,138 Z" />
+    <path
+        android:fillColor="#3B72FF"
+        android:pathData="M78,192 C84.6,192 90,197.4 90,204 C90,210.6 84.6,216 78,216 C71.4,216 66,210.6 66,204 C66,197.4 71.4,192 78,192 Z" />
+    <path
+        android:fillColor="#3B72FF"
+        android:pathData="M162,192 C168.6,192 174,197.4 174,204 C174,210.6 168.6,216 162,216 C155.4,216 150,210.6 150,204 C150,197.4 155.4,192 162,192 Z" />
+</vector>

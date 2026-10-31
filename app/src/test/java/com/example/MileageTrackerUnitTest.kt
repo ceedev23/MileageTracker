@@ -4,7 +4,9 @@ import com.example.data.LatLngPoint
 import com.example.data.TripEntity
 import com.example.service.DetectorState
 import com.example.service.TripDetector
+import com.example.service.movingAfter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -88,6 +90,16 @@ class MileageTrackerUnitTest {
     }
     assertTrue(started)
     assertEquals(DetectorState.RECORDING, detector.state)
+  }
+
+  @Test
+  fun `tracking is on only while moving and turns off after a real stop`() {
+    assertTrue(movingAfter(false, DetectorState.IDLE, 12f, 0L))
+    assertFalse(movingAfter(false, DetectorState.RECORDING, 0f, 0L))
+    assertTrue(movingAfter(true, DetectorState.RECORDING, 0f, 5_000L))
+    assertFalse(movingAfter(true, DetectorState.RECORDING, 0f, TripDetector.WARMUP_ABORT_MS))
+    assertTrue(movingAfter(true, DetectorState.MOVING, 0f, 2_000L))
+    assertFalse(movingAfter(true, DetectorState.IDLE, 0f, 0L))
   }
 
   @Test
