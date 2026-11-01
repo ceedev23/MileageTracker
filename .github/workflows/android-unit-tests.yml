@@ -38,6 +38,9 @@ jobs:
       - name: Install project SDK
         run: sdkmanager "platforms;android-36.1" "build-tools;36.0.0"
 
+      - name: Assemble debug APK
+        run: bash ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
       - name: Run debug unit tests
         run: bash ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
 
