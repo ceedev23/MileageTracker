@@ -317,7 +317,8 @@ fun HomeScreen(
                             .weight(1f)
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(bottom = 16.dp),
+                            // Keep the empty-state description comfortably above the fixed button.
+                            .padding(bottom = 40.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                     // 1. TOP U-SHAPED HERO CARD + CONCENTRIC CURVED PROGRESS ARC
