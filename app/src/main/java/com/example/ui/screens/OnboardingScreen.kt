@@ -67,7 +67,7 @@ private val pages = listOf(
         kicker = "Welcome to",
         headline = "MileageTracker",
         body = "Welcome to MileageTracker, your guide to quick and reliable mileage tracking. Easily log the right trip, track its distance, and keep it ready for tax time.",
-        art = R.drawable.onboarding_welcome,
+        art = R.drawable.onboarding_welcome_reference,
         artDescription = "Car"
     ),
     OnboardingPage(
