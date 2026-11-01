@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="captures" path="receipt_captures/" />
+    <cache-path name="odometer_captures" path="odometer_captures/" />
     <cache-path name="reports" path="reports/" />
 </paths>
