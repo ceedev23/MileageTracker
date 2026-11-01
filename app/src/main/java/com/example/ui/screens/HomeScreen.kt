@@ -306,19 +306,10 @@ fun HomeScreen(
                         .fillMaxSize()
                         .background(Color(0xFFF5F6F8))
                         .verticalScroll(rememberScrollState())
-                        .padding(bottom = 16.dp)
+                        .padding(bottom = 100.dp)
                         .testTag("home_screen"),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    OutlinedButton(
-                        onClick = { showOdometerCapture = true },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 12.dp).testTag("home_capture_odometer")
-                    ) {
-                        Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Scan & save odometer")
-                    }
-
                     // 1. TOP U-SHAPED HERO CARD + CONCENTRIC CURVED PROGRESS ARC
                     AnimatedVisibility(
                         visible = unclassifiedTrips.isEmpty(),
@@ -883,6 +874,26 @@ fun HomeScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // Keep the camera action visible regardless of scroll position or hero-card height.
+            if (!isDriverMoving) {
+                androidx.compose.material3.Button(
+                    onClick = { showOdometerCapture = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                        .height(52.dp)
+                        .testTag("home_capture_odometer"),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = com.example.ui.theme.MileageBlue
+                    )
+                ) {
+                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scan & save odometer")
                 }
             }
 
