@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -88,6 +89,7 @@ import com.example.service.TripNotifier
 import com.example.service.tripUpdates
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
+import com.example.ui.components.OdometerDialog
 import com.example.ui.components.ReceiptScanDialog
 import com.example.ui.components.ReferenceTripCard
 import com.example.ui.components.UndoToast
@@ -110,6 +112,11 @@ fun HomeScreen(
     val trips by viewModel.trips.collectAsState()
     val scanState by viewModel.receiptScanState.collectAsState()
     val undoAction by viewModel.undoAction.collectAsState()
+
+    var showOdometerCapture by remember { mutableStateOf(false) }
+    if (showOdometerCapture) {
+        OdometerDialog(viewModel = viewModel, onDismiss = { showOdometerCapture = false }, openCameraOnStart = true)
+    }
 
     // Receipt Scanner Dialog
     if (scanState.isDialogVisible) {
@@ -302,6 +309,13 @@ fun HomeScreen(
                         .testTag("home_screen"),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    OutlinedButton(
+                        onClick = { showOdometerCapture = true },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 12.dp).testTag("home_capture_odometer")
+                    ) {
+                        Text("Capture odometer")
+                    }
+
                     // 1. TOP U-SHAPED HERO CARD + CONCENTRIC CURVED PROGRESS ARC
                     AnimatedVisibility(
                         visible = unclassifiedTrips.isEmpty(),
