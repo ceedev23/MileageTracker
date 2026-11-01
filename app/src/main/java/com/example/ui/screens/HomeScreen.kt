@@ -897,7 +897,7 @@ fun HomeScreen(
                     ) {
                         Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Scan & save odometer")
+                        Text("Scan & save odometer", color = Color.White)
                     }
                 }
             }
