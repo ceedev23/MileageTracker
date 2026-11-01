@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -265,15 +266,27 @@ private fun OnboardingArtCard(page: OnboardingPage, modifier: Modifier = Modifie
                 )
                 .clip(shape)
                 .background(MileageBlue)
-                .then(if (page.art == R.drawable.onboarding_welcome_reference) Modifier.border(2.dp, MileageBlue, shape) else Modifier)
                 .testTag("onboarding_u_card")
         ) {
-            Image(
-                painter = painterResource(page.art),
-                contentDescription = page.artDescription,
-                modifier = Modifier.fillMaxSize().clip(shape),
-                contentScale = ContentScale.Crop
-            )
+            if (page.art == R.drawable.onboarding_welcome_reference) {
+                // Welcome artwork: solid blue U-shaped card with a white car.
+                // Draw the car separately so the original bitmap cannot cover the blue card.
+                Icon(
+                    imageVector = Icons.Filled.DirectionsCar,
+                    contentDescription = page.artDescription,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(160.dp)
+                        .align(Alignment.Center)
+                )
+            } else {
+                Image(
+                    painter = painterResource(page.art),
+                    contentDescription = page.artDescription,
+                    modifier = Modifier.fillMaxSize().clip(shape),
+                    contentScale = ContentScale.Crop
+                )
+            }
         }
     }
 }
