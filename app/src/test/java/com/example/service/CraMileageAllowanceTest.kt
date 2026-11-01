@@ -40,4 +40,27 @@ class CraMileageAllowanceTest {
         assertThrows(IllegalArgumentException::class.java) { CraMileageAllowance.annual(2026, false, -1.0) }
         assertThrows(IllegalArgumentException::class.java) { CraMileageAllowance.annual(2026, false, Double.NaN) }
     }
+
+    @Test fun officialCraRatesForEverySupportedYearAndRegion() {
+        val expected = listOf(
+            Triple(2022, 0.61 to 0.55, 0.65 to 0.59),
+            Triple(2023, 0.68 to 0.62, 0.72 to 0.66),
+            Triple(2024, 0.70 to 0.64, 0.74 to 0.68),
+            Triple(2025, 0.72 to 0.66, 0.76 to 0.70),
+            Triple(2026, 0.73 to 0.67, 0.77 to 0.71)
+        )
+        expected.forEach { (year, province, territory) ->
+            val p = CraMileageAllowance.rates(year, false)
+            val t = CraMileageAllowance.rates(year, true)
+            assertEquals("Province first tier $year", province.first, p.first, 0.0000001)
+            assertEquals("Province additional tier $year", province.second, p.additional, 0.0000001)
+            assertEquals("Territory first tier $year", territory.first, t.first, 0.0000001)
+            assertEquals("Territory additional tier $year", territory.second, t.additional, 0.0000001)
+        }
+    }
+
+    @Test fun exactThresholdAndAfterThreshold() {
+        assertEquals(BigDecimal("3650.00"), CraMileageAllowance.annual(2026, false, 5000.0).amountCad)
+        assertEquals(BigDecimal("67.00"), CraMileageAllowance.calculate(2026, false, 5000.0, 100.0).amountCad)
+    }
 }
