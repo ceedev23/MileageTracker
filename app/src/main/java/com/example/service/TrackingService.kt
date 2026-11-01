@@ -61,6 +61,11 @@ class TrackingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                // Notification action promises to save the active trip, not merely stop GPS.
+                // Finalize it through the manager before shutting down this service.
+                if (TrackingManager.trackingState.value.isTracking) {
+                    TrackingManager.stopManualTracking(this)
+                }
                 stopLocationUpdates()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
