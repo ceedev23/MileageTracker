@@ -803,60 +803,6 @@ fun HomeScreen(
                                     }
                                 }
                             }
-                        } else if (!trackingState.isTracking) {
-                            // Rounded White Empty State Card matching the reference image
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(24.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFBFD)),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                border = BorderStroke(1.dp, Color(0xFFEDEFF3))
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(
-                                            horizontal = 24.dp,
-                                            vertical = if (isCompactHeight) 22.dp else 30.dp
-                                        ),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(if (isCompactHeight) 58.dp else 66.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFF1F3F7)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.DirectionsCar,
-                                            contentDescription = "Trips",
-                                            tint = Color(0xFF6B788E),
-                                            modifier = Modifier.size(if (isCompactHeight) 28.dp else 32.dp)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(if (isCompactHeight) 12.dp else 16.dp))
-
-                                    Text(
-                                        text = "Your trips will appear here",
-                                        fontSize = if (isCompactHeight) 15.5.sp else 17.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF0F172A),
-                                        textAlign = TextAlign.Center
-                                    )
-
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    Text(
-                                        text = "Drive as usual. Trips are recorded automatically.",
-                                        fontSize = if (isCompactHeight) 12.sp else 13.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = Color(0xFF64748B),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
                         }
 
                         // Location permission request banner if not granted
@@ -898,6 +844,63 @@ fun HomeScreen(
                         }
                     }
                     // End of scrollable content
+                    }
+                    // Empty-state message lives in the same footer as the action.
+                    // This guarantees that the button never hides its description.
+                    if (trips.isEmpty() && !trackingState.isTracking) {
+                        Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(24.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFBFD)),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                border = BorderStroke(1.dp, Color(0xFFEDEFF3))
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            horizontal = 24.dp,
+                                            vertical = 12.dp
+                                        ),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFFF1F3F7)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DirectionsCar,
+                                            contentDescription = "Trips",
+                                            tint = Color(0xFF6B788E),
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Text(
+                                        text = "Your trips will appear here",
+                                        fontSize = if (isCompactHeight) 15.5.sp else 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0F172A),
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    Text(
+                                        text = "Drive as usual. Trips are recorded automatically.",
+                                        fontSize = if (isCompactHeight) 12.sp else 13.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color(0xFF64748B),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                     androidx.compose.material3.Button(
                         onClick = { showOdometerCapture = true },
