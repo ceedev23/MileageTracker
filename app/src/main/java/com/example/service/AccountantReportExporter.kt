@@ -28,8 +28,21 @@ data class ReportSnapshot(
     val createdAt: Long,
     val timeZoneId: String,
     val taxCountry: String = "US",
-    val craTerritory: Boolean = false
+    val craTerritory: Boolean = false,
+    val priorBusinessKmByYear: Map<Int, Double> = emptyMap()
 ) {
+    /** Estimates selected business trips using the calendar-year distance before the selection. */
+    fun craTripEstimates(): Map<Long, Double> {
+        val yearlyKm = priorBusinessKmByYear.toMutableMap()
+        val zone = TimeZone.getTimeZone(timeZoneId)
+        return trips.filter { it.type == "Business" }.associate { trip ->
+            val year = Calendar.getInstance(zone).apply { timeInMillis = trip.startDate }.get(Calendar.YEAR)
+            val priorKm = yearlyKm[year] ?: 0.0
+            yearlyKm[year] = priorKm + trip.distanceKm
+            trip.id to CraMileageAllowance.calculate(year, craTerritory, priorKm, trip.distanceKm).amountCad.toDouble()
+        }
+    }
+
     companion object {
         fun create(
             trips: List<TripEntity>, receipts: List<GasReceiptEntity>, period: ReportPeriod,
@@ -48,10 +61,19 @@ data class ReportSnapshot(
                 add(if (period == ReportPeriod.THIS_YEAR) Calendar.YEAR else Calendar.MONTH, 1)
             }
             fun included(time: Long) = period == ReportPeriod.ALL || (time >= start.timeInMillis && time < end.timeInMillis)
+            val selectedTrips = trips.filter { included(it.startDate) }
+            val firstSelectedByYear = selectedTrips.filter { it.type == "Business" }.groupBy {
+                Calendar.getInstance(zone).apply { timeInMillis = it.startDate }.get(Calendar.YEAR)
+            }.mapValues { (_, items) -> items.minOf { it.startDate } }
+            val priorKm = firstSelectedByYear.mapValues { (year, firstTime) ->
+                trips.filter { it.type == "Business" && it.startDate < firstTime &&
+                    Calendar.getInstance(zone).apply { timeInMillis = it.startDate }.get(Calendar.YEAR) == year
+                }.sumOf { it.distanceKm }
+            }
             return ReportSnapshot(
                 trips.filter { included(it.startDate) }.sortedWith(compareBy<TripEntity> { it.startDate }.thenBy { it.id }),
                 receipts.filter { included(receiptTime(it, zone)) }.sortedWith(compareBy<GasReceiptEntity> { receiptTime(it, zone) }.thenBy { it.id }),
-                period, isMiles, rate, now, zone.id, taxCountry, craTerritory
+                period, isMiles, rate, now, zone.id, taxCountry, craTerritory, priorKm
             )
         }
     }
@@ -92,16 +114,10 @@ object AccountantReportExporter {
 
     fun tripCsv(snapshot: ReportSnapshot): String = buildString {
         append("Trip ID,Date,Start Address,End Address,Distance (${if (snapshot.isMiles) "Miles" else "Kilometers"}),Type,Purpose,Vehicle,Rate/Unit,Rate-based Estimate\r\n")
-        val yearlyKm = mutableMapOf<Int, Double>()
-        val zone = TimeZone.getTimeZone(snapshot.timeZoneId)
+        val craEstimates = if (snapshot.taxCountry == "CA") snapshot.craTripEstimates() else emptyMap()
         for (trip in snapshot.trips) {
             val distance = if (snapshot.isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
-            val year = Calendar.getInstance(zone).apply { timeInMillis = trip.startDate }.get(Calendar.YEAR)
-            val priorKm = yearlyKm[year] ?: 0.0
-            val craEstimate = if (snapshot.taxCountry == "CA" && trip.type == "Business") {
-                CraMileageAllowance.calculate(year, snapshot.craTerritory, priorKm, trip.distanceKm).amountCad.toDouble()
-            } else 0.0
-            if (trip.type == "Business") yearlyKm[year] = priorKm + trip.distanceKm
+            val craEstimate = craEstimates[trip.id] ?: 0.0
             append(listOf(trip.id.toString(), text(date(trip.startDate, snapshot.timeZoneId)), text(trip.startAddress),
                 text(trip.endAddress), number(distance), text(trip.type ?: "Unclassified"), text(trip.purpose),
                 text(trip.vehicle), number(snapshot.rate, 4), number(if (snapshot.taxCountry == "CA") craEstimate else if (trip.type == "Business") distance * snapshot.rate else 0.0)).joinToString(","))
