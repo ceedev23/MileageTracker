@@ -44,6 +44,7 @@ import com.example.data.InputCheck
 import com.example.service.ObdBluetoothReader
 import com.example.service.ObdDevice
 import com.example.service.Odometer
+import com.example.service.OdometerTextParser
 import com.example.ui.MileageViewModel
 import com.example.ui.theme.MileageBlue
 import com.example.ui.theme.SlateTextSecondary
@@ -107,10 +108,9 @@ fun OdometerDialog(
                     photoText = text
                     photoReviewed = false
                     source = "camera"
-                    val candidates = Regex("""\\b\\d{3,7}(?:[.,]\\d)?\\b""")
-                        .findAll(text.replace(" ", "")).map { it.value.replace(",", "") }.distinct().toList()
-                    if (candidates.size == 1) {
-                        readingText = candidates.single()
+                    val candidate = OdometerTextParser.candidate(text)
+                    if (candidate != null) {
+                        readingText = candidate
                         message = "Number detected. Confirm it matches the dashboard before saving."
                         messageIsError = false
                     } else {
