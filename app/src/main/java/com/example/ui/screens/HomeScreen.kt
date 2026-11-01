@@ -111,6 +111,8 @@ fun HomeScreen(
     val trackingState by viewModel.trackingState.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val trips by viewModel.trips.collectAsState()
+    val odometerReadings by viewModel.odometerReadings.collectAsState()
+    val latestOdometer = odometerReadings.firstOrNull { it.vehicle == settings.vehicleName }
     val scanState by viewModel.receiptScanState.collectAsState()
     val undoAction by viewModel.undoAction.collectAsState()
 
@@ -575,7 +577,19 @@ fun HomeScreen(
                                             )
                                         }
 
-                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Spacer(modifier = Modifier.height(if (isCompactHeight) 5.dp else 8.dp))
+                                        Text(
+                                            text = latestOdometer?.let { reading ->
+                                                val display = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
+                                                "ODOMETER  " + String.format(Locale.US, "%,.1f", display) + " " + unitLabel
+                                            } ?: "ODOMETER  Not recorded",
+                                            fontSize = if (isCompactHeight) 11.sp else 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White.copy(alpha = 0.88f),
+                                            maxLines = 1
+                                        )
+
+                                        Spacer(modifier = Modifier.height(if (isCompactHeight) 6.dp else 10.dp))
 
                                         // "• Tracking is on" deep-blue pill badge
                                         Surface(
