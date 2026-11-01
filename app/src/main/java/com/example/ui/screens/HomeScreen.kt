@@ -301,15 +301,23 @@ fun HomeScreen(
                     }
                 )
             } else {
+                // Reserve a dedicated footer for the camera button so it never
+                // covers trip content, including the empty-state description.
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color(0xFFF5F6F8))
-                        .verticalScroll(rememberScrollState())
-                        .padding(bottom = 100.dp)
                         .testTag("home_screen"),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                     // 1. TOP U-SHAPED HERO CARD + CONCENTRIC CURVED PROGRESS ARC
                     AnimatedVisibility(
                         visible = unclassifiedTrips.isEmpty(),
@@ -874,26 +882,23 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
-            }
-
-            // Keep the camera action visible regardless of scroll position or hero-card height.
-            if (!isDriverMoving) {
-                androidx.compose.material3.Button(
-                    onClick = { showOdometerCapture = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 12.dp)
-                        .height(52.dp)
-                        .testTag("home_capture_odometer"),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = com.example.ui.theme.MileageBlue
-                    )
-                ) {
-                    Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Scan & save odometer")
+                    // End of scrollable content
+                    }
+                    androidx.compose.material3.Button(
+                        onClick = { showOdometerCapture = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                            .height(52.dp)
+                            .testTag("home_capture_odometer"),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = com.example.ui.theme.MileageBlue
+                        )
+                    ) {
+                        Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Scan & save odometer")
+                    }
                 }
             }
 
@@ -902,7 +907,7 @@ fun HomeScreen(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 12.dp)
+                        .padding(bottom = if (isDriverMoving) 12.dp else 84.dp)
                 ) {
                     UndoToast(
                         action = undoAction,
