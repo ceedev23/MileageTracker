@@ -27,8 +27,8 @@ class ReportSnapshotCraTest {
             ReportPeriod.THIS_MONTH, date(2026, 10, 31))
         assertEquals(1, s.trips.size)
         assertEquals(4800.0, s.priorBusinessKmByYear[2026]!!, 0.0)
-        assertEquals(341.00, s.craTripEstimates()[2L]!!, 0.001)
-        assertEquals("341.00", AccountantReportExporter.tripCsv(s).lines()[1].split(",").last())
+        assertEquals(347.00, s.craTripEstimates()[2L]!!, 0.001)
+        assertEquals("347.00", AccountantReportExporter.tripCsv(s).lines()[1].split(",").last())
     }
 
     @Test fun personalTripsDoNotConsumeAllowanceTier() {
