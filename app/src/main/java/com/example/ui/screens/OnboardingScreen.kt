@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -264,11 +265,13 @@ private fun OnboardingArtCard(page: OnboardingPage, modifier: Modifier = Modifie
                 )
                 .clip(shape)
                 .background(MileageBlue)
+                .then(if (page.art == R.drawable.onboarding_welcome_reference) Modifier.border(2.dp, MileageBlue, shape) else Modifier)
+                .testTag("onboarding_u_card")
         ) {
             Image(
                 painter = painterResource(page.art),
                 contentDescription = page.artDescription,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().clip(shape),
                 contentScale = ContentScale.Crop
             )
         }
