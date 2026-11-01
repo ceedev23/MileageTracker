@@ -101,15 +101,7 @@ fun ReportScreen(
     val personalDist = if (isMiles) personalKm * 0.621371 else personalKm
 
     val craEstimate = if (settings.taxCountry == "CA") {
-        val eligible = filteredTrips.filter { it.type == "Business" }
-        val years = eligible.groupBy {
-            java.util.Calendar.getInstance().apply { timeInMillis = it.startDate }.get(java.util.Calendar.YEAR)
-        }
-        years.entries.sumOf { (year, yearTrips) ->
-            if (year in 2022..2026) com.example.service.CraMileageAllowance.annual(
-                year, craTerritory, yearTrips.sumOf { it.distanceKm }
-            ).amountCad.toDouble() else 0.0
-        }
+        reportSnapshot.craTripEstimates().values.sum()
     } else 0.0
     val estimatedTaxValue = if (settings.taxCountry == "CA") craEstimate else businessDist * rate
     val businessRatio = if (totalDist > 0) (businessDist / totalDist).toFloat() else 0f
@@ -148,7 +140,7 @@ fun ReportScreen(
                 Text("Travel in Yukon, Northwest Territories or Nunavut")
             }
             Text(
-                "CRA employee automobile allowance estimate (2022–2026). Annual 5,000 km threshold; not a self-employed tax deduction. For filtered periods, earlier business kilometres may affect the tier.",
+                "CRA employee automobile allowance estimate (2022–2026). Annual 5,000 km threshold; not a self-employed tax deduction. Earlier business kilometres in the calendar year are included when calculating filtered periods.",
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
