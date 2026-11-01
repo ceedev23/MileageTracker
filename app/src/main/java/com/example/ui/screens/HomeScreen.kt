@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.outlined.CalendarToday
@@ -313,7 +314,9 @@ fun HomeScreen(
                         onClick = { showOdometerCapture = true },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 12.dp).testTag("home_capture_odometer")
                     ) {
-                        Text("Capture odometer")
+                        Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Scan & save odometer")
                     }
 
                     // 1. TOP U-SHAPED HERO CARD + CONCENTRIC CURVED PROGRESS ARC
