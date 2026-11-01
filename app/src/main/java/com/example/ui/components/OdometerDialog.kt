@@ -3,6 +3,10 @@ package com.example.ui.components
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.net.Uri
+import androidx.core.content.FileProvider
+import androidx.compose.runtime.LaunchedEffect
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +53,8 @@ import java.util.Locale
 @Composable
 fun OdometerDialog(
     viewModel: MileageViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    openCameraOnStart: Boolean = false
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
@@ -69,6 +74,7 @@ fun OdometerDialog(
     var messageIsError by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var devices by remember { mutableStateOf<List<ObdDevice>?>(null) }
+    var pendingCapture by remember { mutableStateOf<File?>(null) }
 
     fun dismiss() {
         photoPath?.let { viewModel.discardOdometerPhoto(it) }
@@ -85,6 +91,52 @@ fun OdometerDialog(
                 }.onFailure { messageIsError = true; message = it.message ?: "Could not read photo" }
             }
         }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val file = pendingCapture
+        pendingCapture = null
+        if (captured && file != null) {
+            busy = true
+            viewModel.importOdometerPhoto(Uri.fromFile(file)) { result ->
+                busy = false
+                file.delete()
+                result.onSuccess { (path, text) ->
+                    photoPath?.let { viewModel.discardOdometerPhoto(it) }
+                    photoPath = path
+                    photoText = text
+                    photoReviewed = false
+                    source = "camera"
+                    val candidates = Regex("""\\b\\d{3,7}(?:[.,]\\d)?\\b""")
+                        .findAll(text.replace(" ", "")).map { it.value.replace(",", "") }.distinct().toList()
+                    if (candidates.size == 1) {
+                        readingText = candidates.single()
+                        message = "Number detected. Confirm it matches the dashboard before saving."
+                        messageIsError = false
+                    } else {
+                        message = "Check the photo and enter the odometer number manually."
+                        messageIsError = false
+                    }
+                }.onFailure { messageIsError = true; message = it.message ?: "Could not read camera photo" }
+            }
+        } else file?.delete()
+    }
+    fun takeOdometerPhoto() {
+        try {
+            val dir = File(context.cacheDir, "odometer_captures").apply { mkdirs() }
+            val file = File.createTempFile("odometer_", ".jpg", dir)
+            pendingCapture = file
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            cameraLauncher.launch(uri)
+        } catch (error: Exception) {
+            pendingCapture?.delete()
+            pendingCapture = null
+            messageIsError = true
+            message = error.message ?: "Could not open camera"
+        }
+    }
+    LaunchedEffect(openCameraOnStart) {
+        if (openCameraOnStart) takeOdometerPhoto()
     }
 
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -160,7 +212,8 @@ fun OdometerDialog(
                     enabled = !busy
                 )
                 Text("Vehicle: ${settings.vehicleName}")
-                OutlinedButton(onClick = { photoLauncher.launch("image/*") }, enabled = !busy) { Text("Attach odometer photo") }
+                OutlinedButton(onClick = { takeOdometerPhoto() }, enabled = !busy) { Text("Take odometer photo") }
+                OutlinedButton(onClick = { photoLauncher.launch("image/*") }, enabled = !busy) { Text("Attach existing photo") }
                 if (photoPath != null) {
                     coil.compose.AsyncImage(model = photoPath, contentDescription = "Odometer photo for manual review", modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp))
                     Text("Photo stays on this device and is excluded from Android backup. OCR does not verify authenticity.")
