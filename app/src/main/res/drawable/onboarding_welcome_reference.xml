@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="480dp"
+    android:viewportWidth="400"
+    android:viewportHeight="480">
+    <!-- Pale blue background and simplified cobalt car based on the supplied reference. -->
+    <path android:fillColor="#E9EEFF" android:pathData="M0,0h400v480h-400z"/>
+    <path android:fillColor="#3467F5" android:pathData="M155,161 L245,161 Q254,161 259,172 L273,209 Q282,217 282,232 L282,294 Q282,305 271,305 L262,305 Q253,305 253,295 L253,290 L147,290 L147,295 Q147,305 138,305 L129,305 Q118,305 118,294 L118,232 Q118,217 127,209 L141,172 Q146,161 155,161 Z"/>
+    <path android:fillColor="#E9EEFF" android:pathData="M157,176 L243,176 L255,213 L145,213 Z"/>
+    <path android:fillColor="#E9EEFF" android:pathData="M157,237 a12,12 0,1 0,24 0 a12,12 0,1 0,-24 0"/>
+    <path android:fillColor="#E9EEFF" android:pathData="M219,237 a12,12 0,1 0,24 0 a12,12 0,1 0,-24 0"/>
+</vector>
