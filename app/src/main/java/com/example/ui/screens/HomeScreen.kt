@@ -907,7 +907,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp, vertical = 12.dp)
-                            .height(52.dp)
+                            .height(67.6.dp)
                             .testTag("home_capture_odometer"),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                             containerColor = com.example.ui.theme.MileageBlue
