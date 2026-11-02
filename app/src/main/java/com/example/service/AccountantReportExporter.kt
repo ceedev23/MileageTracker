@@ -129,6 +129,20 @@ object AccountantReportExporter {
         }
     }
 
+    fun odometerCsv(snapshot: ReportSnapshot): String = buildString {
+        append("Reading ID,Recorded At,Vehicle,Odometer,Unit,Source,Photo Reviewed\r\n")
+        for (reading in snapshot.odometerReadings) {
+            val display = if (snapshot.isMiles) reading.readingKm * 0.621371 else reading.readingKm
+            append(listOf(
+                reading.id.toString(), text(date(reading.recordedAt, snapshot.timeZoneId)),
+                text(reading.vehicle), number(display, 1),
+                text(if (snapshot.isMiles) "mi" else "km"),
+                text(reading.source), text(if (reading.photoReviewed) "Yes" else "No")
+            ).joinToString(","))
+            append("\r\n")
+        }
+    }
+
     fun expenseCsv(snapshot: ReportSnapshot, photoStatuses: Map<Long, String>? = null): String = buildString {
         append("Receipt ID,Receipt Date,Date Source,Saved At,Merchant,Total Amount,Currency as Recorded,Fuel Type,Volume,Volume Unit,Price/Unit,Payment Method,Linked Trip ID,Linked Trip in Export,Image File,Image Status\r\n")
         val tripIds = snapshot.trips.map { it.id }.toSet()
