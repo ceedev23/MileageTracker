@@ -40,6 +40,8 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var checked by remember(vehicle, year, fields) { mutableStateOf(false) }
     var exportText by remember { mutableStateOf("") }
+    var showGuidance by remember { mutableStateOf(false) }
+    var showOdometerHistory by remember { mutableStateOf(false) }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             val snapshot = exportText
@@ -65,25 +67,29 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Canadian vehicle expenses") },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Calendar year · CAD · each vehicle calculated separately · saved on this device")
-                OutlinedTextField(vehicle, { vehicle = it.take(40); message = null }, label = { Text("Vehicle (exact trip vehicle name)") }, enabled = !busy)
+                Text("Enter annual expenses in CAD. Required odometer readings help calculate your business-use share.")
+                OutlinedTextField(vehicle, { vehicle = it.take(40); message = null }, label = { Text("Vehicle") }, supportingText = { Text("Use the same vehicle name as your saved trips.") }, singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 val vehicles = (trips.mapNotNull { it.vehicle } + records.map { it.vehicle } + settings.vehicleName).distinct()
                 vehicles.forEach { name -> TextButton(onClick = { vehicle = name }, enabled = !busy) { Text(name) } }
-                OutlinedTextField(year, { year = it.filter(Char::isDigit).take(4); message = null }, label = { Text("Calendar year") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), enabled = !busy)
+                OutlinedTextField(year, { year = it.filter(Char::isDigit).take(4); message = null }, label = { Text("Calendar year") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 Text("Opening/closing readings must cover this calendar year, or the vehicle ownership period within it. Use recorded boundary readings; do not substitute the first and last tracked trip.")
-                readings.filter { it.vehicle == vehicle }.take(8).forEach {
+                TextButton(onClick = { showOdometerHistory = !showOdometerHistory }) { Text(if (showOdometerHistory) "Hide saved odometer readings" else "Show saved odometer readings") }
+                if (showOdometerHistory) readings.filter { it.vehicle == vehicle }.take(8).forEach {
                     Text("Recorded ${java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(java.util.Date(it.recordedAt))}: ${it.readingKm} km")
                 }
                 val labels = listOf("Opening odometer (km)", "Closing odometer (km)", "Fuel, charging and oil (CAD)",
                     "Maintenance and repairs (CAD)", "Regular insurance (CAD)", "Licence and registration (CAD)",
                     "Interest AFTER applicable limits (CAD)", "Lease costs AFTER applicable limits (CAD)",
                     "Business parking only (CAD)", "Supplementary business insurance only (CAD)")
+                Text("Required: opening and closing odometer readings")
+                Text("Optional: leave an expense blank if it does not apply.")
                 labels.forEachIndexed { i, label ->
                     OutlinedTextField(fields[i], { value ->
                         fields = fields.toMutableList().also { it[i] = value.take(16) }; message = null
-                    }, label = { Text(label) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), enabled = !busy)
+                    }, label = { Text(label) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 }
-                Text(CanadianVehicleExpenses.LIMITS)
+                TextButton(onClick = { showGuidance = !showGuidance }) { Text(if (showGuidance) "Hide expense limits guidance" else "View expense limits guidance") }
+                if (showGuidance) Text(CanadianVehicleExpenses.LIMITS)
                 val unclassified = trips.count { it.vehicle == vehicle && it.type == null && Calendar.getInstance().apply { timeInMillis = it.startDate }.get(Calendar.YEAR).toString() == year }
                 Text("$unclassified unclassified trips for this vehicle/year are excluded from business kilometres. Trips without a matching vehicle are excluded.")
                 Row { Checkbox(checked, { checked = it }, enabled = !busy); Text("I checked the vehicle, period, CAD amounts, expense eligibility and applicable limits") }
