@@ -847,7 +847,7 @@ fun HomeScreen(
                     }
                     // Empty-state message lives in the same footer as the action.
                     // This guarantees that the button never hides its description.
-                    if (trips.isEmpty() && !trackingState.isTracking) {
+                    if (unclassifiedTrips.isEmpty() && !trackingState.isTracking) {
                         Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(24.dp),
