@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.InputCheck
@@ -107,6 +109,7 @@ fun TripEditDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 500.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -125,6 +128,8 @@ fun TripEditDialog(
                     )
                 }
 
+                Text("Enter the trip distance and review its classification. Other details are optional.", color = SlateTextSecondary, fontSize = 13.sp)
+
                 // Distance input
                 OutlinedTextField(
                     value = distanceText,
@@ -133,7 +138,8 @@ fun TripEditDialog(
                         formError = null
                     },
                     label = { Text("Distance ($unitLabel)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    supportingText = { Text("Required. Enter a distance greater than zero.") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -186,7 +192,7 @@ fun TripEditDialog(
                         startAddress = InputCheck.keepTyped(it, 120)
                         formError = null
                     },
-                    label = { Text("Start Location") },
+                    label = { Text("Start Location (optional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -197,7 +203,7 @@ fun TripEditDialog(
                         endAddress = InputCheck.keepTyped(it, 120)
                         formError = null
                     },
-                    label = { Text("Destination") },
+                    label = { Text("Destination (optional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -208,7 +214,7 @@ fun TripEditDialog(
                         purpose = InputCheck.keepTyped(it, 160)
                         formError = null
                     },
-                    label = { Text("Purpose / Notes") },
+                    label = { Text("Purpose / Notes (optional)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
