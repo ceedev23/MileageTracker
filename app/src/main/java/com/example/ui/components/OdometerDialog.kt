@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -63,6 +65,8 @@ fun OdometerDialog(
     val unitLabel = if (isMiles) "mi" else "km"
 
     var readingText by remember { mutableStateOf("") }
+    var showHistory by remember { mutableStateOf(false) }
+    var showAdapter by remember { mutableStateOf(false) }
     var deleteReadingId by remember { mutableStateOf<Long?>(null) }
     var source by remember { mutableStateOf("manual") }
     var logTrip by remember { mutableStateOf(false) }
@@ -179,12 +183,12 @@ fun OdometerDialog(
 
     AlertDialog(
         onDismissRequest = { if (!busy) dismiss() },
-        title = { Text("Odometer", fontWeight = FontWeight.Bold) },
+        title = { Text("Save odometer reading", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp)
+                    .heightIn(max = 520.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -207,13 +211,14 @@ fun OdometerDialog(
                     },
                     label = { Text("Odometer ($unitLabel)") },
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    supportingText = { Text("Enter the number displayed on your dashboard. Check the unit before saving.") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy
                 )
                 Text("Vehicle: ${settings.vehicleName}")
-                OutlinedButton(onClick = { takeOdometerPhoto() }, enabled = !busy) { Text("Take odometer photo") }
-                OutlinedButton(onClick = { photoLauncher.launch("image/*") }, enabled = !busy) { Text("Attach existing photo") }
+                OutlinedButton(onClick = { takeOdometerPhoto() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Take odometer photo") }
+                OutlinedButton(onClick = { photoLauncher.launch("image/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Choose existing photo") }
                 if (photoPath != null) {
                     coil.compose.AsyncImage(model = photoPath, contentDescription = "Odometer photo for manual review", modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp))
                     Text("Photo stays on this device and is excluded from Android backup. OCR does not verify authenticity.")
@@ -223,8 +228,10 @@ fun OdometerDialog(
                         Text("I checked the entered number and km/mi against the photo")
                     }
                 }
-                Text("Reading history (local only)", fontWeight = FontWeight.Bold)
-                readings.filter { it.vehicle == settings.vehicleName }.take(20).forEach { reading ->
+                TextButton(onClick = { showHistory = !showHistory }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (showHistory) "Hide reading history" else "View reading history")
+                }
+                if (showHistory) readings.filter { it.vehicle == settings.vehicleName }.take(20).forEach { reading ->
                     val shown = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
                     Text("${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(reading.recordedAt))}: ${String.format(Locale.US, "%.1f", shown)} $unitLabel · ${reading.source}${if (reading.photoReviewed) " · photo reviewed" else ""}")
                     TextButton(enabled = !busy, onClick = {
@@ -241,7 +248,10 @@ fun OdometerDialog(
                         )
                     }
                 }
-                if (devices == null) {
+                TextButton(onClick = { showAdapter = !showAdapter }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (showAdapter) "Hide Bluetooth adapter options" else "Use Bluetooth OBD-II adapter")
+                }
+                if (showAdapter && devices == null) {
                     OutlinedButton(
                         onClick = {
                             if (!hasPermission) {
@@ -256,7 +266,7 @@ fun OdometerDialog(
                     ) {
                         Text("Read from paired adapter")
                     }
-                } else {
+                } else if (showAdapter) {
                     val problem = ObdBluetoothReader.unavailableReason(context)
                     when {
                         problem != null -> {
@@ -326,7 +336,7 @@ fun OdometerDialog(
                             .onFailure { messageIsError = true; message = it.message ?: "Could not save reading" }
                     }
                 },
-                enabled = !busy && (photoPath == null || photoReviewed),
+                enabled = !busy && enteredKm?.let { InputCheck.odometerKm(it) } != null && (photoPath == null || photoReviewed),
                 colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White),
                 elevation = null
             ) {
