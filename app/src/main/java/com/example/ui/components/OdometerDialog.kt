@@ -24,6 +24,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -210,6 +212,17 @@ fun OdometerDialog(
                         photoReviewed = false
                     },
                     label = { Text("Odometer ($unitLabel)") },
+                    placeholder = { Text("Enter odometer reading") },
+                    trailingIcon = { Text(unitLabel, color = SlateTextSecondary) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MileageBlue,
+                        unfocusedBorderColor = MileageBlue,
+                        disabledBorderColor = SlateTextSecondary,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        disabledContainerColor = Color.White
+                    ),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
                     supportingText = { Text("Enter the number displayed on your dashboard. Check the unit before saving.") },
