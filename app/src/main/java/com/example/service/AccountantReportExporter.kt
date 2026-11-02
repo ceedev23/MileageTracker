@@ -214,6 +214,7 @@ object AccountantReportExporter {
                 }
                 entry("trips.csv", tripCsv(snapshot))
                 entry("fuel_expenses.csv", expenseCsv(snapshot, statuses))
+                entry("odometer_readings.csv", odometerCsv(snapshot))
                 entry("missing_photos.csv", "Receipt ID,Issue\r\n" + missing.joinToString("") { "${it.receiptId},${text(it.reason)}\r\n" })
                 entry("README.txt", """
                     MileageTracker accountant export
@@ -222,10 +223,12 @@ object AccountantReportExporter {
                     Record dates use timezone: ${snapshot.timeZoneId}
                     Trips: ${snapshot.trips.size}
                     Fuel expense records: ${snapshot.receipts.size}
+                    Odometer readings: ${snapshot.odometerReadings.size}
                     Included receipt photos: ${photos.size}
                     MISSING receipt photos: ${missing.size}
 
-                    trips.csv and fuel_expenses.csv contain the selected report records.
+                    trips.csv, fuel_expenses.csv and odometer_readings.csv contain selected records.
+                    Odometer readings are vehicle totals, not trip distances.
                     Each included image is linked by receipt ID in fuel_expenses.csv.
                     Check missing_photos.csv before relying on this package as complete evidence.
                     Photos missing from this device are not fetched automatically during export.
