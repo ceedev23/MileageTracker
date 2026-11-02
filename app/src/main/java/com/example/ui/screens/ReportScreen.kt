@@ -72,6 +72,7 @@ fun ReportScreen(
     val context = LocalContext.current
     val trips by viewModel.trips.collectAsState()
     val receipts by viewModel.receipts.collectAsState()
+    val odometerReadings by viewModel.odometerReadings.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val exportState by viewModel.reportExportState.collectAsState()
 
@@ -87,7 +88,7 @@ fun ReportScreen(
     val rate = settings.reimbursementRate
     var craTerritory by remember { mutableStateOf(false) }
 
-    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate, taxCountry = settings.taxCountry, craTerritory = craTerritory)
+    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate, taxCountry = settings.taxCountry, craTerritory = craTerritory, odometerReadings = odometerReadings)
     val filteredTrips = reportSnapshot.trips
     val filteredReceipts = reportSnapshot.receipts
     val periodGasExpenses = filteredReceipts.sumOf { it.totalAmount }
@@ -480,7 +481,7 @@ fun ReportScreen(
     // CSV Preview Dialog
     if (showCsvPreview) {
         val snapshot = previewSnapshot ?: reportSnapshot
-        val previewData = "TRIPS\n" + AccountantReportExporter.tripCsv(snapshot) + "\nFUEL EXPENSES\n" + AccountantReportExporter.expenseCsv(snapshot)
+        val previewData = "TRIPS\n" + AccountantReportExporter.tripCsv(snapshot) + "\nFUEL EXPENSES\n" + AccountantReportExporter.expenseCsv(snapshot) + "\nODOMETER READINGS\n" + AccountantReportExporter.odometerCsv(snapshot)
         AlertDialog(
             onDismissRequest = { showCsvPreview = false },
             title = { Text("${snapshot.period.label}: Export Preview") },
