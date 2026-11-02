@@ -50,7 +50,8 @@ data class ReportSnapshot(
             trips: List<TripEntity>, receipts: List<GasReceiptEntity>, period: ReportPeriod,
             isMiles: Boolean, rate: Double, now: Long = System.currentTimeMillis(),
             zone: TimeZone = TimeZone.getDefault(),
-            taxCountry: String = "US", craTerritory: Boolean = false
+            taxCountry: String = "US", craTerritory: Boolean = false,
+            odometerReadings: List<OdometerReadingEntity> = emptyList()
         ): ReportSnapshot {
             val start = Calendar.getInstance(zone).apply {
                 timeInMillis = now
@@ -75,7 +76,8 @@ data class ReportSnapshot(
             return ReportSnapshot(
                 trips.filter { included(it.startDate) }.sortedWith(compareBy<TripEntity> { it.startDate }.thenBy { it.id }),
                 receipts.filter { included(receiptTime(it, zone)) }.sortedWith(compareBy<GasReceiptEntity> { receiptTime(it, zone) }.thenBy { it.id }),
-                period, isMiles, rate, now, zone.id, taxCountry, craTerritory, priorKm
+                period, isMiles, rate, now, zone.id, taxCountry, craTerritory, priorKm,
+                odometerReadings.filter { included(it.recordedAt) }.sortedWith(compareBy<OdometerReadingEntity> { it.recordedAt }.thenBy { it.id })
             )
         }
     }
