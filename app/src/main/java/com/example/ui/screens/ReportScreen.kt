@@ -161,6 +161,32 @@ fun ReportScreen(
             }
         }
 
+        // Saved odometer totals are distinct from trip distance.
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("report_odometer_summary"),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Odometer readings", fontWeight = FontWeight.Bold, color = SlateTextPrimary)
+                val latestByVehicle = reportSnapshot.odometerReadings
+                    .groupBy { it.vehicle }
+                    .mapValues { (_, readings) -> readings.maxWithOrNull(compareBy<com.example.data.OdometerReadingEntity> { it.recordedAt }.thenBy { it.id }) }
+                if (latestByVehicle.isEmpty()) {
+                    Text("No odometer readings recorded for this period.", color = SlateTextSecondary)
+                } else {
+                    latestByVehicle.toSortedMap().forEach { (vehicle, reading) ->
+                        if (reading != null) {
+                            val distance = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(vehicle, color = SlateTextPrimary)
+                                Text(String.format(Locale.US, "%,.1f %s", distance, unitLabel), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Primary Hero Card (Driversnote / CRA report style)
         Card(
             modifier = Modifier.fillMaxWidth(),
