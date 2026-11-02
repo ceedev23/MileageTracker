@@ -2,6 +2,7 @@ package com.example.service
 
 import com.example.data.GasReceiptEntity
 import com.example.data.InputCheck
+import com.example.data.OdometerReadingEntity
 import com.example.data.TripEntity
 import java.io.File
 import java.io.IOException
@@ -29,7 +30,8 @@ data class ReportSnapshot(
     val timeZoneId: String,
     val taxCountry: String = "US",
     val craTerritory: Boolean = false,
-    val priorBusinessKmByYear: Map<Int, Double> = emptyMap()
+    val priorBusinessKmByYear: Map<Int, Double> = emptyMap(),
+    val odometerReadings: List<OdometerReadingEntity> = emptyList()
 ) {
     /** Estimates selected business trips using the calendar-year distance before the selection. */
     fun craTripEstimates(): Map<Long, Double> {
