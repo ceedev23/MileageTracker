@@ -256,7 +256,8 @@ fun HomeScreen(
         trips.filter { it.type == null || it.type.isEmpty() || it.type == "Unclassified" }
     }
 
-    val isDriverMoving = trackingState.showsLiveDrive()
+    val isDriverMoving = trackingState.isTracking ||
+        (unclassifiedTrips.isEmpty() && trackingState.showsLiveDrive())
 
     // Pulse animation for driving indicator
     val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
