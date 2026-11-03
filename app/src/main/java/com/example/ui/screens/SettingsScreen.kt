@@ -88,6 +88,9 @@ fun SettingsScreen(
     var showReceiptBackupConsent by remember { mutableStateOf(false) }
     var photoBackupEnabled by remember(userProfile) { mutableStateOf(viewModel.receiptPhotoBackup.enabled()) }
     var showClearDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var deletingAccount by remember { mutableStateOf(false) }
+    var accountDeleteError by remember { mutableStateOf<String?>(null) }
     var showOdometerDialog by remember { mutableStateOf(false) }
     var legalDoc by remember { mutableStateOf<LegalDoc?>(null) }
     var rateInput by remember(settings.reimbursementRate) {
@@ -238,6 +241,18 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+
+        if (profile != null && !profile.isGuest) {
+            OutlinedButton(
+                onClick = { accountDeleteError = null; showDeleteAccountDialog = true },
+                modifier = Modifier.fillMaxWidth().testTag("settings_delete_account")
+            ) {
+                Text("Close / Delete Account", color = StopRed)
+            }
+        }
+        accountDeleteError?.let { message ->
+            Text(message, color = StopRed, style = MaterialTheme.typography.bodySmall)
         }
 
         val syncState by viewModel.supabaseSyncState.collectAsState()
@@ -757,6 +772,36 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showDeleteAccountDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!deletingAccount) showDeleteAccountDialog = false },
+            title = { Text("Permanently delete account?") },
+            text = {
+                Text("This permanently deletes your sign-in account and associated cloud records, including synced trips and receipts. This cannot be undone. Local records on this device are not deleted. Export anything you need first. Closing the account is permanent; there is no temporary deactivation option.")
+            },
+            confirmButton = {
+                Button(
+                    enabled = !deletingAccount,
+                    onClick = {
+                        deletingAccount = true
+                        viewModel.deleteAccount { result ->
+                            deletingAccount = false
+                            showDeleteAccountDialog = false
+                            accountDeleteError = result.exceptionOrNull()?.message
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StopRed)
+                ) { Text(if (deletingAccount) "Deleting..." else "Delete permanently", color = Color.White) }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    enabled = !deletingAccount,
+                    onClick = { showDeleteAccountDialog = false }
+                ) { Text("Cancel") }
+            }
+        )
     }
 
     if (showOdometerDialog) {
