@@ -554,7 +554,7 @@ class SupabaseClient(
                 val session = ensureFreshSession() ?: throw IOException("Sign in to back up receipt photos.")
                 require(ReceiptPhotoBackup.validKey(key, session.user.id)) { "Invalid receipt object" }
                 val path = if (method == "GET") "object/authenticated" else "object"
-                val suffix = if (method == "DELETE") "receipt-photos" else "receipt-photos/$key"
+                val suffix = "receipt-photos/$key"
                 val builder = Request.Builder().url("${baseUrl()}/storage/v1/$path/$suffix")
                 headers(session.accessToken).forEach { (k, v) -> builder.header(k, v) }
                 when (method) {
@@ -565,7 +565,7 @@ class SupabaseClient(
                             .post(bytes.toRequestBody("image/jpeg".toMediaType()))
                     }
                     "GET" -> builder.get()
-                    "DELETE" -> builder.delete(JSONObject().put("prefixes", JSONArray().put(key)).toString().toRequestBody(jsonMediaType))
+                    "DELETE" -> builder.delete()
                     else -> throw IOException("Unsupported receipt operation")
                 }
                 httpClient.newCall(builder.build()).execute().use { response ->
