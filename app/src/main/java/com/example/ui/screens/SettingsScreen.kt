@@ -740,6 +740,25 @@ fun SettingsScreen(
                     tag = "settings_privacy",
                     onClick = { legalDoc = LegalDoc.PRIVACY }
                 )
+                listOf(
+                    LegalDoc.REFUNDS to "settings_refunds",
+                    LegalDoc.SUBSCRIPTIONS to "settings_subscriptions",
+                    LegalDoc.DATA to "settings_data_policy",
+                    LegalDoc.LOCATION to "settings_location_policy",
+                    LegalDoc.ACCEPTABLE to "settings_acceptable_use",
+                    LegalDoc.SECURITY to "settings_security_policy",
+                    LegalDoc.COOKIES to "settings_cookies",
+                    LegalDoc.DISCLAIMER to "settings_disclaimer"
+                ).forEach { (doc, tag) ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(1.dp).background(SlateBorder)
+                    )
+                    LegalRow(
+                        title = doc.title,
+                        tag = tag,
+                        onClick = { legalDoc = doc }
+                    )
+                }
             }
         }
     }
