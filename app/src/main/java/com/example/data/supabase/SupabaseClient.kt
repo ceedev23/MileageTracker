@@ -340,6 +340,27 @@ class SupabaseClient(
         }
     }
 
+    suspend fun deleteAccount(): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            if (!config.isConfigured()) throw IOException("Account service is unavailable.")
+            val session = ensureFreshSession() ?: throw IOException("Sign in again to delete your account.")
+            val request = Request.Builder()
+                .url("${baseUrl()}/functions/v1/delete-account")
+                .post("{}".toRequestBody(jsonMediaType))
+            headers(session.accessToken).forEach { (key, value) -> request.header(key, value) }
+            httpClient.newCall(request.build()).execute().use { response ->
+                if (!response.isSuccessful) throw IOException(
+                    if (response.code == 404 || response.code == 503) "Account deletion is not available yet. Please contact support."
+                    else "Account deletion failed. Your account remains active."
+                )
+            }
+            config.clearSession()
+            Result.success(true)
+        } catch (error: Exception) {
+            Result.failure(IOException(error.message ?: "Account deletion failed."))
+        }
+    }
+
     suspend fun signOut(): Result<Boolean> = withContext(Dispatchers.IO) {
         val session = config.getSession()
         if (session != null && session.accessToken.isNotBlank() && config.isConfigured()) {
