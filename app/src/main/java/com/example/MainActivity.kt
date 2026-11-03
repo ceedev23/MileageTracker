@@ -129,8 +129,19 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
     viewModel.selectTab(AppTab.HOME)
   }
 
-  // An active trip takes precedence over the previously selected tab.
-  val showLiveDrive = trackingState.showsLiveDrive()
+  // Return to the classification screen when a recorded trip finishes.
+  var wasRecordingTrip by remember { mutableStateOf(false) }
+  LaunchedEffect(trackingState.isTracking) {
+    if (wasRecordingTrip && !trackingState.isTracking) {
+      viewModel.selectTab(AppTab.HOME)
+    }
+    wasRecordingTrip = trackingState.isTracking
+  }
+
+  // A completed, unclassified trip must not be hidden by stale detector state.
+  val hasTripsToClassify = trips.any { it.type.isNullOrEmpty() || it.type == "Unclassified" }
+  val showLiveDrive = trackingState.isTracking ||
+    (!hasTripsToClassify && trackingState.showsLiveDrive())
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
