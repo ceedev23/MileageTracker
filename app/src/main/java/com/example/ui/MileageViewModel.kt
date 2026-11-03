@@ -345,6 +345,18 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         _authUiState.value = AuthUiState()
     }
 
+    fun deleteAccount(onComplete: (Result<Boolean>) -> Unit) {
+        viewModelScope.launch {
+            val result = supabaseClient.deleteAccount()
+            if (result.isSuccess) {
+                _userProfile.value = null
+                _isAuthPromptVisible.value = true
+                _authUiState.value = AuthUiState()
+            }
+            onComplete(result)
+        }
+    }
+
     fun signOut() {
         viewModelScope.launch {
             supabaseClient.signOut()
