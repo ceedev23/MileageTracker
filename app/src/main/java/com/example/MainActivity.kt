@@ -129,7 +129,8 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
     viewModel.selectTab(AppTab.HOME)
   }
 
-  val showLiveDrive = currentTab == AppTab.HOME && trackingState.showsLiveDrive()
+  // An active trip takes precedence over the previously selected tab.
+  val showLiveDrive = trackingState.showsLiveDrive()
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
@@ -283,7 +284,7 @@ fun MileageTrackerApp(viewModel: MileageViewModel) {
     }
   ) { innerPadding ->
     Crossfade(
-      targetState = currentTab,
+      targetState = if (showLiveDrive) AppTab.HOME else currentTab,
       label = "screen_crossfade",
       modifier = Modifier
         .fillMaxSize()
