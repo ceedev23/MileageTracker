@@ -181,36 +181,19 @@ fun LiveDriveScreen(
             .testTag("home_screen_driving_mode")
     ) {
         val mapHeight = when {
-            maxHeight < 680.dp -> maxHeight * 0.22f
-            maxHeight < 800.dp -> maxHeight * 0.26f
-            else -> maxHeight * 0.30f
+            maxHeight < 680.dp -> maxHeight * 0.30f
+            maxHeight < 800.dp -> maxHeight * 0.34f
+            else -> maxHeight * 0.38f
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // MAP & FLOATING OVERLAYS
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(mapHeight)
-            ) {
-                GoogleMapView(
-                    points = trackingState.path,
-                    isLive = true,
-                    speedKmh = trackingState.speedKmh,
-                    distanceKm = trackingState.distanceKm,
-                    isMiles = isMiles,
-                    showChrome = false,
-                    routeColor = LiveRouteGreen,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // 1. Sleek Floating Top Tracking Banner
+            // Tracking status stays above the centered map.
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                         .testTag("home_tracking_banner")
                 ) {
                     Card(
@@ -288,6 +271,25 @@ fun LiveDriveScreen(
                         }
                     }
                 }
+
+            // MAP CENTERED BETWEEN STATUS AND TRIP DETAILS
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(mapHeight)
+            ) {
+                GoogleMapView(
+                    points = trackingState.path,
+                    isLive = true,
+                    speedKmh = trackingState.speedKmh,
+                    distanceKm = trackingState.distanceKm,
+                    isMiles = isMiles,
+                    showChrome = false,
+                    routeColor = LiveRouteGreen,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+
             }
 
             // ELEVATED BOTTOM SHEET / DRAFT DETAILS
