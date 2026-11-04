@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.components.StyledAlertDialog
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -64,7 +66,7 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
             values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[8], values[9])
     }
     val calculation = runCatching { val e = expense(); e to CanadianVehicleExpenses.calculate(e, trips) }
-    AlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Canadian vehicle expenses") },
+    StyledAlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Canadian vehicle expenses") },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Enter annual expenses in CAD. Required odometer readings help calculate your business-use share.")
