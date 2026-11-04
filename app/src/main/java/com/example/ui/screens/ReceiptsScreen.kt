@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.StyledAlertDialog
+
 import android.graphics.BitmapFactory
 import com.example.data.InputCheck
 import androidx.compose.foundation.Image
@@ -119,7 +121,7 @@ fun ReceiptsScreen(
 
     // Delete Confirmation Dialog
     receiptToDelete?.let { receipt ->
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { receiptToDelete = null },
             title = { Text("Delete Gas Receipt?") },
             text = { Text("Are you sure you want to delete this receipt from ${receipt.merchant ?: "Gas Station"} for $${String.format(Locale.US, "%.2f", receipt.totalAmount)}?") },
