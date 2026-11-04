@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.StyledAlertDialog
+
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -775,7 +777,7 @@ fun SettingsScreen(
     }
 
     if (showDeleteAccountDialog) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { if (!deletingAccount) showDeleteAccountDialog = false },
             title = { Text("Permanently delete account?") },
             text = {
@@ -813,7 +815,7 @@ fun SettingsScreen(
 
     // Confirmation dialog for clearing all data
     if (showReceiptBackupConsent) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { showReceiptBackupConsent = false },
             title = { Text("Back up receipt photos?") },
             text = { Text("Upload your receipt photos to private Supabase storage to restore them on another device. Storage region: ${viewModel.receiptPhotoBackup.region}. Supabase and its providers may process information elsewhere under their data processing terms. Only your signed-in account can access photos through the app. Photos may contain personal or payment details. Backup is optional; you can turn it off anytime. Deleting a receipt queues removal of its cloud copy when online. Keep copies for your tax obligations.") },
@@ -827,7 +829,7 @@ fun SettingsScreen(
     }
 
     if (showClearDialog) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { showClearDialog = false },
             icon = { Icon(imageVector = Icons.Default.Warning, contentDescription = null, tint = StopRed) },
             title = { Text("Clear All Trips?") },
