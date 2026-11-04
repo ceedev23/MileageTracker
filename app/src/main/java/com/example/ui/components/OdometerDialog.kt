@@ -1,5 +1,25 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bluetooth
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.text.style.TextAlign
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -183,14 +203,25 @@ fun OdometerDialog(
             dismissButton = { TextButton(enabled = !busy, onClick = { deleteReadingId = null }) { Text("Cancel") } })
     }
 
-    AlertDialog(
-        onDismissRequest = { if (!busy) dismiss() },
-        title = { Text("Save odometer reading", fontWeight = FontWeight.Bold) },
-        text = {
+    Dialog(onDismissRequest = { if (!busy) dismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+      Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(30.dp),
+        color = Color.White,
+        shadowElevation = 12.dp
+      ) {
+        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(56.dp).background(MileageBlue, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+              Icon(Icons.Outlined.Speed, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+            }
+          }
+          Text("Save Odometer Reading", fontWeight = FontWeight.Bold, fontSize = 23.sp, color = Color(0xFF091638), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+          Text("Enter your odometer reading and choose an option below.", fontSize = 13.sp, color = SlateTextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 520.dp)
+                    .heightIn(max = 480.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -212,6 +243,7 @@ fun OdometerDialog(
                         photoReviewed = false
                     },
                     label = { Text("Odometer ($unitLabel)") },
+                    leadingIcon = { Icon(Icons.Outlined.Speed, contentDescription = null, tint = MileageBlue) },
                     placeholder = { Text("Enter odometer reading") },
                     trailingIcon = { Text(unitLabel, color = SlateTextSecondary) },
                     shape = RoundedCornerShape(12.dp),
@@ -229,9 +261,14 @@ fun OdometerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy
                 )
-                Text("Vehicle: ${settings.vehicleName}")
-                OutlinedButton(onClick = { takeOdometerPhoto() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Take odometer photo") }
-                OutlinedButton(onClick = { photoLauncher.launch("image/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Choose existing photo") }
+                Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFF2F4F8), border = BorderStroke(1.dp, Color(0xFFBBC5D5))) {
+                  Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(Icons.Outlined.DirectionsCar, contentDescription = null, tint = MileageBlue)
+                    Text("Vehicle: ${settings.vehicleName}", color = Color(0xFF091638), fontSize = 14.sp)
+                  }
+                }
+                OdometerActionRow("Take Odometer Photo", Icons.Outlined.CameraAlt, !busy) { takeOdometerPhoto() }
+                OdometerActionRow("Choose Existing Photo", Icons.Outlined.Image, !busy) { photoLauncher.launch("image/*") }
                 if (photoPath != null) {
                     coil.compose.AsyncImage(model = photoPath, contentDescription = "Odometer photo for manual review", modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp))
                     Text("Photo stays on this device and is excluded from Android backup. OCR does not verify authenticity.")
@@ -241,9 +278,7 @@ fun OdometerDialog(
                         Text("I checked the entered number and km/mi against the photo")
                     }
                 }
-                TextButton(onClick = { showHistory = !showHistory }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (showHistory) "Hide reading history" else "View reading history")
-                }
+                OdometerActionRow(if (showHistory) "Hide Reading History" else "View Reading History", Icons.Outlined.History, !busy) { showHistory = !showHistory }
                 if (showHistory) readings.filter { it.vehicle == settings.vehicleName }.take(20).forEach { reading ->
                     val shown = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
                     Text("${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(reading.recordedAt))}: ${String.format(Locale.US, "%.1f", shown)} $unitLabel · ${reading.source}${if (reading.photoReviewed) " · photo reviewed" else ""}")
@@ -261,9 +296,7 @@ fun OdometerDialog(
                         )
                     }
                 }
-                TextButton(onClick = { showAdapter = !showAdapter }, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (showAdapter) "Hide Bluetooth adapter options" else "Use Bluetooth OBD-II adapter")
-                }
+                OdometerActionRow(if (showAdapter) "Hide Bluetooth Options" else "Use Bluetooth OBD-II Adapter", Icons.Outlined.Bluetooth, !busy) { showAdapter = !showAdapter }
                 if (showAdapter && devices == null) {
                     OutlinedButton(
                         onClick = {
@@ -333,8 +366,13 @@ fun OdometerDialog(
                 }
             }
         },
-        confirmButton = {
+          Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(onClick = { dismiss() }, enabled = !busy, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4E8EF), contentColor = Color(0xFF091638))) {
+              Text("Cancel", fontWeight = FontWeight.Bold)
+            }
             Button(
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(12.dp),
                 onClick = {
                     val km = enteredKm?.let { InputCheck.odometerKm(it) }
                     if (km == null) {
@@ -350,14 +388,32 @@ fun OdometerDialog(
                     }
                 },
                 enabled = !busy && enteredKm?.let { InputCheck.odometerKm(it) } != null && (photoPath == null || photoReviewed),
-                colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White),
-                elevation = null
-            ) {
-                Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = { dismiss() }, enabled = !busy) { Text("Cancel") }
+                colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White)
+            ) { Text("Save", fontWeight = FontWeight.Bold) }
+          }
         }
-    )
+      }
+    }
+}
+
+@Composable
+private fun OdometerActionRow(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color(0xFF142449)),
+        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF091638))
+    ) {
+        Icon(icon, contentDescription = null, tint = MileageBlue, modifier = Modifier.size(23.dp))
+        Text(title, modifier = Modifier.weight(1f).padding(start = 14.dp), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Color(0xFF091638))
+    }
 }
