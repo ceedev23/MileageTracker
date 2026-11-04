@@ -550,9 +550,9 @@ fun ReceiptDetailModal(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp)),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
+                .clip(RoundedCornerShape(30.dp)),
+            color = Color.White,
+            shadowElevation = 12.dp
         ) {
             Column(
                 modifier = Modifier
