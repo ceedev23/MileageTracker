@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.StyledAlertDialog
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -793,7 +795,7 @@ private fun NameDialog(
     onSave: (String) -> Unit
 ) {
     var value by remember(initialValue) { mutableStateOf(initialValue) }
-    AlertDialog(
+    StyledAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(20.dp),
         containerColor = Color.White,
