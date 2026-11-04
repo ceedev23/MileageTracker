@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import com.example.ui.components.StyledAlertDialog
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -97,7 +99,7 @@ fun TripEditDialog(
         }
     }
 
-    AlertDialog(
+    StyledAlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
