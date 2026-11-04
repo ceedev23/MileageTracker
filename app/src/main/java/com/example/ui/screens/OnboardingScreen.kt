@@ -67,8 +67,8 @@ private data class OnboardingPage(
 private val pages = listOf(
     OnboardingPage(
         kicker = "Welcome to",
-        headline = "MileageTracker",
-        body = "Welcome to MileageTracker, your guide to quick and reliable mileage tracking. Easily log the right trip, track its distance, and keep it ready for tax time.",
+        headline = "VoomLogs",
+        body = "Welcome to VoomLogs, your guide to quick and reliable mileage tracking. Easily log the right trip, track its distance, and keep it ready for tax time.",
         art = R.drawable.onboarding_welcome_reference,
         artDescription = "Car"
     ),
