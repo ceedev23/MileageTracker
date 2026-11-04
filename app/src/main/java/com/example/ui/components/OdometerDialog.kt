@@ -190,7 +190,7 @@ fun OdometerDialog(
     val deltaKm = enteredKm?.let { Odometer.tripKm(latest?.readingKm, it) }
 
     deleteReadingId?.let { id ->
-        AlertDialog(onDismissRequest = { if (!busy) deleteReadingId = null },
+        StyledAlertDialog(onDismissRequest = { if (!busy) deleteReadingId = null },
             title = { Text("Delete odometer reading?") },
             text = { Text("This removes the saved reading and its local photo. Existing trip records will remain.") },
             confirmButton = { TextButton(enabled = !busy, onClick = {
