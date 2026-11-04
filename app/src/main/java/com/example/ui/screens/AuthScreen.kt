@@ -373,7 +373,7 @@ private fun WelcomeLandingView(
                             contentScale = ContentScale.Crop
                         )
                         Text(
-                            text = "MileageTracker",
+                            text = "VoomLogs",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -587,7 +587,7 @@ private fun SignInFormView(
                                 contentScale = ContentScale.Crop
                             )
                             Text(
-                                text = "MileageTracker",
+                                text = "VoomLogs",
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NavyDark
@@ -622,7 +622,7 @@ private fun SignInFormView(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_asset),
-                            contentDescription = "MileageTracker Logo",
+                            contentDescription = "VoomLogs Logo",
                             modifier = Modifier
                                 .size(50.dp)
                                 .clip(CircleShape)
@@ -1185,7 +1185,7 @@ private fun SignUpFormView(
                                 contentScale = ContentScale.Crop
                             )
                             Text(
-                                text = "MileageTracker",
+                                text = "VoomLogs",
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NavyDark
@@ -1220,7 +1220,7 @@ private fun SignUpFormView(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.ic_launcher_asset),
-                            contentDescription = "MileageTracker Logo",
+                            contentDescription = "VoomLogs Logo",
                             modifier = Modifier
                                 .size(50.dp)
                                 .clip(CircleShape)
