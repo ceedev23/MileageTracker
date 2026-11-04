@@ -86,6 +86,7 @@ fun TripsScreen(
 
     var tripToEdit by remember { mutableStateOf<TripEntity?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showTimelineImport by remember { mutableStateOf(false) }
     var tripToDelete by remember { mutableStateOf<TripEntity?>(null) }
 
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -111,6 +112,10 @@ fun TripsScreen(
         TripFilter.UNCLASSIFIED -> unclassified
         TripFilter.BUSINESS -> businessTrips
         TripFilter.PERSONAL -> personalTrips
+    }
+
+    if (showTimelineImport) {
+        GoogleTimelineImportDialog(viewModel = viewModel, onDismiss = { showTimelineImport = false })
     }
 
     Scaffold(
@@ -142,6 +147,11 @@ fun TripsScreen(
                     .fillMaxSize()
                     .padding(top = 16.dp)
             ) {
+                OutlinedButton(
+                    onClick = { showTimelineImport = true },
+                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
+                ) { Text("Import Google Maps Timeline trips") }
+
                 // Top Summary Card
                 Surface(
                     modifier = Modifier
