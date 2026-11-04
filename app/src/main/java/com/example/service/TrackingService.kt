@@ -93,7 +93,7 @@ class TrackingService : Service() {
                 TrackingManager.noteMonitoring()
                 wasTracking = false
                 val notification = buildNotification(
-                    title = "MileageTracker • Motion Detection Active",
+                    title = "VoomLogs • Motion Detection Active",
                     text = "Monitoring driving movement & GPS to auto-record trips",
                     alert = true
                 )
@@ -182,7 +182,7 @@ class TrackingService : Service() {
                 "Trip Tracking",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Shows the current trip while MileageTracker is recording or watching for a drive"
+                description = "Shows the current trip while VoomLogs is recording or watching for a drive"
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -235,11 +235,11 @@ class TrackingService : Service() {
             currentTripText(state.distanceKm, state.speedKmh)
         } else if (state.isMonitoringMovement) {
             Pair(
-                "MileageTracker • Auto-Detect Active",
+                "VoomLogs • Auto-Detect Active",
                 if (state.speedKmh > 3f) "Movement detected (${state.speedKmh.toInt()} km/h)..." else "Monitoring for vehicle movement"
             )
         } else {
-            Pair("MileageTracker", "Ready to track")
+            Pair("VoomLogs", "Ready to track")
         }
 
         val identity = "${state.isTracking}:${state.isMonitoringMovement}:${state.detectorState}:${state.tripStartedAtMs}"
