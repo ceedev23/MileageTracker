@@ -34,7 +34,7 @@ object LegalCopy {
     private val terms = listOf(
         LegalSection(
             "The service",
-            "MileageTracker records drives, fuel receipts, and a mileage estimate for your own records. " +
+            "VoomLogs records drives, fuel receipts, and a mileage estimate for your own records. " +
                 "These terms cover the app on your phone, whether you continue as a guest or create an account."
         ),
         LegalSection(
@@ -66,7 +66,7 @@ object LegalCopy {
             "Estimates, not tax advice",
             "Distances, reimbursement amounts, and report totals are estimates from the trips you keep and the rate you set. " +
                 "A preset labeled with a year, such as a CRA or IRS figure, can be wrong for your situation. " +
-                "MileageTracker does not file taxes, does not guarantee a deduction, and is not a substitute for your records or a tax professional."
+                "VoomLogs does not file taxes, does not guarantee a deduction, and is not a substitute for your records or a tax professional."
         ),
         LegalSection(
             "Acceptable use",
@@ -92,7 +92,7 @@ object LegalCopy {
     private val privacy = listOf(
         LegalSection(
             "What this covers",
-            "This policy describes what MileageTracker stores on your phone and, if you sign in, what is backed up with your account. " +
+            "This policy describes what VoomLogs stores on your phone and, if you sign in, what is backed up with your account. " +
                 "It describes this version of the app."
         ),
         LegalSection(
@@ -151,7 +151,7 @@ object LegalCopy {
         ),
         LegalSection(
             "Children",
-            "MileageTracker is not directed at children under 13, and we do not knowingly create accounts for them."
+            "VoomLogs is not directed at children under 13, and we do not knowingly create accounts for them."
         ),
         LegalSection(
             "Changes",
@@ -162,7 +162,7 @@ object LegalCopy {
     // Draft disclosures: confirm operator identity, contact details, billing configuration,
     // storage practices and jurisdiction-specific consumer rights before publication.
     private val refunds = listOf(
-        LegalSection("Current availability", "This version does not offer a paid subscription or in-app purchase. No subscription refund is available for a charge that MileageTracker did not collect."),
+        LegalSection("Current availability", "This version does not offer a paid subscription or in-app purchase. No subscription refund is available for a charge that VoomLogs did not collect."),
         LegalSection("Future paid plans", "Before paid plans launch, the checkout must disclose the price, renewal interval, cancellation method, refund eligibility, and applicable taxes. This policy must be updated before any paid purchase is accepted."),
         LegalSection("App store purchases", "If a future purchase is billed by Apple or Google, request a refund through the applicable store, subject to its rules and your legal rights."),
         LegalSection("Consumer rights", "Nothing here limits refund or cancellation rights that cannot lawfully be waived.")
@@ -186,7 +186,7 @@ object LegalCopy {
         LegalSection("Sharing", "Signed-in trips may be synced to Supabase. Device geocoding providers may process coordinates to resolve addresses. We do not sell route information.")
     )
     private val acceptable = listOf(
-        LegalSection("Permitted use", "Use MileageTracker to maintain records of journeys you are authorized to record."),
+        LegalSection("Permitted use", "Use VoomLogs to maintain records of journeys you are authorized to record."),
         LegalSection("Prohibited conduct", "Do not access other accounts, interfere with the service, submit malicious content, abuse infrastructure or use location tracking to stalk or surveil another person unlawfully."),
         LegalSection("Accuracy and integrity", "You are responsible for reviewing manually entered mileage, receipts, trip categories and submitted reports."),
         LegalSection("Enforcement", "We may restrict access for serious misuse, subject to applicable law.")
@@ -206,6 +206,6 @@ object LegalCopy {
         LegalSection("Trip accuracy", "GPS signals, background restrictions, battery settings, tunnels and device conditions can cause missing or inaccurate drives. Verify trip records before relying on them."),
         LegalSection("Odometer and receipts", "Camera-based readings and receipt recognition can contain errors. Review and correct extracted values."),
         LegalSection("Taxes and reimbursement", "Mileage rates and totals are estimates, not accounting, legal or tax advice. Eligibility and recordkeeping rules differ by country, employer and circumstances."),
-        LegalSection("No guaranteed outcome", "MileageTracker does not guarantee a tax deduction, reimbursement, audit acceptance or uninterrupted availability. Statutory consumer protections remain unaffected.")
+        LegalSection("No guaranteed outcome", "VoomLogs does not guarantee a tax deduction, reimbursement, audit acceptance or uninterrupted availability. Statutory consumer protections remain unaffected.")
     )
 }
