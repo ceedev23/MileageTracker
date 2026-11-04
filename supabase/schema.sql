@@ -84,13 +84,8 @@ CREATE POLICY "Authenticated users can manage their trips"
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
--- Allow anonymous access for guest drivers or when user_id is null
-CREATE POLICY "Anon users can access unassigned trips"
-    ON public.trips
-    FOR ALL
-    TO anon
-    USING (user_id IS NULL OR user_id = auth.uid())
-    WITH CHECK (user_id IS NULL OR user_id = auth.uid());
+-- Guest trips remain on-device. Never expose unassigned trips to anon.
+DROP POLICY IF EXISTS "Anon users can access unassigned trips" ON public.trips;
 
 -- Gas Receipts Policies:
 CREATE POLICY "Authenticated users can manage their gas receipts"
@@ -114,3 +109,16 @@ CREATE POLICY "Users can manage their own settings"
 -- Enable Supabase Realtime for instant synchronization across devices
 ALTER PUBLICATION supabase_realtime ADD TABLE public.trips;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.gas_receipts;
+
+-- Least-privilege grants: TRUNCATE bypasses RLS and must not be granted.
+REVOKE ALL PRIVILEGES ON public.trips, public.gas_receipts, public.user_settings FROM anon;
+REVOKE TRUNCATE, REFERENCES, TRIGGER ON public.trips, public.gas_receipts, public.user_settings FROM authenticated;
+
+-- Internal DDL event-trigger function must not be callable through the API.
+-- This function is installed separately; guard for new database setup.
+DO $$
+BEGIN
+  IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL THEN
+    REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+  END IF;
+END $$;
