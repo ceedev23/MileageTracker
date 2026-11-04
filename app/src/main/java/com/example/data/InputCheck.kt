@@ -109,7 +109,7 @@ object InputCheck {
         if (unit == "km" || unit == "mi") unit else null
 
     fun odometerSource(source: String): String? =
-        if (source == "manual" || source == "bluetooth") source else null
+        if (source == "manual" || source == "bluetooth" || source == "camera") source else null
 
     fun receiptDate(raw: String): String? {
         val clean = raw.trim()
