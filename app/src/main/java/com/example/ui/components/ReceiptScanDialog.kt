@@ -158,10 +158,10 @@ fun ReceiptScanDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(30.dp))
                 .testTag("receipt_scan_dialog"),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
+            color = Color.White,
+            shadowElevation = 12.dp
         ) {
             Column(
                 modifier = Modifier
