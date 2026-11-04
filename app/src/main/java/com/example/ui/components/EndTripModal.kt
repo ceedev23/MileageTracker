@@ -91,7 +91,7 @@ fun EndTripBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = Color.White,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
         dragHandle = {
             Surface(
                 modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
