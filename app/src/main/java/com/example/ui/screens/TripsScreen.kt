@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.StyledAlertDialog
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -350,7 +352,7 @@ fun TripsScreen(
     }
 
     if (showShifts) {
-        AlertDialog(onDismissRequest = { showShifts = false }, title = { Text("Suggested shifts") },
+        StyledAlertDialog(onDismissRequest = { showShifts = false }, title = { Text("Suggested shifts") },
             text = {
                 LazyColumn(Modifier.height(320.dp)) {
                     item { Text("Same vehicle, breaks up to 4 hours, maximum 16 hours. Review selected trips before applying.") }
@@ -368,7 +370,7 @@ fun TripsScreen(
             }, confirmButton = { TextButton(onClick = { showShifts = false }) { Text("Close") } })
     }
     bulkType?.let { type ->
-        AlertDialog(onDismissRequest = { if (!bulkBusy) bulkType = null },
+        StyledAlertDialog(onDismissRequest = { if (!bulkBusy) bulkType = null },
             title = { Text("Mark ${selectedIds.size} trips $type?") },
             text = { Text("This replaces the classification of every selected trip. Individual trip records stay separate.") },
             confirmButton = { TextButton(enabled = !bulkBusy, onClick = {
@@ -405,7 +407,7 @@ fun TripsScreen(
         } else {
             String.format(Locale.getDefault(), "%.1f km", target.distanceKm)
         }
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { tripToDelete = null },
             title = {
                 Text(
