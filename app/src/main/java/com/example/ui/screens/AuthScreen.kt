@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.StyledAlertDialog
+
 import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -149,7 +151,7 @@ fun AuthScreen(
     }
 
     if (countryDestination != null) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { countryDestination = null },
             title = { Text("Choose your tax country") },
             text = { Text("Canada defaults to kilometres; United States defaults to miles. You can change your country and distance unit in Settings.") },
@@ -945,7 +947,7 @@ private fun SignInFormView(
 
     // Social Provider Information Dialog
     if (showSocialDialog) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { showSocialDialog = false },
             title = { Text(text = "$socialDialogProvider Sign In", fontWeight = FontWeight.Bold) },
             text = {
@@ -976,7 +978,7 @@ private fun SignInFormView(
         var resetError by remember { mutableStateOf<String?>(null) }
         var isResetting by remember { mutableStateOf(false) }
 
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { if (!isResetting) showForgotDialog = false },
             title = { Text(text = "Reset Password", fontWeight = FontWeight.Bold) },
             text = {
@@ -1058,7 +1060,7 @@ private fun SignInFormView(
     }
 
     if (showResetSentAlert) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { showResetSentAlert = false },
             title = { Text("Reset Link Sent", fontWeight = FontWeight.Bold) },
             text = {
@@ -1596,7 +1598,7 @@ private fun SignUpFormView(
 
     // Social Provider Information Dialog
     if (showSocialDialog) {
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { showSocialDialog = false },
             title = { Text(text = "$socialDialogProvider Sign Up", fontWeight = FontWeight.Bold) },
             text = {
