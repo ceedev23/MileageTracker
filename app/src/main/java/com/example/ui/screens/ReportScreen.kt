@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.ui.components.StyledAlertDialog
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -479,14 +481,14 @@ fun ReportScreen(
     }
 
     exportState.error?.let { message ->
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { viewModel.dismissReportExport() },
             title = { Text("Export not shared") }, text = { Text(message) },
             confirmButton = { Button(onClick = { viewModel.dismissReportExport() }) { Text("Close") } }
         )
     }
     exportState.bundle?.let { bundle ->
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { viewModel.dismissReportExport() },
             title = { Text(if (bundle.missingPhotos.isEmpty()) "Review export" else "Photos missing from export") },
             text = {
@@ -509,7 +511,7 @@ fun ReportScreen(
     if (showCsvPreview) {
         val snapshot = previewSnapshot ?: reportSnapshot
         val previewData = "TRIPS\n" + AccountantReportExporter.tripCsv(snapshot) + "\nFUEL EXPENSES\n" + AccountantReportExporter.expenseCsv(snapshot) + "\nODOMETER READINGS\n" + AccountantReportExporter.odometerCsv(snapshot)
-        AlertDialog(
+        StyledAlertDialog(
             onDismissRequest = { showCsvPreview = false },
             title = { Text("${snapshot.period.label}: Export Preview") },
             text = {
