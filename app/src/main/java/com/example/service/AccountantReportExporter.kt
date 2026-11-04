@@ -217,7 +217,7 @@ object AccountantReportExporter {
                 entry("odometer_readings.csv", odometerCsv(snapshot))
                 entry("missing_photos.csv", "Receipt ID,Issue\r\n" + missing.joinToString("") { "${it.receiptId},${text(it.reason)}\r\n" })
                 entry("README.txt", """
-                    MileageTracker accountant export
+                    VoomLogs accountant export
                     Period: ${snapshot.period.label}
                     Generated (UTC): ${date(snapshot.createdAt, "UTC")}
                     Record dates use timezone: ${snapshot.timeZoneId}
