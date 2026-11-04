@@ -365,7 +365,6 @@ fun OdometerDialog(
                     Text(it, color = if (messageIsError) StopRed else SlateTextSecondary, fontSize = 13.sp)
                 }
             }
-        },
           Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { dismiss() }, enabled = !busy, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE4E8EF), contentColor = Color(0xFF091638))) {
               Text("Cancel", fontWeight = FontWeight.Bold)
