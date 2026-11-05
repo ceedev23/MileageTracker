@@ -51,6 +51,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -78,6 +79,7 @@ import com.example.ui.screens.TripsScreen
 import com.example.ui.theme.MileageBlue
 import com.example.ui.theme.MileageBlueContainer
 import com.example.ui.theme.MyApplicationTheme
+import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : ComponentActivity() {
   private val viewModel: MileageViewModel by viewModels()

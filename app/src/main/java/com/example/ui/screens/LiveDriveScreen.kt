@@ -192,7 +192,6 @@ fun LiveDriveScreen(
             // Tracking status stays above the centered map.
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 10.dp)
