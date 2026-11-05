@@ -366,6 +366,16 @@ fun SettingsScreen(
             }
         }
 
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                GoogleMapsTripImport(viewModel)
+            }
+        }
+
         SettingsSectionHeading("Tracking")
 
         // Automatic Detection Section
