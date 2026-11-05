@@ -33,7 +33,7 @@ fun GoogleMapsTripImport(viewModel: MileageViewModel) {
             try {
                 val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {
                     it.readText()
-                } ?: error("Unable to open the selected file")
+                } ?: throw IllegalStateException("Unable to open the selected file")
                 val parsed = parseGoogleTimelineTrips(content)
                 candidates = parsed.distinctBy { Pair(it.startDate, it.endDate) }
                     .filterNot { candidate ->
