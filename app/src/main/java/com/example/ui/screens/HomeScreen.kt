@@ -614,9 +614,9 @@ fun HomeScreen(
                                                     modifier = Modifier
                                                         .size(8.dp)
                                                         .clip(CircleShape)
-                                                        .alpha(if (trackingState.isMoving) pulseAlpha else 1.0f)
+                                                        .alpha(if (trackingState.showsLiveDrive()) pulseAlpha else 1.0f)
                                                         .background(
-                                                            if (trackingState.isMoving) {
+                                                            if (trackingState.showsLiveDrive()) {
                                                                 Color(0xFF1D63FF)
                                                             } else {
                                                                 Color(0xFF94A3B8)
@@ -624,7 +624,7 @@ fun HomeScreen(
                                                         )
                                                 )
                                                 Text(
-                                                    text = if (trackingState.isMoving) {
+                                                    text = if (trackingState.showsLiveDrive()) {
                                                         "Tracking is on"
                                                     } else {
                                                         "Tracking is off"
