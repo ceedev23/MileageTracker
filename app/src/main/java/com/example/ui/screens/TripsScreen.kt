@@ -242,9 +242,9 @@ fun TripsScreen(
 
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { selectMode = !selectMode; selectedIds = emptySet() }, enabled = !bulkBusy) {
-                        Text(if (selectMode) "Cancel selection" else "Select trips")
+                        Text(if (selectMode) "Cancel selection" else "Select multiple")
                     }
-                    TextButton(onClick = { showShifts = true }, enabled = !bulkBusy && trips.isNotEmpty()) { Text("Select shift") }
+                    TextButton(onClick = { showShifts = true }, enabled = !bulkBusy && trips.isNotEmpty()) { Text("Select work shift") }
                     if (selectMode) TextButton(onClick = { selectedIds = filteredTrips.map { it.id }.toSet() }, enabled = !bulkBusy) { Text("Select visible") }
                 }
                 if (selectedIds.isNotEmpty()) {
@@ -365,7 +365,7 @@ fun TripsScreen(
         StyledAlertDialog(onDismissRequest = { showShifts = false }, title = { Text("Suggested shifts") },
             text = {
                 LazyColumn(Modifier.height(320.dp)) {
-                    item { Text("Same vehicle, breaks up to 4 hours, maximum 16 hours. Review selected trips before applying.") }
+                    item { Text("Suggested groups use the same vehicle, breaks up to 4 hours, and a maximum duration of 16 hours. They do not verify working hours. Review selected trips before applying.") }
                     items(com.example.service.TripShifts.group(trips)) { shift ->
                         TextButton(onClick = {
                             selectedIds = shift.trips.map { it.id }.toSet()
@@ -373,7 +373,10 @@ fun TripsScreen(
                             selectMode = true; showShifts = false
                         }) {
                             val format = java.text.SimpleDateFormat("MMM d HH:mm", Locale.getDefault())
-                            Text("${format.format(java.util.Date(shift.start))} – ${format.format(java.util.Date(shift.end))} · ${shift.trips.size} trips · ${shift.trips.first().vehicle.orEmpty()}")
+                            val distanceKm = shift.trips.sumOf { it.distanceKm }
+                            val distance = if (isMiles) distanceKm * 0.621371 else distanceKm
+                            val personalCount = shift.trips.count { it.type == "Personal" }
+                            Text("${format.format(java.util.Date(shift.start))} – ${format.format(java.util.Date(shift.end))} · ${shift.trips.size} trips · ${String.format(Locale.getDefault(), "%.1f", distance)} $unitLabel · ${shift.trips.first().vehicle.orEmpty()}${if (personalCount > 0) " · $personalCount personal (review)" else ""}")
                         }
                     }
                 }
@@ -382,7 +385,11 @@ fun TripsScreen(
     bulkType?.let { type ->
         StyledAlertDialog(onDismissRequest = { if (!bulkBusy) bulkType = null },
             title = { Text("Mark ${selectedIds.size} trips $type?") },
-            text = { Text("This replaces the classification of every selected trip. Individual trip records stay separate.") },
+            text = {
+                val personalCount = trips.count { it.id in selectedIds && it.type == "Personal" }
+                Text("This replaces the classification of every selected trip. Individual trip records stay separate." +
+                    if (personalCount > 0) "\\n\\nWarning: $personalCount selected trip(s) are currently Personal. Deselect any trips you do not want to change before applying." else "")
+            },
             confirmButton = { TextButton(enabled = !bulkBusy, onClick = {
                 bulkBusy = true
                 viewModel.classifyTrips(selectedIds, type) { result ->
