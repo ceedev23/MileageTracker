@@ -388,7 +388,7 @@ fun TripsScreen(
             text = {
                 val personalCount = trips.count { it.id in selectedIds && it.type == "Personal" }
                 Text("This replaces the classification of every selected trip. Individual trip records stay separate." +
-                    if (personalCount > 0) "\\n\\nWarning: $personalCount selected trip(s) are currently Personal. Deselect any trips you do not want to change before applying." else "")
+                    if (personalCount > 0) "\n\nWarning: $personalCount selected trip(s) are currently Personal. Deselect any trips you do not want to change before applying." else "")
             },
             confirmButton = { TextButton(enabled = !bulkBusy, onClick = {
                 bulkBusy = true
