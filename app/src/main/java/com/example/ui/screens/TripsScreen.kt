@@ -152,6 +152,12 @@ fun TripsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
                 ) { Text("Import Google Maps Timeline trips") }
 
+                Text(
+                    text = "Give every trip a purpose.",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
                 // Top Summary Card
                 Surface(
                     modifier = Modifier
@@ -183,7 +189,7 @@ fun TripsScreen(
                                 color = SlateTextMuted
                             )
                             Text(
-                                text = "${unclassified.size} to classify",
+                                text = "Needs review (${unclassified.size})",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (unclassified.isNotEmpty()) Color(0xFFD97706) else SlateTextSecondary
@@ -217,7 +223,7 @@ fun TripsScreen(
                         FilterChip(
                             selected = activeFilter == TripFilter.UNCLASSIFIED,
                             onClick = { viewModel.setFilter(TripFilter.UNCLASSIFIED) },
-                            label = { Text("To Classify (${unclassified.size})") },
+                            label = { Text("Needs review (${unclassified.size})") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = UnclassifiedBg,
                                 selectedLabelColor = UnclassifiedAmber

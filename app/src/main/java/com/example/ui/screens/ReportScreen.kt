@@ -121,7 +121,7 @@ fun ReportScreen(
         // Header
         Column {
             Text(
-                text = "Tax & Mileage Report",
+                text = "Mileage report",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = SlateTextPrimary

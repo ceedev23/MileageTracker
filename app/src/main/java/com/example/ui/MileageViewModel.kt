@@ -66,13 +66,13 @@ enum class AppTab(val label: String) {
     HOME("Home"),
     TRIPS("Trips"),
     RECEIPTS("Gas Receipts"),
-    REPORT("Report"),
+    REPORT("Reports"),
     SETTINGS("Settings")
 }
 
 enum class TripFilter(val label: String) {
     ALL("All"),
-    UNCLASSIFIED("To Classify"),
+    UNCLASSIFIED("Needs review"),
     BUSINESS("Business"),
     PERSONAL("Personal")
 }
