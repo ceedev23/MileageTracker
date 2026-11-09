@@ -245,18 +245,6 @@ fun SettingsScreen(
             }
         }
 
-        if (profile != null && !profile.isGuest) {
-            OutlinedButton(
-                onClick = { accountDeleteError = null; showDeleteAccountDialog = true },
-                modifier = Modifier.fillMaxWidth().testTag("settings_delete_account")
-            ) {
-                Text("Close / Delete Account", color = StopRed)
-            }
-        }
-        accountDeleteError?.let { message ->
-            Text(message, color = StopRed, style = MaterialTheme.typography.bodySmall)
-        }
-
         val syncState by viewModel.supabaseSyncState.collectAsState()
         val signedIn = profile != null && !profile.isGuest
         val backupAvailable = syncState.status != SyncStatus.NOT_CONFIGURED
@@ -701,45 +689,6 @@ fun SettingsScreen(
 
         SettingsSectionHeading("Data & privacy")
 
-        // Data Management Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Your data",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = SlateTextPrimary
-                )
-
-                Text(
-                    text = "Remove every trip saved on this device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SlateTextSecondary
-                )
-
-                Button(
-                    onClick = { showClearDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = StopRed,
-                        contentColor = Color.White
-                    ),
-                    elevation = null
-                ) {
-                    Text("Clear all trips", fontSize = 13.sp, color = Color.White)
-                }
-            }
-        }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -781,6 +730,58 @@ fun SettingsScreen(
                         tag = tag,
                         onClick = { legalDoc = doc }
                     )
+                }
+            }
+        }
+
+        // Data Management Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Your data",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = SlateTextPrimary
+                )
+
+                Text(
+                    text = "Remove every trip saved on this device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SlateTextSecondary
+                )
+
+                Button(
+                    onClick = { showClearDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StopRed,
+                        contentColor = Color.White
+                    ),
+                    elevation = null
+                ) {
+                    Text("Clear all trips", fontSize = 13.sp, color = Color.White)
+                }
+
+                if (profile != null && !profile.isGuest) {
+                    OutlinedButton(
+                        onClick = { accountDeleteError = null; showDeleteAccountDialog = true },
+                        modifier = Modifier.fillMaxWidth().testTag("settings_delete_account")
+                    ) {
+                        Text("Close / Delete Account", color = StopRed)
+                    }
+                }
+                accountDeleteError?.let { message ->
+                    Text(message, color = StopRed, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
