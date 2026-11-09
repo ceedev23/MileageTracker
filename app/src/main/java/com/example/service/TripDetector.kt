@@ -151,16 +151,10 @@ class TripDetector(
     }
 
     fun checkDwellTimeout(now: Long = System.currentTimeMillis()): ActiveTrip? {
-        if (state == DetectorState.RECORDING) {
-            val trip = currentTrip ?: return null
-            val dwellMs = dwellMinutes * 60 * 1000L
-            val lastTime = trip.lastPoint?.timestamp ?: trip.startTime
-            val stopped = stoppedSince ?: (if (now - lastTime >= dwellMs) lastTime else null)
-            if (stopped != null && (now - stopped) >= dwellMs) {
-                return endTrip()
-            }
-        }
-        return null
+        if (state != DetectorState.RECORDING) return null
+        val stopped = stoppedSince ?: return null
+        val dwellMs = dwellMinutes * 60 * 1000L
+        return if (now - stopped >= dwellMs) endTrip() else null
     }
 
     fun endTrip(): ActiveTrip? {

@@ -123,6 +123,36 @@ class TripDwellEndTripTest {
     }
 
     @Test
+    fun changingDwellDuringAStopUsesTheNewDelay() {
+        var tripsEnded = 0
+        val detector = TripDetector(
+            dwellMinutes = 5,
+            onTripStarted = {},
+            onTripUpdated = {},
+            onTripEnded = { tripsEnded++ },
+            onTripDiscarded = {}
+        )
+        val start = 1_000_000L
+        detector.processPoint(LatLngPoint(37.7749, -122.4194, timestamp = start, speedKmh = 25f))
+        val lastMoving = start + 30_000L
+        detector.processPoint(LatLngPoint(37.7840, -122.4194, timestamp = lastMoving, speedKmh = 30f))
+        assertEquals(DetectorState.RECORDING, detector.state)
+
+        detector.updateDwellMinutes(2)
+        assertNull(detector.checkDwellTimeout(lastMoving + 120_000L))
+
+        val stop = lastMoving + 121_000L
+        detector.processPoint(LatLngPoint(37.7840, -122.4194, timestamp = stop, speedKmh = 0f))
+        detector.updateDwellMinutes(6)
+        assertNull(detector.checkDwellTimeout(stop + 120_000L))
+
+        detector.updateDwellMinutes(3)
+        assertNull(detector.checkDwellTimeout(stop + 179_999L))
+        assertEquals(stop, detector.checkDwellTimeout(stop + 180_000L)?.endTime)
+        assertEquals(1, tripsEnded)
+    }
+
+    @Test
     fun testStoppedTripShowsOnHomeScreenForClassification() {
         // Set dwell delay to 2 minutes
         viewModel.changeDwell(-3) // 5 - 3 = 2 min

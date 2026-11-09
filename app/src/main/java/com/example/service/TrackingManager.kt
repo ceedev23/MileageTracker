@@ -510,11 +510,13 @@ object TrackingManager {
         checkpointActiveTrip()
     }
 
+    @Synchronized
     fun setDwellMinutes(minutes: Int) {
         currentDwellMinutes = minutes.coerceIn(1, 30)
         tripDetector?.updateDwellMinutes(currentDwellMinutes)
     }
 
+    @Synchronized
     fun getDwellMinutes(): Int = tripDetector?.dwellMinutes ?: currentDwellMinutes
 
     private fun startTimer() {
