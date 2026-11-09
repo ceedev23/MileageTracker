@@ -10,6 +10,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
@@ -61,6 +63,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,7 +83,6 @@ import com.example.ui.screens.TripsScreen
 import com.example.ui.theme.MileageBlue
 import com.example.ui.theme.MileageBlueContainer
 import com.example.ui.theme.MyApplicationTheme
-import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : ComponentActivity() {
   private val viewModel: MileageViewModel by viewModels()
@@ -93,7 +96,21 @@ class MainActivity : ComponentActivity() {
     )
     setContent {
       MyApplicationTheme {
-        MileageTrackerApp(viewModel = viewModel)
+        val isStarting by viewModel.isStarting.collectAsState()
+        if (isStarting) {
+          Box(
+            modifier = Modifier.fillMaxSize().background(colorResource(R.color.splash_blue)),
+            contentAlignment = Alignment.Center
+          ) {
+            Image(
+              painter = painterResource(R.drawable.ic_splash_road),
+              contentDescription = "Loading VoomLogs",
+              modifier = Modifier.size(320.dp)
+            )
+          }
+        } else {
+          MileageTrackerApp(viewModel = viewModel)
+        }
       }
     }
   }

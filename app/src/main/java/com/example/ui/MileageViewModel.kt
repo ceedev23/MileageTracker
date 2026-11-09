@@ -155,6 +155,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     private val _justCompletedTrip = MutableStateFlow<TripEntity?>(null)
     val justCompletedTrip: StateFlow<TripEntity?> = _justCompletedTrip.asStateFlow()
 
+    private val _isStarting = MutableStateFlow(true)
+    val isStarting: StateFlow<Boolean> = _isStarting.asStateFlow()
+
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
 
@@ -491,15 +494,19 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
-            val existing = supabaseConfig.getSession()
-            val fresh = supabaseClient.ensureFreshSession()
-            when {
-                fresh != null -> showSignedIn(fresh)
-                existing != null && supabaseConfig.getSession() != null -> showSignedIn(existing)
-                existing != null -> {
-                    _isAuthPromptVisible.value = true
-                    _authUiState.value = AuthUiState(errorMessage = "Your session expired. Sign in again.")
+            try {
+                val existing = supabaseConfig.getSession()
+                val fresh = supabaseClient.ensureFreshSession()
+                when {
+                    fresh != null -> showSignedIn(fresh)
+                    existing != null && supabaseConfig.getSession() != null -> showSignedIn(existing)
+                    existing != null -> {
+                        _isAuthPromptVisible.value = true
+                        _authUiState.value = AuthUiState(errorMessage = "Your session expired. Sign in again.")
+                    }
                 }
+            } finally {
+                _isStarting.value = false
             }
             if (supabaseConfig.isConfigured()) {
                 supabaseSyncManager.syncAll()
