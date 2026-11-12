@@ -149,14 +149,14 @@ object AccountantReportExporter {
         val years = (snapshot.trips.map { Calendar.getInstance(zone).apply { timeInMillis = it.startDate }.get(Calendar.YEAR) } +
             snapshot.odometerReadings.map { Calendar.getInstance(zone).apply { timeInMillis = it.recordedAt }.get(Calendar.YEAR) })
             .distinct().sorted()
-        val out = StringBuilder("Tax year,Vehicle,First saved odometer km,Last saved odometer km,Observed change km,Business trip km,Unclassified trips,Year boundary readings verified\\r\\n")
+        val out = StringBuilder("Tax year,Vehicle,First saved odometer km,Last saved odometer km,Observed change km,Business trip km,Unclassified trips,Year boundary readings verified\r\n")
         for (year in years) {
             for (item in CraAnnualLogbook.summarize(year, snapshot.odometerReadings, snapshot.trips, zone)) {
                 out.append(listOf(year.toString(), text(item.vehicle), item.openingKm?.toString().orEmpty(),
                     item.closingKm?.toString().orEmpty(), item.totalKm?.toString().orEmpty(),
                     item.businessKm.toString(), item.unclassifiedTrips.toString(),
                     if (item.completeYearBoundaries) "Readings on Jan 1 and Dec 31; verify" else "No - incomplete evidence"
-                ).joinToString(",")).append("\\r\\n")
+                ).joinToString(",")).append("\r\n")
             }
         }
         return out.toString()
