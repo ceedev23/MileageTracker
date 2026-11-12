@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
             Image(
               painter = painterResource(R.drawable.ic_splash_road),
               contentDescription = "Loading VoomLogs",
-              modifier = Modifier.size(320.dp)
+              modifier = Modifier.size(120.dp)
             )
           }
         } else {
