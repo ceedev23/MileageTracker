@@ -143,6 +143,37 @@ object AccountantReportExporter {
         }
     }
 
+    /** Diagnostic only: discrepancies are never added to tax-reportable trips. */
+    fun odometerReconciliationCsv(snapshot: ReportSnapshot): String = buildString {
+        append("Vehicle,From,To,Odometer KM,Recorded Trip KM,Unexplained KM,Status\\r\\n")
+        for ((vehicle, readings) in snapshot.odometerReadings.groupBy { it.vehicle }) {
+            val ordered = readings.sortedWith(compareBy<OdometerReadingEntity> { it.recordedAt }.thenBy { it.id })
+            for (index in 1 until ordered.size) {
+                val from = ordered[index - 1]
+                val to = ordered[index]
+                val delta = to.readingKm - from.readingKm
+                val matching = snapshot.trips.filter {
+                    (it.vehicle == vehicle || it.vehicle.isNullOrBlank()) &&
+                        it.endDate > from.recordedAt && it.startDate < to.recordedAt
+                }
+                val crossing = matching.any { it.startDate < from.recordedAt || it.endDate > to.recordedAt }
+                val logged = matching.sumOf { it.distanceKm }
+                val gap = delta - logged
+                val status = when {
+                    delta < 0 -> "Odometer decreased - review"
+                    crossing -> "Trip crosses interval - review"
+                    gap < -0.1 -> "Recorded trips exceed odometer - review"
+                    gap > 0.1 -> "Unexplained distance - not a business trip"
+                    else -> "Reconciled"
+                }
+                append(listOf(text(vehicle), text(date(from.recordedAt, snapshot.timeZoneId)),
+                    text(date(to.recordedAt, snapshot.timeZoneId)), number(delta),
+                    number(logged), number(gap), text(status)).joinToString(","))
+                append("\\r\\n")
+            }
+        }
+    }
+
     fun expenseCsv(snapshot: ReportSnapshot, photoStatuses: Map<Long, String>? = null): String = buildString {
         append("Receipt ID,Receipt Date,Date Source,Saved At,Merchant,Total Amount,Currency as Recorded,Fuel Type,Volume,Volume Unit,Price/Unit,Payment Method,Linked Trip ID,Linked Trip in Export,Image File,Image Status\r\n")
         val tripIds = snapshot.trips.map { it.id }.toSet()
@@ -215,6 +246,7 @@ object AccountantReportExporter {
                 entry("trips.csv", tripCsv(snapshot))
                 entry("fuel_expenses.csv", expenseCsv(snapshot, statuses))
                 entry("odometer_readings.csv", odometerCsv(snapshot))
+                entry("odometer_reconciliation.csv", odometerReconciliationCsv(snapshot))
                 entry("missing_photos.csv", "Receipt ID,Issue\r\n" + missing.joinToString("") { "${it.receiptId},${text(it.reason)}\r\n" })
                 entry("README.txt", """
                     VoomLogs accountant export
@@ -229,6 +261,9 @@ object AccountantReportExporter {
 
                     trips.csv, fuel_expenses.csv and odometer_readings.csv contain selected records.
                     Odometer readings are vehicle totals, not trip distances.
+                    odometer_reconciliation.csv identifies unexplained differences for review;
+                    these differences are NOT business trips or tax deductions.
+                    Only intervals with both readings inside the selected period are assessed.
                     Each included image is linked by receipt ID in fuel_expenses.csv.
                     Check missing_photos.csv before relying on this package as complete evidence.
                     Photos missing from this device are not fetched automatically during export.
