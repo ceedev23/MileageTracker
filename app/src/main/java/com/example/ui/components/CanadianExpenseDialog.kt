@@ -43,6 +43,11 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
     var checked by remember(vehicle, year, fields) { mutableStateOf(false) }
     var exportText by remember { mutableStateOf("") }
     var showGuidance by remember { mutableStateOf(false) }
+    var operatingItc by remember(vehicle, year) { mutableStateOf("") }
+    var directItc by remember(vehicle, year) { mutableStateOf("") }
+    var verifiedCca by remember(vehicle, year) { mutableStateOf("") }
+    var ccaBasis by remember(vehicle, year) { mutableStateOf("") }
+    var ownershipReviewed by remember(vehicle, year) { mutableStateOf(false) }
     var showOdometerHistory by remember { mutableStateOf(false) }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
@@ -65,7 +70,17 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
         return VehicleExpenseEntity(vehicle, year.toIntOrNull() ?: error("Enter a valid year"),
             values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7], values[8], values[9])
     }
-    val calculation = runCatching { val e = expense(); e to CanadianVehicleExpenses.calculate(e, trips) }
+    val calculation = runCatching {
+        val e = expense()
+        fun amount(raw: String) = if (raw.isBlank()) 0.0 else raw.toDoubleOrNull() ?: error("Enter a valid tax adjustment")
+        val adjustments = com.example.service.CanadianTaxAdjustments(
+            operatingItcCad = amount(operatingItc), directExpenseItcCad = amount(directItc),
+            verifiedCcaClaimCad = amount(verifiedCca), ccaClassAndBasis = ccaBasis,
+            ownershipPeriodReviewed = ownershipReviewed
+        )
+        Triple(e, CanadianVehicleExpenses.calculate(e, trips),
+            com.example.service.CanadianTaxWorksheet.calculate(e, trips, adjustments))
+    }
     StyledAlertDialog(onDismissRequest = { if (!busy) onDismiss() }, title = { Text("Canadian vehicle expenses") },
         text = {
             Column(Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -99,18 +114,34 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                         fields = fields.toMutableList().also { it[i] = value.take(16) }; message = null
                     }, label = { Text(label) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 }
+                Text("T2125 adjustments (CAD)", style = MaterialTheme.typography.titleSmall)
+                Text("Enter only GST/HST input tax credits actually claimed or claimable and attributable to the amounts above. Do not subtract ITCs twice.")
+                OutlinedTextField(operatingItc, { operatingItc = it.take(16) }, label = { Text("Operating-expense ITCs to subtract (CAD)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(directItc, { directItc = it.take(16) }, label = { Text("Direct-cost ITCs to subtract (CAD)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                Text("CCA must be calculated separately from the correct CRA class/UCC schedule. Enter the reviewed BUSINESS-USE CCA amount, not the vehicle purchase price or full depreciation.")
+                OutlinedTextField(verifiedCca, { verifiedCca = it.take(16) }, label = { Text("Verified business-use CCA claim (CAD)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(ccaBasis, { ccaBasis = it.take(160) }, label = { Text("CCA class, opening UCC and calculation reference") },
+                    modifier = Modifier.fillMaxWidth())
+                Row { Checkbox(ownershipReviewed, { ownershipReviewed = it }); Text("I verified the tax-year or ownership-period odometer boundaries") }
+                Text("Passenger vehicle limits vary by acquisition year. For new 2026 passenger vehicles, Class 10.1 cost ceiling is CAD 39,000 before tax; interest ceiling CAD 350/month and lease ceiling CAD 1,100/month before tax are not standalone eligibility tests.")
                 TextButton(onClick = { showGuidance = !showGuidance }) { Text(if (showGuidance) "Hide expense limits guidance" else "View expense limits guidance") }
                 if (showGuidance) Text(CanadianVehicleExpenses.LIMITS)
                 val unclassified = trips.count { it.vehicle == vehicle && it.type == null && Calendar.getInstance().apply { timeInMillis = it.startDate }.get(Calendar.YEAR).toString() == year }
                 Text("$unclassified unclassified trips for this vehicle/year are excluded from business kilometres. Trips without a matching vehicle are excluded.")
                 Row { Checkbox(checked, { checked = it }, enabled = !busy); Text("I checked the vehicle, period, CAD amounts, expense eligibility and applicable limits") }
-                calculation.onSuccess { (_, result) ->
-                    Text(String.format(Locale.CANADA, "Business %.1f / total %.1f km (%.2f%%). Estimated expense deduction: CAD %.2f", result.businessKm, result.totalKm, result.businessShare * 100, result.estimatedDeduction))
+                calculation.onSuccess { (_, result, tax) ->
+                    Text(String.format(Locale.CANADA, "Business %.1f / total %.1f km (%.2f%%). T2125 vehicle expenses after ITCs: CAD %.2f. Separate reviewed CCA: CAD %.2f. Combined worksheet estimate: CAD %.2f", result.businessKm, result.totalKm, result.businessShare * 100, tax.t2125VehicleExpenses, tax.t2125CcaSeparate, tax.combinedEstimate))
+                    tax.warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                 }.onFailure { Text(it.message ?: "Enter readings to calculate") }
                 TextButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(CanadianVehicleExpenses.SOURCE))) }) { Text("CRA calculation guidance") }
                 TextButton(enabled = calculation.isSuccess && checked && !busy, onClick = {
-                    val (e, result) = calculation.getOrThrow()
-                    exportText = CanadianVehicleExpenses.csv(e, result)
+                    val (e, result, tax) = calculation.getOrThrow()
+                    exportText = CanadianVehicleExpenses.csv(e, result) +
+                        "\\r\\nT2125 review,Amount CAD\\r\\nVehicle expenses after ITCs,${tax.t2125VehicleExpenses}\\r\\nSeparate verified CCA,${tax.t2125CcaSeparate}\\r\\nCombined estimate,${tax.combinedEstimate}\\r\\n" +
+                        tax.warnings.joinToString("") { "\\"${it.replace("\\"", "\\"\\"")}\\"\\r\\n" }
                     export.launch("Canadian_Vehicle_Expenses_${e.year}.csv")
                 }) { Text("Export this calculation as CSV") }
                 if (record != null) TextButton(enabled = !busy, onClick = {
