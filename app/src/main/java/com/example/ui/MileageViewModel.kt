@@ -711,7 +711,6 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
         val vehicle = settings.value.vehicleName
         viewModelScope.launch {
-            var tripToSync: TripEntity? = null
             val result = runCatching {
                 if (photoPath != null) require(photoReviewed && com.example.service.OdometerPhotoStore.file(getApplication(), photoPath) != null) {
                     "Review the reading and units against the photo before saving"
@@ -720,24 +719,16 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                     val dao = database.odometerReadingDao()
                     val previous = dao.latest(vehicle)
                     require(previous == null || cleanKm >= previous.readingKm) { "Reading is below the last reading for this vehicle. Check the vehicle and units." }
+                    // Odometer evidence verifies total vehicle use; it must never create
+                    // a trip without a separately documented journey and purpose.
+                    require(!logTrip) { "Add missing journeys from Trips with their date, destination and purpose." }
                     val now = System.currentTimeMillis()
-                    val delta = Odometer.tripKm(previous?.readingKm, cleanKm)
-                    if (logTrip && previous != null && delta != null) {
-                        val overlapping = repository.getAllTripsList().any {
-                            (it.vehicle == vehicle || it.vehicle.isNullOrBlank()) && it.endDate > previous.recordedAt && it.startDate < now
-                        }
-                        require(!overlapping) { "Trips already exist in this interval. Save the reading without logging another trip to avoid double counting." }
-                        val trip = TripEntity(startDate = previous.recordedAt, endDate = now, distanceKm = delta,
-                            type = null, purpose = "Odometer", vehicle = vehicle)
-                        tripToSync = trip.copy(id = repository.insertTrip(trip))
-                    }
                     dao.insert(com.example.data.OdometerReadingEntity(vehicle = vehicle, recordedAt = now,
                         readingKm = cleanKm, source = cleanSource, photoPath = photoPath, photoReviewed = photoReviewed))
                 }
                 settingsManager.setOdometer(cleanKm, cleanSource)
             }
             onResult(result)
-            if (result.isSuccess) tripToSync?.let { supabaseSyncManager.onTripSaved(it) }
         }
     }
 
