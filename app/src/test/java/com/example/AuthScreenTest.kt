@@ -188,7 +188,7 @@ class AuthScreenTest {
 
         composeTestRule.onNodeWithTag("welcome_sign_in_button").performClick()
         composeTestRule.onNodeWithText("Welcome to").assertIsDisplayed()
-        composeTestRule.onNodeWithText("MileageTracker").assertIsDisplayed()
+        composeTestRule.onNodeWithText("VoomLogs").assertIsDisplayed()
 
         composeTestRule.onNodeWithTag("onboarding_next").performClick()
         composeTestRule.onNodeWithText("Live Tracking").assertIsDisplayed()
