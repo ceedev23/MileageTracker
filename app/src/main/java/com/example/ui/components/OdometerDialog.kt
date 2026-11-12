@@ -91,7 +91,6 @@ fun OdometerDialog(
     var showAdapter by remember { mutableStateOf(false) }
     var deleteReadingId by remember { mutableStateOf<Long?>(null) }
     var source by remember { mutableStateOf("manual") }
-    var logTrip by remember { mutableStateOf(false) }
     val readings by viewModel.odometerReadings.collectAsState()
     val latest = readings.firstOrNull { it.vehicle == settings.vehicleName }
     var photoPath by remember { mutableStateOf<String?>(null) }
@@ -188,6 +187,13 @@ fun OdometerDialog(
     val entered = readingText.replace(",", "").toDoubleOrNull()
     val enteredKm = entered?.let { if (isMiles) it / 0.621371 else it }
     val deltaKm = enteredKm?.let { Odometer.tripKm(latest?.readingKm, it) }
+    val trips by viewModel.trips.collectAsState()
+    val intervalTrips = if (latest == null) emptyList() else trips.filter {
+        (it.vehicle == settings.vehicleName || it.vehicle.isNullOrBlank()) &&
+            it.endDate > latest.recordedAt && it.startDate <= System.currentTimeMillis()
+    }
+    val recordedKm = intervalTrips.sumOf { it.distanceKm }
+    val hasCrossingTrip = latest != null && intervalTrips.any { it.startDate < latest.recordedAt }
 
     deleteReadingId?.let { id ->
         StyledAlertDialog(onDismissRequest = { if (!busy) deleteReadingId = null },
@@ -288,13 +294,17 @@ fun OdometerDialog(
                 }
                 if (deltaKm != null) {
                     val shownDelta = if (isMiles) deltaKm * 0.621371 else deltaKm
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = logTrip, onCheckedChange = { logTrip = it }, enabled = !busy)
-                        Text(
-                            text = "Log ${String.format(Locale.US, "%,.1f", shownDelta)} $unitLabel since the last reading",
-                            fontSize = 13.sp
-                        )
-                    }
+                    val remaining = deltaKm - recordedKm
+                    val shownRemaining = if (isMiles) remaining * 0.621371 else remaining
+                    Text("Odometer distance: ${String.format(Locale.US, "%,.1f", shownDelta)} $unitLabel", fontSize = 13.sp)
+                    Text("Recorded trip distance: ${String.format(Locale.US, "%,.1f", if (isMiles) recordedKm * 0.621371 else recordedKm)} $unitLabel", fontSize = 13.sp)
+                    Text(
+                        if (hasCrossingTrip) "Some trips cross the reading boundary. Review your logbook to reconcile the difference."
+                        else if (remaining < -0.1) "Recorded trips exceed the odometer difference. Review the records."
+                        else if (remaining > 0.1) "${String.format(Locale.US, "%,.1f", shownRemaining)} $unitLabel is not accounted for. Save this reading, then add any missing journey in Trips with its date, destination and purpose. Unexplained distance is not a business trip."
+                        else "Odometer and recorded trips agree within 0.1 km. No additional trip is needed.",
+                        fontSize = 13.sp, color = SlateTextSecondary
+                    )
                 }
                 OdometerActionRow(if (showAdapter) "Hide Bluetooth Options" else "Use Bluetooth OBD-II Adapter", Icons.Outlined.Bluetooth, !busy) { showAdapter = !showAdapter }
                 if (showAdapter && devices == null) {
@@ -380,7 +390,7 @@ fun OdometerDialog(
                         return@Button
                     }
                     busy = true
-                    viewModel.saveOdometerReading(km, source, logTrip && deltaKm != null, photoPath, photoReviewed) { result ->
+                    viewModel.saveOdometerReading(km, source, false, photoPath, photoReviewed) { result ->
                         busy = false
                         result.onSuccess { photoPath = null; onDismiss() }
                             .onFailure { messageIsError = true; message = it.message ?: "Could not save reading" }
