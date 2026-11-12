@@ -133,6 +133,26 @@ fun ReportScreen(
             )
         }
 
+        if (settings.taxCountry == "CA") {
+            val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+            val zone = java.util.TimeZone.getDefault()
+            val annual = com.example.service.CraAnnualLogbook.summarize(year, odometerReadings, trips, zone)
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("CRA annual vehicle logbook · $year", fontWeight = FontWeight.Bold)
+                    Text("Odometer readings establish total vehicle use; only documented business trips count as business kilometres.")
+                    annual.forEach { item ->
+                        Text(item.vehicle, fontWeight = FontWeight.Bold)
+                        Text("First saved: ${item.openingKm?.let { String.format(Locale.US, "%,.1f km", it) } ?: "Missing"} · Last saved: ${item.closingKm?.let { String.format(Locale.US, "%,.1f km", it) } ?: "Missing"}")
+                        Text("Observed odometer change: ${item.totalKm?.let { String.format(Locale.US, "%,.1f km", it) } ?: "Unavailable"} · Business trips: ${String.format(Locale.US, "%,.1f km", item.businessKm)}")
+                        Text(if (item.completeYearBoundaries) "Boundary readings available for review" else "Incomplete year boundary evidence: enter verified opening and closing readings in Canadian vehicle expenses.")
+                        if (item.unclassifiedTrips > 0) Text("${item.unclassifiedTrips} unclassified trips excluded from business use.")
+                    }
+                    if (annual.isEmpty()) Text("No vehicle records yet. Save odometer readings and review your trips.")
+                }
+            }
+        }
+
         if (settings.taxCountry == "CA") OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
             Text("Canadian actual vehicle expenses")
         }
