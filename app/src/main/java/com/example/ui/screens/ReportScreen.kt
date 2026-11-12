@@ -148,56 +148,6 @@ fun ReportScreen(
             )
         }
 
-        if (settings.taxCountry == "CA") {
-            val year = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-            val zone = java.util.TimeZone.getDefault()
-            val annual = com.example.service.CraAnnualLogbook.summarize(year, odometerReadings, trips, zone)
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("CRA annual vehicle logbook · $year", fontWeight = FontWeight.Bold)
-                    Text("Odometer readings establish total vehicle use; only documented business trips count as business kilometres.")
-                    annual.forEach { item ->
-                        Text(item.vehicle, fontWeight = FontWeight.Bold)
-                        Text("First saved: ${item.openingKm?.let { String.format(Locale.US, "%,.1f km", it) } ?: "Missing"} · Last saved: ${item.closingKm?.let { String.format(Locale.US, "%,.1f km", it) } ?: "Missing"}")
-                        Text("Observed odometer change: ${item.totalKm?.let { String.format(Locale.US, "%,.1f km", it) } ?: "Unavailable"} · Business trips: ${String.format(Locale.US, "%,.1f km", item.businessKm)}")
-                        Text(if (item.completeYearBoundaries) "Boundary readings available for review" else "Incomplete year boundary evidence: enter verified opening and closing readings in Canadian vehicle expenses.")
-                        if (item.unclassifiedTrips > 0) Text("${item.unclassifiedTrips} unclassified trips excluded from business use.")
-                    }
-                    if (annual.isEmpty()) Text("No vehicle records yet. Save odometer readings and review your trips.")
-                }
-            }
-        }
-
-        if (settings.taxCountry == "CA") OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Canadian actual vehicle expenses")
-        }
-
-        if (settings.taxCountry == "CA") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Checkbox(checked = craTerritory, onCheckedChange = { craTerritory = it })
-                Text("Travel in Yukon, Northwest Territories or Nunavut")
-            }
-            Text(
-                "CRA employee automobile allowance estimate (2022–2026). Annual 5,000 km threshold; not a self-employed tax deduction. Earlier business kilometres in the calendar year are included when calculating filtered periods.",
-                style = MaterialTheme.typography.bodySmall,
-                color = SlateTextSecondary
-            )
-        }
-
-        // Period Filters
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ReportPeriod.values().forEach { period ->
-                FilterChip(
-                    selected = selectedPeriod == period,
-                    onClick = { selectedPeriod = period },
-                    label = { Text(period.label) }
-                )
-            }
-        }
-
         // Primary Hero Card (Driversnote / CRA report style)
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -303,6 +253,36 @@ fun ReportScreen(
                         )
                     }
                 }
+            }
+        }
+
+        if (settings.taxCountry == "CA") OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Canadian actual vehicle expenses")
+        }
+
+        if (settings.taxCountry == "CA") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Checkbox(checked = craTerritory, onCheckedChange = { craTerritory = it })
+                Text("Travel in Yukon, Northwest Territories or Nunavut")
+            }
+            Text(
+                "CRA employee automobile allowance estimate (2022–2026). Annual 5,000 km threshold; not a self-employed tax deduction. Earlier business kilometres in the calendar year are included when calculating filtered periods.",
+                style = MaterialTheme.typography.bodySmall,
+                color = SlateTextSecondary
+            )
+        }
+
+        // Period Filters
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ReportPeriod.values().forEach { period ->
+                FilterChip(
+                    selected = selectedPeriod == period,
+                    onClick = { selectedPeriod = period },
+                    label = { Text(period.label) }
+                )
             }
         }
 
