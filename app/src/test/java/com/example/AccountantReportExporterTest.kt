@@ -46,7 +46,7 @@ class AccountantReportExporterTest {
         val bundle = AccountantReportExporter.create(s, files, cache)
         assertEquals(1, bundle.photoCount); assertTrue(bundle.missingPhotos.isEmpty())
         ZipFile(bundle.file).use { zip ->
-            assertEquals(setOf("trips.csv", "fuel_expenses.csv", "missing_photos.csv", "README.txt", "receipts/receipt_7.jpg"), zip.entries().asSequence().map { it.name }.toSet())
+            assertEquals(setOf("trips.csv", "fuel_expenses.csv", "odometer_readings.csv", "odometer_reconciliation.csv", "missing_photos.csv", "README.txt", "receipts/receipt_7.jpg"), zip.entries().asSequence().map { it.name }.toSet())
             assertArrayEquals(jpeg, zip.getInputStream(zip.getEntry("receipts/receipt_7.jpg")).readBytes())
             assertEquals(AccountantReportExporter.tripCsv(s), csv(zip, "trips.csv"))
             val expenses = csv(zip, "fuel_expenses.csv")
@@ -55,6 +55,24 @@ class AccountantReportExporterTest {
             assertFalse(expenses.contains(files.absolutePath))
         }
         assertArrayEquals(jpeg, image.readBytes())
+    }
+    @Test fun `unexplained odometer distance stays separate from business trip records`() {
+        val readings = listOf(
+            com.example.data.OdometerReadingEntity(id = 1, vehicle = "Car",
+                recordedAt = time("2026-10-15 09:00"), readingKm = 1000.0, source = "manual"),
+            com.example.data.OdometerReadingEntity(id = 2, vehicle = "Car",
+                recordedAt = time("2026-10-15 18:00"), readingKm = 1030.0, source = "manual")
+        )
+        val selected = ReportSnapshot.create(
+            listOf(trip(date = "2026-10-15 12:00").copy(distanceKm = 20.0)),
+            emptyList(), ReportPeriod.ALL, false, .73, now, zone,
+            odometerReadings = readings
+        )
+        val reconciliation = AccountantReportExporter.odometerReconciliationCsv(selected)
+        assertTrue(reconciliation.contains("30.00,20.00,10.00"))
+        assertTrue(reconciliation.contains("Unexplained distance - not a business trip"))
+        assertEquals(1, selected.trips.size)
+        assertEquals(20.0, selected.trips.single().distanceKm, 0.001)
     }
     @Test fun `missing photos remain explicit in expense row manifest and result`() {
         val bundle = AccountantReportExporter.create(snapshot(receipts = listOf(receipt(8))), files, cache)
