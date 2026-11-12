@@ -103,9 +103,8 @@ fun ReportScreen(
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
     val rate = settings.reimbursementRate
-    var craTerritory by remember { mutableStateOf(false) }
 
-    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate, taxCountry = settings.taxCountry, craTerritory = craTerritory, odometerReadings = odometerReadings)
+    val reportSnapshot = ReportSnapshot.create(trips, receipts, selectedPeriod, isMiles, rate, taxCountry = settings.taxCountry, odometerReadings = odometerReadings)
     val filteredTrips = reportSnapshot.trips
     val filteredReceipts = reportSnapshot.receipts
     val periodGasExpenses = filteredReceipts.sumOf { it.totalAmount }
@@ -118,10 +117,6 @@ fun ReportScreen(
     val businessDist = if (isMiles) businessKm * 0.621371 else businessKm
     val personalDist = if (isMiles) personalKm * 0.621371 else personalKm
 
-    val craEstimate = if (settings.taxCountry == "CA") {
-        reportSnapshot.craTripEstimates().values.sum()
-    } else 0.0
-    val estimatedTaxValue = if (settings.taxCountry == "CA") craEstimate else businessDist * rate
     val businessRatio = if (totalDist > 0) (businessDist / totalDist).toFloat() else 0f
     val personalRatio = if (totalDist > 0) 1f - businessRatio else 0f
 
@@ -142,13 +137,13 @@ fun ReportScreen(
                 color = SlateTextPrimary
             )
             Text(
-                text = "Trip records, fuel expenses and rate-based estimates for review",
+                text = "Business mileage, fuel expenses and records for self-employed tax reporting",
                 style = MaterialTheme.typography.bodySmall,
                 color = SlateTextSecondary
             )
         }
 
-        // Primary Hero Card (Driversnote / CRA report style)
+        // Business mileage summary for self-employed drivers
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -162,7 +157,7 @@ fun ReportScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (settings.taxCountry == "CA") "CRA EMPLOYEE ALLOWANCE ESTIMATE" else "RATE-BASED ESTIMATE",
+                    text = "DOCUMENTED BUSINESS DISTANCE",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.8f),
@@ -172,7 +167,7 @@ fun ReportScreen(
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Text(
-                    text = String.format(Locale.getDefault(), "$%.2f", estimatedTaxValue),
+                    text = String.format(Locale.getDefault(), "%.1f %s", businessDist, unitLabel),
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Black,
                     color = Color.White
@@ -180,10 +175,8 @@ fun ReportScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                val businessDistStr = String.format(Locale.getDefault(), "%.1f", businessDist)
-                val rateStr = String.format(Locale.getDefault(), "$%.2f", rate)
                 Text(
-                    text = if (settings.taxCountry == "CA") "Based on $businessDistStr $unitLabel business; tiered CRA annual rates" else "Based on $businessDistStr $unitLabel business @ $rateStr/unit",
+                    text = "Only trips classified as business are counted. This is mileage, not a tax deduction.",
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.9f)
                 )
@@ -257,19 +250,7 @@ fun ReportScreen(
         }
 
         if (settings.taxCountry == "CA") OutlinedButton(onClick = { showCanadianExpenses = true }, modifier = Modifier.fillMaxWidth()) {
-            Text("Canadian actual vehicle expenses")
-        }
-
-        if (settings.taxCountry == "CA") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Checkbox(checked = craTerritory, onCheckedChange = { craTerritory = it })
-                Text("Travel in Yukon, Northwest Territories or Nunavut")
-            }
-            Text(
-                "CRA employee automobile allowance estimate (2022–2026). Annual 5,000 km threshold; not a self-employed tax deduction. Earlier business kilometres in the calendar year are included when calculating filtered periods.",
-                style = MaterialTheme.typography.bodySmall,
-                color = SlateTextSecondary
-            )
+            Text("Calculate self-employed vehicle expenses")
         }
 
         // Period Filters
