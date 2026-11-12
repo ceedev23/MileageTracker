@@ -137,6 +137,7 @@ object TrackingManager {
                 clearLiveTripExtras()
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = false,
+                    liveDriveVisible = false,
                     detectorState = DetectorState.IDLE,
                     distanceKm = 0.0,
                     speedKmh = 0f,
@@ -227,6 +228,7 @@ object TrackingManager {
                 clearLiveTripExtras()
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = false,
+                    liveDriveVisible = false,
                     detectorState = DetectorState.IDLE,
                     distanceKm = 0.0,
                     speedKmh = 0f,
@@ -430,6 +432,7 @@ object TrackingManager {
             clearLiveTripExtras()
             _trackingState.value = _trackingState.value.copy(
                 isTracking = false,
+                    liveDriveVisible = false,
                 detectorState = DetectorState.IDLE,
                 distanceKm = 0.0,
                 speedKmh = 0f,
