@@ -145,7 +145,7 @@ object AccountantReportExporter {
 
     /** Diagnostic only: discrepancies are never added to tax-reportable trips. */
     fun odometerReconciliationCsv(snapshot: ReportSnapshot): String = buildString {
-        append("Vehicle,From,To,Odometer KM,Recorded Trip KM,Unexplained KM,Status\\r\\n")
+        append("Vehicle,From,To,Odometer KM,Recorded Trip KM,Unexplained KM,Status\r\n")
         for ((vehicle, readings) in snapshot.odometerReadings.groupBy { it.vehicle }) {
             val ordered = readings.sortedWith(compareBy<OdometerReadingEntity> { it.recordedAt }.thenBy { it.id })
             for (index in 1 until ordered.size) {
@@ -169,7 +169,7 @@ object AccountantReportExporter {
                 append(listOf(text(vehicle), text(date(from.recordedAt, snapshot.timeZoneId)),
                     text(date(to.recordedAt, snapshot.timeZoneId)), number(delta),
                     number(logged), number(gap), text(status)).joinToString(","))
-                append("\\r\\n")
+                append("\r\n")
             }
         }
     }
