@@ -81,6 +81,8 @@ fun TripsScreen(
 ) {
     val trips by viewModel.trips.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val odometerReadings by viewModel.odometerReadings.collectAsState()
+    var showMissingTripReview by remember { mutableStateOf(false) }
     val activeFilter by viewModel.activeFilter.collectAsState()
     val undoAction by viewModel.undoAction.collectAsState()
 
@@ -151,6 +153,44 @@ fun TripsScreen(
                     onClick = { showTimelineImport = true },
                     modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
                 ) { Text("Import Google Maps Timeline trips") }
+
+                if (settings.taxCountry == "CA") {
+                    OutlinedButton(
+                        onClick = { showMissingTripReview = !showMissingTripReview },
+                        modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
+                    ) { Text(if (showMissingTripReview) "Hide odometer gap review" else "Review missing mileage") }
+                    if (showMissingTripReview) {
+                        val vehicleReadings = odometerReadings.filter { it.vehicle == settings.vehicleName }
+                            .sortedBy { it.recordedAt }
+                        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Review missing journeys", fontWeight = FontWeight.Bold)
+                            Text("A difference is not a trip or tax deduction. Check dates, destination, business purpose and distance before adding a manual trip.")
+                            vehicleReadings.zipWithNext().takeLast(20).forEach { (from, to) ->
+                                val matches = trips.filter {
+                                    (it.vehicle == settings.vehicleName || it.vehicle.isNullOrBlank()) &&
+                                        it.endDate > from.recordedAt && it.startDate < to.recordedAt
+                                }
+                                val delta = to.readingKm - from.readingKm
+                                val gap = delta - matches.sumOf { it.distanceKm }
+                                val crossing = matches.any { it.startDate < from.recordedAt || it.endDate > to.recordedAt }
+                                if (kotlin.math.abs(gap) > 0.1 || crossing) {
+                                    Card(modifier = Modifier.fillMaxWidth()) {
+                                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text("${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(from.recordedAt))} – ${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(to.recordedAt))}")
+                                            Text(String.format(Locale.US, "Odometer %.1f km · Trips %.1f km · Difference %.1f km", delta, matches.sumOf { it.distanceKm }, gap))
+                                            Text(if (crossing) "A trip crosses the reading interval. Verify the records before adding anything." else if (gap > 0) "Unexplained distance; not counted as business mileage." else "Recorded trips exceed odometer change; check for duplicates.")
+                                            if (gap > 0 && !crossing) TextButton(onClick = {
+                                                tripToEdit = null
+                                                showEditDialog = true
+                                            }) { Text("Add documented missing trip") }
+                                        }
+                                    }
+                                }
+                            }
+                            if (vehicleReadings.size < 2) Text("Save at least two odometer readings for this vehicle to compare.")
+                        }
+                    }
+                }
 
                 Text(
                     text = "Give every trip a purpose.",
