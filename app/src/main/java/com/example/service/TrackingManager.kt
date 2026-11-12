@@ -40,12 +40,10 @@ data class LiveTrackingState(
     val path: List<LatLngPoint> = emptyList(),
     val statusMessage: String = "Ready to track",
     val startAddress: String? = null,
-    val tripStartedAtMs: Long = 0L
+    val tripStartedAtMs: Long = 0L,
+    val liveDriveVisible: Boolean = false
 ) {
-    fun showsLiveDrive(): Boolean =
-        isTracking ||
-            detectorState == DetectorState.MOVING ||
-            detectorState == DetectorState.RECORDING
+    fun showsLiveDrive(): Boolean = liveDriveVisible
 }
 
 /** Choices made on the live tracking screen, applied when the trip is saved. */
@@ -66,6 +64,7 @@ object TrackingManager {
     private var tripDetector: TripDetector? = null
     private var appContext: Context? = null
     private var currentDwellMinutes: Int = 5
+    private var stoppedAtMs: Long? = null
     private var startTimeMs: Long = 0L
     private var activeDraft = ActiveTripDraft()
     private var startGeocodeStarted = false
@@ -106,6 +105,7 @@ object TrackingManager {
                 if (existingStart == null) startGeocodeStarted = false
                 _trackingState.value = _trackingState.value.copy(
                     isTracking = true,
+                    liveDriveVisible = true,
                     detectorState = DetectorState.RECORDING,
                     distanceKm = trip.distanceKm,
                     path = trip.points.toList(),
@@ -477,12 +477,19 @@ object TrackingManager {
         stopTimer()
         tripDetector?.reset()
         clearLiveTripExtras()
+        stoppedAtMs = null
         _trackingState.value = LiveTrackingState()
     }
 
     @Synchronized
     fun processGpsPoint(point: LatLngPoint) {
         tripDetector?.processPoint(point)
+        val effectiveSpeed = tripDetector?.effectiveSpeedKmh(point) ?: point.speedKmh
+        if (effectiveSpeed > TripDetector.SPEED_THRESHOLD_KMH) stoppedAtMs = null
+        else if (stoppedAtMs == null) stoppedAtMs = point.timestamp
+        val stillFor = stoppedAtMs?.let { (point.timestamp - it).coerceAtLeast(0L) } ?: 0L
+        val visible = movingAfter(_trackingState.value.showsLiveDrive(),
+            tripDetector?.state ?: DetectorState.IDLE, effectiveSpeed, stillFor)
         val isTracking = _trackingState.value.isTracking
         val trip = tripDetector?.currentTrip
         val currentDetectorState = tripDetector?.state ?: DetectorState.IDLE
@@ -493,6 +500,7 @@ object TrackingManager {
                 ?: point.timestamp
             _trackingState.value = _trackingState.value.copy(
                 detectorState = currentDetectorState,
+                liveDriveVisible = visible,
                 distanceKm = trip?.distanceKm ?: _trackingState.value.distanceKm,
                 speedKmh = point.speedKmh,
                 path = trip?.points?.toList() ?: (_trackingState.value.path + point),
@@ -503,6 +511,7 @@ object TrackingManager {
             // Idle movement monitoring telemetry update
             _trackingState.value = _trackingState.value.copy(
                 detectorState = currentDetectorState,
+                liveDriveVisible = visible,
                 speedKmh = point.speedKmh,
                 path = listOf(point)
             )
