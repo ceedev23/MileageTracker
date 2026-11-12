@@ -75,6 +75,15 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                 vehicles.forEach { name -> TextButton(onClick = { vehicle = name }, enabled = !busy) { Text(name) } }
                 OutlinedTextField(year, { year = it.filter(Char::isDigit).take(4); message = null }, label = { Text("Calendar year") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(), enabled = !busy)
                 Text("Opening/closing readings must cover this calendar year, or the vehicle ownership period within it. Use recorded boundary readings; do not substitute the first and last tracked trip.")
+                val annual = year.toIntOrNull()?.let {
+                    com.example.service.CraAnnualLogbook.summarize(it, readings, trips).firstOrNull { summary -> summary.vehicle == vehicle }
+                }
+                if (annual != null) {
+                    Text("Saved odometer evidence: ${annual.openingKm?.toString() ?: "missing"} km to ${annual.closingKm?.toString() ?: "missing"} km")
+                    Text(if (annual.completeYearBoundaries) "Opening and closing year boundary readings found; verify dates and amounts." else "Year boundary evidence is incomplete. Verify and enter actual opening and closing readings before filing.")
+                    if (annual.unclassifiedTrips > 0) Text("${annual.unclassifiedTrips} trips still require classification. They are excluded from business kilometres.")
+                }
+
                 TextButton(onClick = { showOdometerHistory = !showOdometerHistory }) { Text(if (showOdometerHistory) "Hide saved odometer readings" else "Show saved odometer readings") }
                 if (showOdometerHistory) readings.filter { it.vehicle == vehicle }.take(8).forEach {
                     Text("Recorded ${java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(java.util.Date(it.recordedAt))}: ${it.readingKm} km")
