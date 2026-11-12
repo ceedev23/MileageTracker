@@ -723,13 +723,26 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                     val now = System.currentTimeMillis()
                     val delta = Odometer.tripKm(previous?.readingKm, cleanKm)
                     if (logTrip && previous != null && delta != null) {
-                        val overlapping = repository.getAllTripsList().any {
-                            (it.vehicle == vehicle || it.vehicle.isNullOrBlank()) && it.endDate > previous.recordedAt && it.startDate < now
+                        // Reconcile only trips wholly within the odometer interval.
+                        // Partial overlaps cannot be attributed reliably without route data.
+                        val intervalTrips = repository.getAllTripsList().filter {
+                            (it.vehicle == vehicle || it.vehicle.isNullOrBlank()) &&
+                                it.endDate > previous.recordedAt && it.startDate < now
                         }
-                        require(!overlapping) { "Trips already exist in this interval. Save the reading without logging another trip to avoid double counting." }
-                        val trip = TripEntity(startDate = previous.recordedAt, endDate = now, distanceKm = delta,
-                            type = null, purpose = "Odometer", vehicle = vehicle)
-                        tripToSync = trip.copy(id = repository.insertTrip(trip))
+                        require(intervalTrips.none {
+                            it.startDate < previous.recordedAt || it.endDate > now
+                        }) { "A trip crosses the odometer reading interval. Save the reading without logging a trip to avoid double counting." }
+                        val recordedKm = intervalTrips.sumOf { it.distanceKm }
+                        val remainingKm = delta - recordedKm
+                        require(remainingKm >= -0.1) {
+                            "Recorded trips exceed the odometer difference. Save the reading without logging a trip and review your trips."
+                        }
+                        if (remainingKm > 0.1) {
+                            val trip = TripEntity(startDate = previous.recordedAt, endDate = now,
+                                distanceKm = remainingKm, type = null,
+                                purpose = "Unrecorded odometer mileage (review)", vehicle = vehicle)
+                            tripToSync = trip.copy(id = repository.insertTrip(trip))
+                        }
                     }
                     dao.insert(com.example.data.OdometerReadingEntity(vehicle = vehicle, recordedAt = now,
                         readingKm = cleanKm, source = cleanSource, photoPath = photoPath, photoReviewed = photoReviewed))
