@@ -75,8 +75,6 @@ import com.example.ui.theme.SlateTextSecondary
 import com.example.ui.theme.StopRed
 import java.util.Locale
 
-private const val CRA_RATE_PER_KM = 0.73
-private const val IRS_RATE_PER_MILE = 0.76
 
 @Composable
 fun SettingsScreen(
@@ -562,7 +560,7 @@ fun SettingsScreen(
                 // Reimbursement Rate
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = "Custom reimbursement rate ($ / ${settings.unit})",
+                        text = "Optional per-${settings.unit} client billing rate ($)",
                         style = MaterialTheme.typography.bodySmall,
                         color = SlateTextSecondary,
                         fontWeight = FontWeight.Medium
@@ -587,7 +585,7 @@ fun SettingsScreen(
                         )
 
                     }
-                    Text("Custom reimbursement only; not a self-employed tax deduction calculation. Check this rate after changing units or country.", style = MaterialTheme.typography.bodySmall, color = SlateTextMuted)
+                    Text("Optional rate for client mileage billing estimates. It is not a CRA or IRS tax deduction rate. Check this rate after changing units or country.", style = MaterialTheme.typography.bodySmall, color = SlateTextMuted)
                 }
 
                 // Vehicle Name
