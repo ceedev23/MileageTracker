@@ -140,7 +140,10 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                 TextButton(enabled = calculation.isSuccess && checked && !busy, onClick = {
                     val (e, result, tax) = calculation.getOrThrow()
                     exportText = CanadianVehicleExpenses.csv(e, result) +
-                        "\r\nT2125 review,Amount CAD\r\nVehicle expenses after ITCs,${tax.t2125VehicleExpenses}\r\nSeparate verified CCA,${tax.t2125CcaSeparate}\r\nCombined estimate,${tax.combinedEstimate}\r\n"
+                        "T2125 review,Amount CAD" + System.lineSeparator() +
+                        "Vehicle expenses after ITCs,${tax.t2125VehicleExpenses}" + System.lineSeparator() +
+                        "Separate verified CCA,${tax.t2125CcaSeparate}" + System.lineSeparator() +
+                        "Combined estimate,${tax.combinedEstimate}" + System.lineSeparator()
                     export.launch("Canadian_Vehicle_Expenses_${e.year}.csv")
                 }) { Text("Export this calculation as CSV") }
                 if (record != null) TextButton(enabled = !busy, onClick = {
