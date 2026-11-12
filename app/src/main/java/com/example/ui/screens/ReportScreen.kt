@@ -35,6 +35,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,13 +49,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.service.ReportPeriod
 import com.example.service.ReportSnapshot
-import com.example.service.AccountantReportExporter
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.theme.BusinessBlue
@@ -82,8 +82,23 @@ fun ReportScreen(
     if (showCanadianExpenses) com.example.ui.components.CanadianExpenseDialog(viewModel) { showCanadianExpenses = false }
 
     var selectedPeriod by remember { mutableStateOf(ReportPeriod.ALL) }
-    var showCsvPreview by remember { mutableStateOf(false) }
-    var previewSnapshot by remember { mutableStateOf<ReportSnapshot?>(null) }
+    var downloadError by remember { mutableStateOf<String?>(null) }
+    val downloadZip = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) {
+            val bundle = exportState.bundle
+            try {
+                checkNotNull(bundle) { "Export package is unavailable" }
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    bundle.file.inputStream().use { input -> input.copyTo(output) }
+                } ?: error("Cannot open destination")
+                viewModel.dismissReportExport()
+            } catch (_: Exception) {
+                downloadError = "Could not save the ZIP. Choose another location and try again."
+            }
+        }
+    }
 
     val isMiles = settings.unit == "mi"
     val unitLabel = if (isMiles) "mi" else "km"
@@ -465,36 +480,16 @@ fun ReportScreen(
                     color = SlateTextSecondary
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Button(
+                    onClick = { viewModel.prepareAccountantReport(reportSnapshot) },
+                    enabled = !exportState.isPreparing,
+                    modifier = Modifier.fillMaxWidth().testTag("export_accountant_zip_button"),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White),
+                    elevation = null
                 ) {
-                    OutlinedButton(
-                        onClick = { previewSnapshot = reportSnapshot; showCsvPreview = true },
-                        enabled = !exportState.isPreparing,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Preview", fontSize = 13.sp)
-                    }
-
-                    Button(
-                        onClick = { viewModel.prepareAccountantReport(reportSnapshot) },
-                        enabled = !exportState.isPreparing,
-                        modifier = Modifier
-                            .weight(1.2f)
-                            .testTag("export_accountant_zip_button"),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MileageBlue,
-                            contentColor = Color.White
-                        ),
-                        elevation = null
-                    ) {
-                        Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (exportState.isPreparing) "Preparing..." else "Export ZIP", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text(if (exportState.isPreparing) "Preparing..." else "Download Accountant ZIP",
+                        color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -503,7 +498,7 @@ fun ReportScreen(
     exportState.error?.let { message ->
         StyledAlertDialog(
             onDismissRequest = { viewModel.dismissReportExport() },
-            title = { Text("Export not shared") }, text = { Text(message) },
+            title = { Text("Export unavailable") }, text = { Text(message) },
             confirmButton = { Button(onClick = { viewModel.dismissReportExport() }) { Text("Close") } }
         )
     }
@@ -520,58 +515,26 @@ fun ReportScreen(
                     Text("Receipt photos may contain personal or payment information. Share only with your intended recipient. These records do not certify tax compliance.")
                 }
             },
-            confirmButton = { Button(onClick = { viewModel.shareAccountantReport(context) }) {
-                Text(if (bundle.missingPhotos.isEmpty()) "Share ZIP" else "Share with missing photos")
-            } },
-            dismissButton = { OutlinedButton(onClick = { viewModel.dismissReportExport() }) { Text("Cancel") } }
-        )
-    }
-
-    // CSV Preview Dialog
-    if (showCsvPreview) {
-        val snapshot = previewSnapshot ?: reportSnapshot
-        val previewData = "TRIPS\n" + AccountantReportExporter.tripCsv(snapshot) + "\nFUEL EXPENSES\n" + AccountantReportExporter.expenseCsv(snapshot) + "\nODOMETER READINGS\n" + AccountantReportExporter.odometerCsv(snapshot)
-        StyledAlertDialog(
-            onDismissRequest = { showCsvPreview = false },
-            title = { Text("${snapshot.period.label}: Export Preview") },
-            text = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF0F172A))
-                        .padding(12.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = previewData,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        color = Color(0xFFE2E8F0)
-                    )
-                }
-            },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showCsvPreview = false
-                        viewModel.prepareAccountantReport(snapshot)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MileageBlue,
-                        contentColor = Color.White
-                    ),
-                    elevation = null
-                ) {
-                    Text("Prepare ZIP", color = Color.White, fontWeight = FontWeight.Bold)
+                Button(onClick = { downloadZip.launch("VoomLogs_Accountant_Export.zip") }) {
+                    Text("Download ZIP")
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showCsvPreview = false }) {
-                    Text("Close")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { viewModel.shareAccountantReport(context) }) { Text("Share") }
+                    OutlinedButton(onClick = { viewModel.dismissReportExport() }) { Text("Cancel") }
                 }
             }
+        )
+    }
+
+    downloadError?.let { message ->
+        StyledAlertDialog(
+            onDismissRequest = { downloadError = null },
+            title = { Text("Download unsuccessful") },
+            text = { Text(message) },
+            confirmButton = { Button(onClick = { downloadError = null }) { Text("Close") } }
         )
     }
 }
