@@ -137,7 +137,7 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                     tax.warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
                 }.onFailure { Text(it.message ?: "Enter readings to calculate") }
                 TextButton(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(CanadianVehicleExpenses.SOURCE))) }) { Text("CRA calculation guidance") }
-                TextButton(enabled = calculation.isSuccess && checked && !busy, onClick = {
+                TextButton(enabled = calculation.isSuccess && checked && ownershipReviewed && !busy, onClick = {
                     val (e, result, tax) = calculation.getOrThrow()
                     exportText = CanadianVehicleExpenses.csv(e, result) +
                         "T2125 review,Amount CAD" + System.lineSeparator() +
@@ -155,7 +155,7 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                 message?.let { Text(it) }
             }
         },
-        confirmButton = { TextButton(enabled = !busy && checked && calculation.isSuccess, onClick = {
+        confirmButton = { TextButton(enabled = !busy && checked && ownershipReviewed && calculation.isSuccess, onClick = {
             val e = calculation.getOrThrow().first
             busy = true
             viewModel.saveVehicleExpenses(e) { result ->
