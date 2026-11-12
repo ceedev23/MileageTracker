@@ -188,6 +188,19 @@ fun OdometerDialog(
     val entered = readingText.replace(",", "").toDoubleOrNull()
     val enteredKm = entered?.let { if (isMiles) it / 0.621371 else it }
     val deltaKm = enteredKm?.let { Odometer.tripKm(latest?.readingKm, it) }
+    val trips by viewModel.trips.collectAsState()
+    val matchingTrips = if (latest != null) trips.filter {
+        (it.vehicle == settings.vehicleName || it.vehicle.isNullOrBlank()) &&
+            it.endDate > latest.recordedAt
+    } else emptyList()
+    val hasPartialOverlap = latest != null && matchingTrips.any { it.startDate < latest.recordedAt }
+    val recordedKm = matchingTrips.sumOf { it.distanceKm }
+    val remainingKm = deltaKm?.minus(recordedKm)
+    val canLogRemaining = remainingKm != null && remainingKm > 0.1 &&
+        remainingKm >= -0.1 && !hasPartialOverlap
+    LaunchedEffect(canLogRemaining) {
+        if (!canLogRemaining) logTrip = false
+    }
 
     deleteReadingId?.let { id ->
         StyledAlertDialog(onDismissRequest = { if (!busy) deleteReadingId = null },
@@ -289,12 +302,23 @@ fun OdometerDialog(
                 if (deltaKm != null) {
                     val shownDelta = if (isMiles) deltaKm * 0.621371 else deltaKm
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = logTrip, onCheckedChange = { logTrip = it }, enabled = !busy)
+                        Checkbox(checked = logTrip, onCheckedChange = { logTrip = it }, enabled = !busy && canLogRemaining)
                         Text(
-                            text = "Log ${String.format(Locale.US, "%,.1f", shownDelta)} $unitLabel since the last reading",
+                            text = "Log ${String.format(Locale.US, "%,.1f", if (isMiles) (remainingKm ?: 0.0) * 0.621371 else (remainingKm ?: 0.0))} $unitLabel not yet recorded",
                             fontSize = 13.sp
                         )
                     }
+                }
+                if (deltaKm != null && matchingTrips.isNotEmpty()) {
+                    Text(
+                        when {
+                            hasPartialOverlap -> "A trip crosses the reading interval. Save the odometer only and review the trips."
+                            remainingKm != null && remainingKm < -0.1 -> "Recorded trips exceed the odometer difference. Review trips before logging more mileage."
+                            !canLogRemaining -> "All mileage is already recorded. Only the odometer reading will be saved."
+                            else -> "Existing trips are counted. Only the unrecorded distance can be added as an unclassified trip."
+                        },
+                        color = SlateTextSecondary, fontSize = 13.sp
+                    )
                 }
                 OdometerActionRow(if (showAdapter) "Hide Bluetooth Options" else "Use Bluetooth OBD-II Adapter", Icons.Outlined.Bluetooth, !busy) { showAdapter = !showAdapter }
                 if (showAdapter && devices == null) {
@@ -380,7 +404,7 @@ fun OdometerDialog(
                         return@Button
                     }
                     busy = true
-                    viewModel.saveOdometerReading(km, source, logTrip && deltaKm != null, photoPath, photoReviewed) { result ->
+                    viewModel.saveOdometerReading(km, source, logTrip && canLogRemaining, photoPath, photoReviewed) { result ->
                         busy = false
                         result.onSuccess { photoPath = null; onDismiss() }
                             .onFailure { messageIsError = true; message = it.message ?: "Could not save reading" }
