@@ -144,6 +144,24 @@ object AccountantReportExporter {
     }
 
     /** Diagnostic only: discrepancies are never added to tax-reportable trips. */
+    fun craAnnualVehicleLogbookCsv(snapshot: ReportSnapshot): String {
+        val zone = TimeZone.getTimeZone(snapshot.timeZoneId)
+        val years = (snapshot.trips.map { Calendar.getInstance(zone).apply { timeInMillis = it.startDate }.get(Calendar.YEAR) } +
+            snapshot.odometerReadings.map { Calendar.getInstance(zone).apply { timeInMillis = it.recordedAt }.get(Calendar.YEAR) })
+            .distinct().sorted()
+        val out = StringBuilder("Tax year,Vehicle,First saved odometer km,Last saved odometer km,Observed change km,Business trip km,Unclassified trips,Year boundary readings verified\\r\\n")
+        for (year in years) {
+            for (item in CraAnnualLogbook.summarize(year, snapshot.odometerReadings, snapshot.trips, zone)) {
+                out.append(listOf(year.toString(), text(item.vehicle), item.openingKm?.toString().orEmpty(),
+                    item.closingKm?.toString().orEmpty(), item.totalKm?.toString().orEmpty(),
+                    item.businessKm.toString(), item.unclassifiedTrips.toString(),
+                    if (item.completeYearBoundaries) "Readings on Jan 1 and Dec 31; verify" else "No - incomplete evidence"
+                ).joinToString(",")).append("\\r\\n")
+            }
+        }
+        return out.toString()
+    }
+
     fun odometerReconciliationCsv(snapshot: ReportSnapshot): String = buildString {
         append("Vehicle,From,To,Odometer KM,Recorded Trip KM,Unexplained KM,Status\r\n")
         for ((vehicle, readings) in snapshot.odometerReadings.groupBy { it.vehicle }) {
@@ -247,6 +265,7 @@ object AccountantReportExporter {
                 entry("fuel_expenses.csv", expenseCsv(snapshot, statuses))
                 entry("odometer_readings.csv", odometerCsv(snapshot))
                 entry("odometer_reconciliation.csv", odometerReconciliationCsv(snapshot))
+                if (snapshot.taxCountry == "CA") entry("cra_annual_vehicle_logbook.csv", craAnnualVehicleLogbookCsv(snapshot))
                 entry("missing_photos.csv", "Receipt ID,Issue\r\n" + missing.joinToString("") { "${it.receiptId},${text(it.reason)}\r\n" })
                 entry("README.txt", """
                     VoomLogs accountant export
@@ -261,6 +280,8 @@ object AccountantReportExporter {
 
                     trips.csv, fuel_expenses.csv and odometer_readings.csv contain selected records.
                     Odometer readings are vehicle totals, not trip distances.
+                    For Canadian exports, cra_annual_vehicle_logbook.csv summarizes the
+                    annual vehicle logbook evidence and flags incomplete boundary readings.
                     odometer_reconciliation.csv identifies unexplained differences for review;
                     these differences are NOT business trips or tax deductions.
                     Only intervals with both readings inside the selected period are assessed.
