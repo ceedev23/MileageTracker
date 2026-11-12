@@ -13,7 +13,7 @@ class TrackingPowerPolicy {
     private var stationaryAnchor: LatLngPoint? = null
 
     fun cadence(state: LiveTrackingState, point: LatLngPoint?, elapsedMs: Long): LocationCadence {
-        if (state.showsLiveDrive() || !state.isMonitoringMovement || point == null) {
+        if (state.isTracking || state.detectorState == DetectorState.MOVING || state.detectorState == DetectorState.RECORDING || !state.isMonitoringMovement || point == null) {
             reset()
             return LocationCadence.ACTIVE
         }
