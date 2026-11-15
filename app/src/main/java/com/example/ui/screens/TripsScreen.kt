@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.TripEntity
@@ -74,6 +76,17 @@ import com.example.ui.theme.SlateTextSecondary
 import com.example.ui.theme.UnclassifiedAmber
 import com.example.ui.theme.UnclassifiedBg
 import java.util.Locale
+
+// Keep the empty state centered in the space below the header when both items fit.
+private object EmptyTripsArrangement : Arrangement.Vertical {
+    override fun Density.arrange(totalSize: Int, sizes: IntArray, outPositions: IntArray) {
+        if (sizes.isEmpty()) return
+        outPositions[0] = 0
+        if (sizes.size == 2) {
+            outPositions[1] = sizes[0] + (totalSize - sizes.sum()).coerceAtLeast(0) / 2
+        }
+    }
+}
 
 @Composable
 fun TripsScreen(
@@ -145,257 +158,266 @@ fun TripsScreen(
                 .padding(innerPadding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 16.dp)
+                    .padding(top = 16.dp),
+                contentPadding = PaddingValues(bottom = if (filteredTrips.isEmpty()) 0.dp else 80.dp),
+                verticalArrangement = if (filteredTrips.isEmpty()) EmptyTripsArrangement else Arrangement.Top
             ) {
-                OutlinedButton(
-                    onClick = { showTimelineImport = true },
-                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
-                ) { Text("Import Google Maps Timeline trips") }
-
-                if (settings.taxCountry == "CA") {
+                item(key = "trips_header") {
                     OutlinedButton(
-                        onClick = { showMissingTripReview = !showMissingTripReview },
+                        onClick = { showTimelineImport = true },
                         modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
-                    ) { Text(if (showMissingTripReview) "Hide odometer gap review" else "Review missing mileage") }
-                    if (showMissingTripReview) {
-                        val vehicleReadings = odometerReadings.filter { it.vehicle == settings.vehicleName }
-                            .sortedBy { it.recordedAt }
-                        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Review missing journeys", fontWeight = FontWeight.Bold)
-                            Text("A difference is not a trip or tax deduction. Check dates, destination, business purpose and distance before adding a manual trip.")
-                            vehicleReadings.zipWithNext().takeLast(20).forEach { (from, to) ->
-                                val matches = trips.filter {
-                                    (it.vehicle == settings.vehicleName || it.vehicle.isNullOrBlank()) &&
-                                        it.endDate > from.recordedAt && it.startDate < to.recordedAt
-                                }
-                                val delta = to.readingKm - from.readingKm
-                                val gap = delta - matches.sumOf { it.distanceKm }
-                                val crossing = matches.any { it.startDate < from.recordedAt || it.endDate > to.recordedAt }
-                                if (kotlin.math.abs(gap) > 0.1 || crossing) {
-                                    Card(modifier = Modifier.fillMaxWidth()) {
-                                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Text("${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(from.recordedAt))} – ${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(to.recordedAt))}")
-                                            Text(String.format(Locale.US, "Odometer %.1f km · Trips %.1f km · Difference %.1f km", delta, matches.sumOf { it.distanceKm }, gap))
-                                            Text(if (crossing) "A trip crosses the reading interval. Verify the records before adding anything." else if (gap > 0) "Unexplained distance; not counted as business mileage." else "Recorded trips exceed odometer change; check for duplicates.")
-                                            if (gap > 0 && !crossing) {
-                                                Button(
-                                                    onClick = {
-                                                        tripToEdit = null
-                                                        showEditDialog = true
-                                                    },
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(top = 4.dp)
-                                                        .heightIn(min = 48.dp),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = Color(0xFF2563EB),
-                                                        contentColor = Color.White
-                                                    )
-                                                ) {
-                                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
-                                                    Text(
-                                                        "Add documented missing trip",
-                                                        modifier = Modifier.padding(start = 8.dp),
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        textAlign = TextAlign.Center
-                                                    )
+                    ) { Text("Import Google Maps Timeline trips") }
+
+                    if (settings.taxCountry == "CA") {
+                        OutlinedButton(
+                            onClick = { showMissingTripReview = !showMissingTripReview },
+                            modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()
+                        ) { Text(if (showMissingTripReview) "Hide odometer gap review" else "Review missing mileage") }
+                        if (showMissingTripReview) {
+                            val vehicleReadings = odometerReadings.filter { it.vehicle == settings.vehicleName }
+                                .sortedBy { it.recordedAt }
+                            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Review missing journeys", fontWeight = FontWeight.Bold)
+                                Text("A difference is not a trip or tax deduction. Check dates, destination, business purpose and distance before adding a manual trip.")
+                                vehicleReadings.zipWithNext().takeLast(20).forEach { (from, to) ->
+                                    val matches = trips.filter {
+                                        (it.vehicle == settings.vehicleName || it.vehicle.isNullOrBlank()) &&
+                                            it.endDate > from.recordedAt && it.startDate < to.recordedAt
+                                    }
+                                    val delta = to.readingKm - from.readingKm
+                                    val gap = delta - matches.sumOf { it.distanceKm }
+                                    val crossing = matches.any { it.startDate < from.recordedAt || it.endDate > to.recordedAt }
+                                    if (kotlin.math.abs(gap) > 0.1 || crossing) {
+                                        Card(modifier = Modifier.fillMaxWidth()) {
+                                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Text("${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(from.recordedAt))} – ${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(to.recordedAt))}")
+                                                Text(String.format(Locale.US, "Odometer %.1f km · Trips %.1f km · Difference %.1f km", delta, matches.sumOf { it.distanceKm }, gap))
+                                                Text(if (crossing) "A trip crosses the reading interval. Verify the records before adding anything." else if (gap > 0) "Unexplained distance; not counted as business mileage." else "Recorded trips exceed odometer change; check for duplicates.")
+                                                if (gap > 0 && !crossing) {
+                                                    Button(
+                                                        onClick = {
+                                                            tripToEdit = null
+                                                            showEditDialog = true
+                                                        },
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(top = 4.dp)
+                                                            .heightIn(min = 48.dp),
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = Color(0xFF2563EB),
+                                                            contentColor = Color.White
+                                                        )
+                                                    ) {
+                                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                        Text(
+                                                            "Add documented missing trip",
+                                                            modifier = Modifier.padding(start = 8.dp),
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            textAlign = TextAlign.Center
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                                if (vehicleReadings.size < 2) Text("Save at least two odometer readings for this vehicle to compare.")
                             }
-                            if (vehicleReadings.size < 2) Text("Save at least two odometer readings for this vehicle to compare.")
                         }
                     }
-                }
 
-                Text(
-                    text = "Give every trip a purpose.",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                    Text(
+                        text = "Give every trip a purpose.",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
-                // Top Summary Card
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color.White,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 1.dp,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
-                ) {
-                    Row(
+                    // Top Summary Card
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color.White,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 1.dp,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SlateBorder)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "💼 ${String.format(Locale.getDefault(), "%.1f %s", displayBusinessDist, unitLabel)} business",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = BusinessBlue
-                            )
-                            Text(
-                                text = " · ",
-                                fontSize = 14.sp,
-                                color = SlateTextMuted
-                            )
-                            Text(
-                                text = "Needs review (${unclassified.size})",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (unclassified.isNotEmpty()) Color(0xFFD97706) else SlateTextSecondary
-                            )
-                        }
-
-                        Text(
-                            text = "${trips.size} total",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = SlateTextSecondary
-                        )
-                    }
-                }
-
-                // Filter Chips Row
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        FilterChip(
-                            selected = activeFilter == TripFilter.ALL,
-                            onClick = { viewModel.setFilter(TripFilter.ALL) },
-                            label = { Text("All (${trips.size})") }
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = activeFilter == TripFilter.UNCLASSIFIED,
-                            onClick = { viewModel.setFilter(TripFilter.UNCLASSIFIED) },
-                            label = { Text("Needs review (${unclassified.size})") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = UnclassifiedBg,
-                                selectedLabelColor = UnclassifiedAmber
-                            )
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = activeFilter == TripFilter.BUSINESS,
-                            onClick = { viewModel.setFilter(TripFilter.BUSINESS) },
-                            label = { Text("Business (${businessTrips.size})") }
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = activeFilter == TripFilter.PERSONAL,
-                            onClick = { viewModel.setFilter(TripFilter.PERSONAL) },
-                            label = { Text("Personal (${personalTrips.size})") }
-                        )
-                    }
-                }
-
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { selectMode = !selectMode; selectedIds = emptySet() }, enabled = !bulkBusy) {
-                        Text(if (selectMode) "Cancel selection" else "Select multiple")
-                    }
-                    TextButton(onClick = { showShifts = true }, enabled = !bulkBusy && trips.isNotEmpty()) { Text("Select work shift") }
-                    if (selectMode) TextButton(onClick = { selectedIds = filteredTrips.map { it.id }.toSet() }, enabled = !bulkBusy) { Text("Select visible") }
-                }
-                if (selectedIds.isNotEmpty()) {
-                    Text("${selectedIds.size} selected", modifier = Modifier.padding(horizontal = 16.dp))
-                    Row(Modifier.padding(horizontal = 16.dp)) {
-                        listOf("Business", "Personal").forEach { type ->
-                            TextButton(onClick = { bulkType = type }, enabled = !bulkBusy) { Text("Mark $type") }
-                        }
-                    }
-                }
-                bulkMessage?.let { Text(it, modifier = Modifier.padding(horizontal = 16.dp)) }
-
-                // Trips List or Empty State
-                if (filteredTrips.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(CircleShape)
-                                    .background(MileageBlueContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DirectionsCar,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(36.dp),
-                                    tint = MileageBlue
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "💼 ${String.format(Locale.getDefault(), "%.1f %s", displayBusinessDist, unitLabel)} business",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BusinessBlue
+                                )
+                                Text(
+                                    text = " · ",
+                                    fontSize = 14.sp,
+                                    color = SlateTextMuted
+                                )
+                                Text(
+                                    text = "Needs review (${unclassified.size})",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (unclassified.isNotEmpty()) Color(0xFFD97706) else SlateTextSecondary
                                 )
                             }
 
                             Text(
-                                text = if (trips.isEmpty()) "No trips logged yet" else "No trips match this filter",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = SlateTextPrimary
+                                text = "${trips.size} total",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = SlateTextSecondary
                             )
+                        }
+                    }
 
-                            Text(
-                                text = if (trips.isEmpty())
-                                    "Start tracking on the Home screen or seed sample trips to test the swipe-to-classify feature."
-                                else
-                                    "Try switching filters or swipe to classify other trips.",
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center,
-                                color = SlateTextSecondary,
-                                modifier = Modifier.padding(horizontal = 24.dp)
+                    // Filter Chips Row
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = activeFilter == TripFilter.ALL,
+                                onClick = { viewModel.setFilter(TripFilter.ALL) },
+                                label = { Text("All (${trips.size})") }
                             )
+                        }
+                        item {
+                            FilterChip(
+                                selected = activeFilter == TripFilter.UNCLASSIFIED,
+                                onClick = { viewModel.setFilter(TripFilter.UNCLASSIFIED) },
+                                label = { Text("Needs review (${unclassified.size})") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = UnclassifiedBg,
+                                    selectedLabelColor = UnclassifiedAmber
+                                )
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = activeFilter == TripFilter.BUSINESS,
+                                onClick = { viewModel.setFilter(TripFilter.BUSINESS) },
+                                label = { Text("Business (${businessTrips.size})") }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = activeFilter == TripFilter.PERSONAL,
+                                onClick = { viewModel.setFilter(TripFilter.PERSONAL) },
+                                label = { Text("Personal (${personalTrips.size})") }
+                            )
+                        }
+                    }
 
-                            if (trips.isEmpty()) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Button(
-                                    onClick = { viewModel.seedSampleTrips() },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MileageBlue,
-                                        contentColor = Color.White
-                                    ),
-                                    elevation = null,
-                                    shape = RoundedCornerShape(12.dp)
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { selectMode = !selectMode; selectedIds = emptySet() }, enabled = !bulkBusy) {
+                            Text(if (selectMode) "Cancel selection" else "Select multiple")
+                        }
+                        TextButton(onClick = { showShifts = true }, enabled = !bulkBusy && trips.isNotEmpty()) { Text("Select work shift") }
+                        if (selectMode) TextButton(onClick = { selectedIds = filteredTrips.map { it.id }.toSet() }, enabled = !bulkBusy) { Text("Select visible") }
+                    }
+                    if (selectedIds.isNotEmpty()) {
+                        Text("${selectedIds.size} selected", modifier = Modifier.padding(horizontal = 16.dp))
+                        Row(Modifier.padding(horizontal = 16.dp)) {
+                            listOf("Business", "Personal").forEach { type ->
+                                TextButton(onClick = { bulkType = type }, enabled = !bulkBusy) { Text("Mark $type") }
+                            }
+                        }
+                    }
+                    bulkMessage?.let { Text(it, modifier = Modifier.padding(horizontal = 16.dp)) }
+
+                    if (filteredTrips.isNotEmpty()) Spacer(Modifier.height(6.dp))
+                }
+
+                // Trips List or Empty State
+                if (filteredTrips.isEmpty()) {
+                    item(key = "trips_empty") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(CircleShape)
+                                        .background(MileageBlueContainer),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text("Seed Sample Trips", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Icon(
+                                        imageVector = Icons.Default.DirectionsCar,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(36.dp),
+                                        tint = MileageBlue
+                                    )
+                                }
+
+                                Text(
+                                    text = if (trips.isEmpty()) "No trips logged yet" else "No trips match this filter",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SlateTextPrimary
+                                )
+
+                                Text(
+                                    text = if (trips.isEmpty())
+                                        "Start tracking on the Home screen or seed sample trips to test the swipe-to-classify feature."
+                                    else
+                                        "Try switching filters or swipe to classify other trips.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = SlateTextSecondary,
+                                    modifier = Modifier.padding(horizontal = 24.dp)
+                                )
+
+                                if (trips.isEmpty()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Button(
+                                        onClick = { viewModel.seedSampleTrips() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MileageBlue,
+                                            contentColor = Color.White
+                                        ),
+                                        elevation = null,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Seed Sample Trips", color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 80.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(
-                            items = filteredTrips,
-                            key = { it.id }
-                        ) { trip ->
+                    itemsIndexed(
+                        items = filteredTrips,
+                        key = { _, trip -> trip.id }
+                    ) { index, trip ->
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .padding(bottom = if (index < filteredTrips.lastIndex) 12.dp else 0.dp)
+                        ) {
                             if (selectMode) Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(checked = trip.id in selectedIds, enabled = !bulkBusy, onCheckedChange = { checked ->
                                     selectedIds = if (checked) selectedIds + trip.id else selectedIds - trip.id
