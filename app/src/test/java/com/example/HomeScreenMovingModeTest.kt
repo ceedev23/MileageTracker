@@ -80,7 +80,7 @@ class HomeScreenMovingModeTest {
         composeTestRule.onNodeWithTag("home_screen_driving_mode").assertExists()
         composeTestRule.onNodeWithTag("home_tracking_banner").assertExists()
         composeTestRule.onNodeWithTag("home_tracking_stats").assertExists()
-        composeTestRule.onNodeWithText("Tracking is starting").assertExists()
+        composeTestRule.onNodeWithText("Tracking live").assertExists()
         composeTestRule.onNodeWithText("Personal").assertExists()
         composeTestRule.onNodeWithText("Business").assertExists()
         composeTestRule.onNodeWithTag("home_tracking_stop").assertExists()
