@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.DirectionsCar
@@ -288,9 +289,24 @@ fun OdometerDialog(
                 if (showHistory) readings.filter { it.vehicle == settings.vehicleName }.take(20).forEach { reading ->
                     val shown = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
                     Text("${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(reading.recordedAt))}: ${String.format(Locale.US, "%.1f", shown)} $unitLabel · ${reading.source}${if (reading.photoReviewed) " · photo reviewed" else ""}")
-                    TextButton(enabled = !busy, onClick = {
-                        deleteReadingId = reading.id
-                    }) { Text("Delete reading and photo") }
+                    Button(
+                        onClick = { deleteReadingId = reading.id },
+                        enabled = !busy,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFDECEC),
+                            contentColor = Color(0xFF9F2424)
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Icon(Icons.Filled.DeleteOutline, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Text(
+                            "Delete reading and photo",
+                            modifier = Modifier.padding(start = 8.dp),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
                 if (deltaKm != null) {
                     val shownDelta = if (isMiles) deltaKm * 0.621371 else deltaKm
