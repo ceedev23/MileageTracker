@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
@@ -39,7 +40,8 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -64,12 +66,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.data.InputCheck
 import com.example.service.LiveTrackingState
 import com.example.ui.components.GoogleMapView
@@ -77,22 +82,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val LiveRouteGreen = Color(0xFF188038)
+private val TrackingBackground = Color(0xFFF7F8FD)
+private val TrackingTile = Color(0xFFF1F5FD)
+private val TrackingBorder = Color(0xFFE9ECF4)
+private val TrackingInk = Color(0xFF101538)
+private val TrackingMuted = Color(0xFF535D79)
+private val TrackingAccent = Color(0xFF075DDC)
+private val TrackingLiveGreen = Color(0xFF0B9A45)
 private val PersonalGreen = Color(0xFF16A34A)
 private val BusinessBlue = Color(0xFF2563EB)
-private val StopRed = Color(0xFFEF4444)
+private val StopRed = Color(0xFFEC2A2E)
 
-/**
- * Modern Live Tracking Screen styled to seamlessly match the design language of the rest of the app:
- * - Floating top tracking banner with live pulsing status indicator and crisp rounded card surface
- * - Compact live stats card (Distance & Amount) with high-contrast typography and subtle borders
- * - Elevated bottom sheet container with rounded top corners and drag handle indicator
- * - Start / Destination timeline card with clean markers and dashed connector
- * - Two-segment category toggle pill ([ Personal ] | [ Business ])
- * - Vehicle selector card with icon and chevron
- * - Note input card with edit iconography
- * - Pinned prominent Stop button with icon for quick and safe accessibility while driving
- */
 @Composable
 fun LiveDriveScreen(
     trackingState: LiveTrackingState,
@@ -179,106 +179,108 @@ fun LiveDriveScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(TrackingBackground)
             .testTag("home_screen_driving_mode")
     ) {
-        val mapHeight = when {
-            maxHeight < 680.dp -> maxHeight * 0.30f
-            maxHeight < 800.dp -> maxHeight * 0.34f
-            else -> maxHeight * 0.38f
+        val compact = maxHeight < 680.dp
+        val narrow = maxWidth < 360.dp
+        val curveDepth = if (compact) 40.dp else 56.dp
+        val sheetHeight = maxHeight * (if (compact) 0.48f else 0.43f)
+        val curveDepthPx = with(LocalDensity.current) { curveDepth.toPx() }
+        val headerShape = remember(curveDepthPx) {
+            GenericShape { size, _ ->
+                val bottom = size.height
+                val shoulder = (bottom - curveDepthPx).coerceAtLeast(0f)
+                val controlY = shoulder + (bottom - shoulder) * 0.57f
+                moveTo(0f, 0f)
+                lineTo(size.width, 0f)
+                lineTo(size.width, shoulder)
+                cubicTo(
+                    size.width * 0.90f, controlY,
+                    size.width * 0.71f, bottom,
+                    size.width / 2f, bottom
+                )
+                cubicTo(
+                    size.width * 0.29f, bottom,
+                    size.width * 0.10f, controlY,
+                    0f, shoulder
+                )
+                close()
+            }
         }
 
-        Column(modifier = Modifier.fillMaxSize()) {
-            // Tracking status stays above the centered map.
-                Box(
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy((-12).dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(-curveDepth)
+            ) {
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .testTag("home_tracking_banner")
+                        .zIndex(1f)
+                        .testTag("home_tracking_banner"),
+                    shape = headerShape,
+                    color = TrackingBackground,
+                    shadowElevation = 6.dp
                 ) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(top = if (compact) 16.dp else 24.dp, bottom = curveDepth),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 20.dp)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFEFF6FF)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DirectionsCar,
-                                    contentDescription = null,
-                                    tint = BusinessBlue,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = "Tracking is starting",
-                                        color = Color(0xFF0F172A),
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = Color(0xFFDCFCE7),
-                                        border = BorderStroke(1.dp, Color(0xFF86EFAC))
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(5.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color(0xFF16A34A).copy(alpha = pulseAlpha))
-                                            )
-                                            Text(
-                                                text = "LIVE",
-                                                color = Color(0xFF15803D),
-                                                fontSize = 9.5.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(1.dp))
-                                Text(
-                                    text = "We detected fast movement. Unless you stop,\nwe'll record this as a trip.",
-                                    color = Color(0xFF64748B),
-                                    fontSize = 11.sp,
-                                    lineHeight = 14.sp
-                                )
-                            }
+                                    .size(7.dp)
+                                    .background(TrackingLiveGreen.copy(alpha = pulseAlpha), CircleShape)
+                            )
+                            Text(
+                                text = "Tracking live",
+                                color = TrackingLiveGreen,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = if (narrow) 16.dp else 20.dp)
+                                .testTag("home_tracking_stats"),
+                            horizontalArrangement = Arrangement.spacedBy(if (narrow) 9.dp else 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TrackingMetric(
+                                label = "Distance",
+                                value = "$distanceText $unitLabel",
+                                icon = Icons.Outlined.Route,
+                                compact = narrow,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(40.dp)
+                                    .background(Color(0xFFD5D9E7))
+                            )
+                            TrackingMetric(
+                                label = "Amount",
+                                value = amountText,
+                                icon = Icons.Outlined.AccountBalanceWallet,
+                                compact = narrow,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
-
-            // MAP CENTERED BETWEEN STATUS AND TRIP DETAILS
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(mapHeight)
-            ) {
                 GoogleMapView(
                     points = trackingState.path,
                     isLive = true,
@@ -286,24 +288,23 @@ fun LiveDriveScreen(
                     distanceKm = trackingState.distanceKm,
                     isMiles = isMiles,
                     showChrome = false,
-                    routeColor = LiveRouteGreen,
-                    modifier = Modifier.fillMaxSize()
+                    routeColor = TrackingAccent,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
                 )
-
-
             }
 
-            // ELEVATED BOTTOM SHEET / DRAFT DETAILS
+            // Keep the map visible above the scrollable trip details.
             Surface(
                 modifier = Modifier
-                    .weight(1f)
+                    .height(sheetHeight)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                color = Color(0xFFF8FAFC),
+                color = TrackingBackground,
                 shadowElevation = 8.dp
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Drag Handle Indicator
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -311,10 +312,10 @@ fun LiveDriveScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Surface(
-                            color = Color(0xFFCBD5E1),
+                            color = Color(0xFFB7BFD1),
                             shape = RoundedCornerShape(2.dp)
                         ) {
-                            Box(modifier = Modifier.size(width = 36.dp, height = 3.5.dp))
+                            Box(modifier = Modifier.size(width = 32.dp, height = 4.dp))
                         }
                     }
 
@@ -324,84 +325,21 @@ fun LiveDriveScreen(
                             .weight(1f)
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 2.dp),
-                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
                     ) {
-                        // 1. Compact Live Stats Card (Distance & Amount)
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("home_tracking_stats"),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "DISTANCE",
-                                        color = Color(0xFF64748B),
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(1.dp))
-                                    Text(
-                                        text = "$distanceText $unitLabel",
-                                        color = Color(0xFF0F172A),
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .height(22.dp)
-                                        .width(1.dp)
-                                        .background(Color(0xFFE2E8F0))
-                                )
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "AMOUNT",
-                                        color = Color(0xFF64748B),
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(1.dp))
-                                    Text(
-                                        text = amountText,
-                                        color = if (amount > 0.0) BusinessBlue else Color(0xFF0F172A),
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-
-                        // 2. Start & End Location Timeline Card
+                        // Start and destination
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                            border = BorderStroke(1.dp, TrackingBorder)
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 11.dp)
                             ) {
-                                // Point A (Start)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -412,17 +350,16 @@ fun LiveDriveScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(24.dp)
+                                            .size(26.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFFEFF6FF))
-                                            .border(1.5.dp, BusinessBlue, CircleShape),
+                                            .border(1.5.dp, TrackingAccent, CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = "A",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = BusinessBlue
+                                            color = TrackingAccent
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
@@ -433,8 +370,9 @@ fun LiveDriveScreen(
                                         ) {
                                             Text(
                                                 text = placeTitle,
-                                                color = if (startPlaceName != null) Color(0xFF0F172A) else BusinessBlue,
-                                                fontSize = 13.5.sp,
+                                                modifier = Modifier.weight(1f, fill = false),
+                                                color = if (startPlaceName != null) TrackingInk else TrackingAccent,
+                                                fontSize = if (narrow) 13.sp else 15.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
@@ -448,26 +386,29 @@ fun LiveDriveScreen(
                                         }
                                         Text(
                                             text = addressLine,
-                                            color = Color(0xFF64748B),
-                                            fontSize = 11.5.sp,
-                                            lineHeight = 14.sp,
+                                            color = TrackingMuted,
+                                            fontSize = 12.sp,
+                                            lineHeight = 15.sp,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Column(horizontalAlignment = Alignment.End) {
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                                    ) {
                                         Text(
                                             text = dateText,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium,
-                                            color = Color(0xFF64748B)
+                                            color = TrackingMuted
                                         )
                                         Text(
                                             text = timeText,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A)
+                                            color = TrackingInk
                                         )
                                     }
                                 }
@@ -476,16 +417,16 @@ fun LiveDriveScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(start = 11.dp),
+                                        .padding(start = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Canvas(
                                         modifier = Modifier
                                             .width(2.dp)
-                                            .height(8.dp)
+                                            .height(9.dp)
                                     ) {
                                         drawLine(
-                                            color = Color(0xFFCBD5E1),
+                                            color = Color(0xFFB7BFD1),
                                             start = Offset(size.width / 2, 0f),
                                             end = Offset(size.width / 2, size.height),
                                             strokeWidth = 2.dp.toPx(),
@@ -494,7 +435,6 @@ fun LiveDriveScreen(
                                     }
                                 }
 
-                                // Point B (Live Destination)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -503,9 +443,8 @@ fun LiveDriveScreen(
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .size(24.dp)
+                                            .size(26.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFFF1F5F9))
                                             .border(1.5.dp, Color(0xFF94A3B8), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -513,111 +452,58 @@ fun LiveDriveScreen(
                                             text = "B",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF64748B)
+                                            color = TrackingMuted
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = "We'll add the location once the trip's over",
-                                            color = Color(0xFF64748B),
-                                            fontSize = 12.5.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            lineHeight = 15.sp,
+                                            text = "Destination",
+                                            color = TrackingMuted,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            lineHeight = 18.sp,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "Recording route continuously…",
-                                            color = Color(0xFF94A3B8),
-                                            fontSize = 10.5.sp,
-                                            lineHeight = 13.sp
+                                            text = "Added when the trip ends",
+                                            color = TrackingMuted,
+                                            fontSize = 12.sp,
+                                            lineHeight = 15.sp
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // 3. Classification Segmented Pill Toggle
+                        // Trip classification
                         val isPersonalSelected = category == "Personal"
                         val isBusinessSelected = category == "Business"
 
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFFF1F5F9),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(38.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(3.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Personal Pill
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxSize()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (isPersonalSelected) PersonalGreen else Color.Transparent)
-                                        .testTag("home_tracking_personal")
-                                        .clickable { category = if (isPersonalSelected) null else "Personal" },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Home,
-                                            contentDescription = null,
-                                            tint = if (isPersonalSelected) Color.White else PersonalGreen,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = "Personal",
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isPersonalSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isPersonalSelected) Color.White else Color(0xFF64748B)
-                                        )
-                                    }
-                                }
-
-                                // Business Pill
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxSize()
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (isBusinessSelected) BusinessBlue else Color.Transparent)
-                                        .testTag("home_tracking_business")
-                                        .clickable { category = if (isBusinessSelected) null else "Business" },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.BusinessCenter,
-                                            contentDescription = null,
-                                            tint = if (isBusinessSelected) Color.White else BusinessBlue,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = "Business",
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isBusinessSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                            color = if (isBusinessSelected) Color.White else Color(0xFF64748B)
-                                        )
-                                    }
-                                }
-                            }
+                            TrackingCategoryButton(
+                                label = "Personal",
+                                icon = Icons.Default.Home,
+                                accent = PersonalGreen,
+                                selected = isPersonalSelected,
+                                onClick = { category = if (isPersonalSelected) null else "Personal" },
+                                modifier = Modifier.weight(1f).testTag("home_tracking_personal")
+                            )
+                            TrackingCategoryButton(
+                                label = "Business",
+                                icon = Icons.Default.BusinessCenter,
+                                accent = TrackingAccent,
+                                selected = isBusinessSelected,
+                                onClick = { category = if (isBusinessSelected) null else "Business" },
+                                modifier = Modifier.weight(1f).testTag("home_tracking_business")
+                            )
                         }
 
-                        // 4. Vehicle Selector Card
+                        // Vehicle selector
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -626,16 +512,17 @@ fun LiveDriveScreen(
                                 .testTag("home_tracking_vehicle"),
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0))
+                            border = BorderStroke(1.dp, TrackingBorder)
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 11.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
@@ -643,28 +530,31 @@ fun LiveDriveScreen(
                                         modifier = Modifier
                                             .size(30.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFFEFF6FF)),
+                                            .background(TrackingTile),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.DirectionsCar,
                                             contentDescription = null,
-                                            tint = BusinessBlue,
+                                            tint = TrackingAccent,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
-                                    Column {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
                                         Text(
                                             text = "Vehicle",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF64748B)
+                                            color = TrackingMuted
                                         )
                                         Text(
                                             text = vehicle,
-                                            fontSize = 13.5.sp,
+                                            fontSize = 16.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF0F172A)
+                                            color = TrackingInk
                                         )
                                     }
                                 }
@@ -677,17 +567,17 @@ fun LiveDriveScreen(
                             }
                         }
 
-                        // 5. Note Input Card
+                        // Trip note
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            border = BorderStroke(1.dp, TrackingBorder),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 11.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
@@ -701,7 +591,7 @@ fun LiveDriveScreen(
                                     Icon(
                                         imageVector = Icons.Default.EditNote,
                                         contentDescription = null,
-                                        tint = Color(0xFF64748B),
+                                        tint = TrackingMuted,
                                         modifier = Modifier.size(17.dp)
                                     )
                                 }
@@ -711,7 +601,7 @@ fun LiveDriveScreen(
                                     textStyle = TextStyle(
                                         fontSize = 13.5.sp,
                                         fontWeight = FontWeight.Medium,
-                                        color = Color(0xFF0F172A)
+                                        color = TrackingInk
                                     ),
                                     cursorBrush = SolidColor(BusinessBlue),
                                     modifier = Modifier
@@ -737,13 +627,13 @@ fun LiveDriveScreen(
                     // Pinned Bottom Stop Action
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFF8FAFC)
+                        color = TrackingBackground
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
-                                .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp),
+                                .padding(top = 8.dp, bottom = if (compact) 10.dp else 18.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Button(
@@ -758,8 +648,8 @@ fun LiveDriveScreen(
                                 ),
                                 elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 1.dp),
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(46.dp)
+                                    .fillMaxWidth(0.49f)
+                                    .height(48.dp)
                                     .testTag("home_tracking_stop")
                             ) {
                                 Icon(
@@ -772,7 +662,7 @@ fun LiveDriveScreen(
                                 Text(
                                     text = "Stop",
                                     color = Color.White,
-                                    fontSize = 15.sp,
+                                    fontSize = 19.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -781,6 +671,84 @@ fun LiveDriveScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TrackingMetric(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    compact: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 9.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(if (compact) 32.dp else 44.dp)
+                .background(TrackingTile, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TrackingAccent,
+                modifier = Modifier.size(if (compact) 22.dp else 28.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = TrackingMuted,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = value,
+                color = TrackingInk,
+                fontSize = if (compact) 21.sp else 24.sp,
+                lineHeight = if (compact) 23.sp else 26.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+@Composable
+private fun TrackingCategoryButton(
+    label: String,
+    icon: ImageVector,
+    accent: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(if (selected) accent else TrackingTile)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) Color.White else accent,
+            modifier = Modifier.size(17.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) Color.White else TrackingMuted
+        )
     }
 }
 
