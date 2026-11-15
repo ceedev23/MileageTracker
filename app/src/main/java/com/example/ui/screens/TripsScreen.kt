@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -179,10 +180,31 @@ fun TripsScreen(
                                             Text("${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(from.recordedAt))} – ${java.text.SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(java.util.Date(to.recordedAt))}")
                                             Text(String.format(Locale.US, "Odometer %.1f km · Trips %.1f km · Difference %.1f km", delta, matches.sumOf { it.distanceKm }, gap))
                                             Text(if (crossing) "A trip crosses the reading interval. Verify the records before adding anything." else if (gap > 0) "Unexplained distance; not counted as business mileage." else "Recorded trips exceed odometer change; check for duplicates.")
-                                            if (gap > 0 && !crossing) TextButton(onClick = {
-                                                tripToEdit = null
-                                                showEditDialog = true
-                                            }) { Text("Add documented missing trip") }
+                                            if (gap > 0 && !crossing) {
+                                                Button(
+                                                    onClick = {
+                                                        tripToEdit = null
+                                                        showEditDialog = true
+                                                    },
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(top = 4.dp)
+                                                        .heightIn(min = 48.dp),
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Color(0xFF2563EB),
+                                                        contentColor = Color.White
+                                                    )
+                                                ) {
+                                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
+                                                    Text(
+                                                        "Add documented missing trip",
+                                                        modifier = Modifier.padding(start = 8.dp),
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
