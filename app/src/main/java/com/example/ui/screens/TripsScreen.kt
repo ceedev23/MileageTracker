@@ -215,6 +215,7 @@ fun TripsScreen(
                                                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp))
                                                         Text(
                                                             "Add documented missing trip",
+                                                            color = Color.White,
                                                             modifier = Modifier.padding(start = 8.dp),
                                                             fontWeight = FontWeight.SemiBold,
                                                             textAlign = TextAlign.Center
