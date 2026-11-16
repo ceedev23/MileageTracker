@@ -2,10 +2,12 @@ package com.example
 
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.data.LatLngPoint
@@ -115,9 +117,9 @@ class HomeScreenMovingModeTest {
         }
         composeTestRule.onNodeWithText("$19.50").assertExists()
 
-        composeTestRule.onNodeWithText("Personal").performClick()
+        composeTestRule.onNodeWithTag("home_tracking_personal").performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithText("$0").assertExists()
-        composeTestRule.onNodeWithText("Business").performClick()
+        composeTestRule.onNodeWithTag("home_tracking_business").performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithText("$19.50").assertExists()
     }
 
