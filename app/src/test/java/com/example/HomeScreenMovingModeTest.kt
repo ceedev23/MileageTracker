@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -8,9 +9,11 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.data.LatLngPoint
+import com.example.service.LiveTrackingState
 import com.example.service.TrackingManager
 import com.example.ui.MileageViewModel
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.LiveDriveScreen
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -89,6 +92,33 @@ class HomeScreenMovingModeTest {
         composeTestRule.onNodeWithTag("home_profile_avatar").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_active_live_trip_card").assertDoesNotExist()
         composeTestRule.onNodeWithTag("home_all_trips_classified_banner").assertDoesNotExist()
+    }
+
+    @Test
+    fun testLiveAmountUpdatesBeforeClassification() {
+        val trackingState = mutableStateOf(LiveTrackingState(isTracking = true))
+        composeTestRule.setContent {
+            LiveDriveScreen(
+                trackingState = trackingState.value,
+                isMiles = false,
+                reimbursementRate = 0.73,
+                vehicleName = "Toyota RAV4",
+                onVehicleChange = {},
+                onStop = {},
+                onDraftChange = { _, _, _, _ -> }
+            )
+        }
+
+        composeTestRule.onNodeWithText("$0").assertExists()
+        composeTestRule.runOnIdle {
+            trackingState.value = trackingState.value.copy(distanceKm = 26.71)
+        }
+        composeTestRule.onNodeWithText("$19.50").assertExists()
+
+        composeTestRule.onNodeWithText("Personal").performClick()
+        composeTestRule.onNodeWithText("$0").assertExists()
+        composeTestRule.onNodeWithText("Business").performClick()
+        composeTestRule.onNodeWithText("$19.50").assertExists()
     }
 
     @Test

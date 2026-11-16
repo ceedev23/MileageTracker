@@ -126,7 +126,7 @@ fun LiveDriveScreen(
         SimpleDateFormat("h:mm a", Locale.US).format(Date(startedAt))
     }
 
-    val amount = if (category == "Business") displayDistance * reimbursementRate else 0.0
+    val amount = if (category == "Personal") 0.0 else displayDistance * reimbursementRate
     val amountText = if (amount < 0.005) "$0" else String.format(Locale.US, "$%.2f", amount)
     val addressLine = trackingState.startAddress?.takeIf { it.isNotBlank() } ?: "Locating start address…"
     val placeTitle = startPlaceName?.takeIf { it.isNotBlank() } ?: "Select a location"
