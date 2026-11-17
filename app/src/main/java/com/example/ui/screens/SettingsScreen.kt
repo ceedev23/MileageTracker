@@ -64,6 +64,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -278,6 +279,7 @@ fun SettingsScreen(
                 }
                 SettingsDivider()
                 SettingsDetailsRow("Annual driving target", Icons.Outlined.Speed) {
+                    val focusManager = LocalFocusManager.current
                     val newGoal = goalInput.toDoubleOrNull()
                         ?.let(InputCheck::annualGoal)
                         ?.takeUnless { it == savedGoalInput.toDoubleOrNull() }
@@ -290,9 +292,15 @@ fun SettingsScreen(
                         trailingIcon = if (newGoal != null) {
                             {
                                 Button(
-                                    onClick = { viewModel.setAnnualGoal(newGoal) },
+                                    onClick = {
+                                        viewModel.setAnnualGoal(newGoal)
+                                        focusManager.clearFocus()
+                                    },
                                     modifier = Modifier.padding(end = 6.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MileageBlue)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MileageBlue,
+                                        contentColor = Color.White
+                                    )
                                 ) {
                                     Text("Save")
                                 }
