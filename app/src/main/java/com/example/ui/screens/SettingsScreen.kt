@@ -1,7 +1,5 @@
 package com.example.ui.screens
 
-import com.example.ui.components.StyledAlertDialog
-
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,10 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,22 +23,31 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.Navigation
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import com.example.data.InputCheck
-import com.example.data.supabase.SyncStatus
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -50,31 +56,38 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.example.data.InputCheck
+import com.example.data.supabase.SyncStatus
 import com.example.ui.MileageViewModel
 import com.example.ui.components.OdometerDialog
+import com.example.ui.components.StyledAlertDialog
+import com.example.ui.theme.DriveGreen
 import com.example.ui.theme.MileageBlue
-import com.example.ui.theme.MileageBlueContainer
 import com.example.ui.theme.SlateBorder
-import com.example.ui.theme.SlateSurfaceVariant
-import com.example.ui.theme.SlateTextMuted
 import com.example.ui.theme.SlateTextPrimary
 import com.example.ui.theme.SlateTextSecondary
 import com.example.ui.theme.StopRed
 import java.util.Locale
-
 
 @Composable
 fun SettingsScreen(
@@ -122,6 +135,7 @@ fun SettingsScreen(
         hasBackgroundLocation = granted
     }
 
+    val scrollState = rememberScrollState()
     val openLegal = legalDoc
     if (openLegal != null) {
         LegalScreen(
@@ -132,270 +146,46 @@ fun SettingsScreen(
         return
     }
 
+    val syncState by viewModel.supabaseSyncState.collectAsState()
+    val profile = userProfile?.takeUnless { it.isGuest }
+    val backupAvailable = syncState.status != SyncStatus.NOT_CONFIGURED
+    val backupStatus = when {
+        !backupAvailable -> "Unavailable"
+        profile == null -> "Sign in"
+        syncState.status == SyncStatus.SUCCESS -> "Synced"
+        syncState.status == SyncStatus.SYNCING -> "Syncing"
+        syncState.status == SyncStatus.ERROR -> "Sync failed"
+        else -> "Ready"
+    }
+    val odometer = settings.odometerKm?.let { km ->
+        val distance = if (settings.unit == "mi") km * 0.621371 else km
+        String.format(Locale.US, "%,.1f %s", distance, settings.unit)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+            .background(Color(0xFFF1F4F8))
     ) {
         Text(
             text = "Settings",
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            modifier = Modifier.fillMaxWidth().background(Color.White).padding(vertical = 16.dp)
+                .semantics { heading() },
             textAlign = TextAlign.Center,
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color(0xFF111111)
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = SlateTextPrimary
         )
+        HorizontalDivider(color = SlateBorder)
 
-        SettingsSectionHeading("Account")
-        // Account & Profile Section
-        val profile = userProfile
-        Card(
-            modifier = Modifier.fillMaxWidth().testTag("settings_account_card"),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
+        Column(
+            modifier = Modifier.weight(1f)
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (profile?.isGuest == false) MileageBlue else Color(0xFF64748B)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val initial = profile?.takeIf { !it.isGuest }?.name?.firstOrNull()?.uppercase() ?: "G"
-                            Text(
-                                text = initial,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-
-                        Column {
-                            val signedIn = profile != null && !profile.isGuest
-                            Text(
-                                text = if (signedIn) profile.name else "Guest",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = SlateTextPrimary
-                            )
-                            Text(
-                                text = if (signedIn) profile.email else "Not signed in",
-                                fontSize = 12.5.sp,
-                                color = SlateTextSecondary
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (profile != null && !profile.isGuest) {
-                        OutlinedButton(
-                            onClick = { viewModel.showAuthScreen() },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Switch Account", fontSize = 12.5.sp)
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.signOut() },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
-                        ) {
-                            Text("Sign Out", fontSize = 12.5.sp)
-                        }
-                    } else {
-                        Button(
-                            onClick = { viewModel.showAuthScreen() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MileageBlue,
-                                contentColor = Color.White
-                            ),
-                            elevation = null
-                        ) {
-                            Text("Sign In or Create Account", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        }
-                    }
-                }
-            }
-        }
-
-        val syncState by viewModel.supabaseSyncState.collectAsState()
-        val signedIn = profile != null && !profile.isGuest
-        val backupAvailable = syncState.status != SyncStatus.NOT_CONFIGURED
-        val (badgeBg, badgeFg, badgeText) = when {
-            !backupAvailable -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Unavailable")
-            !signedIn -> Triple(Color(0xFFFEF3C7), Color(0xFFB45309), "Sign in")
-            syncState.status == SyncStatus.SUCCESS -> Triple(Color(0xFFDCFCE7), Color(0xFF15803D), "Synced")
-            syncState.status == SyncStatus.SYNCING -> Triple(Color(0xFFDBEAFE), Color(0xFF1D4ED8), "Syncing")
-            syncState.status == SyncStatus.ERROR -> Triple(Color(0xFFFEE2E2), Color(0xFFB91C1C), "Sync failed")
-            else -> Triple(Color(0xFFF1F5F9), Color(0xFF475569), "Ready")
-        }
-        val backupDetail = when {
-            !backupAvailable -> "Backup isn't available in this version."
-            !signedIn -> "Sign in to back up trips and receipts to your account."
-            syncState.status == SyncStatus.ERROR -> "The last sync did not finish. Some changes may not be backed up. Try syncing again."
-            syncState.status == SyncStatus.SUCCESS -> "Trip and receipt details are synced to your account."
-            syncState.status == SyncStatus.SYNCING -> "Backing up trips and receipts."
-            else -> "Back up trips and receipts to your account."
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth().testTag("settings_cloud_backup_card"),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Cloud backup",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = SlateTextPrimary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = badgeBg
-                    ) {
-                        Text(
-                            text = badgeText,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = badgeFg,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                Text(
-                    text = backupDetail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SlateTextSecondary
-                )
-
-                if (signedIn) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Receipt photo backup", fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (!viewModel.receiptPhotoBackup.available) "Photo backup is not available yet. Photos stay on this device."
-                                else if (photoBackupEnabled) "Included in the next successful full sync."
-                                else "Off. Receipt photos are not included in cloud backup.",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        Switch(
-                            checked = photoBackupEnabled,
-                            enabled = viewModel.receiptPhotoBackup.available && syncState.status != SyncStatus.SYNCING,
-                            onCheckedChange = { checked ->
-                                if (checked) showReceiptBackupConsent = true
-                                else { viewModel.setReceiptPhotoBackup(false); photoBackupEnabled = false }
-                            }
-                        )
-                    }
-                    Text("Turning backup off stops photo uploads and restores; it does not erase existing cloud photos. Delete a receipt to remove its cloud copy at the next successful sync. Keep an export for your tax records.", style = MaterialTheme.typography.bodySmall)
-                }
-
-                if (backupAvailable && signedIn) {
-                    Button(
-                        onClick = { viewModel.syncWithSupabase() },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        enabled = syncState.status != SyncStatus.SYNCING,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MileageBlue,
-                            contentColor = Color.White
-                        ),
-                        elevation = null
-                    ) {
-                        Text(
-                            text = if (syncState.status == SyncStatus.SYNCING) "Syncing..." else "Sync now",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-                }
-            }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(Modifier.padding(16.dp)) {
-                GoogleMapsTripImport(viewModel)
-            }
-        }
-
-        SettingsSectionHeading("Tracking")
-
-        // Automatic Detection Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Automatic Trip Detection",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SlateTextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Record trips automatically when driving movement is detected",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = SlateTextSecondary
-                        )
-                    }
-
+            SettingsGroup("Tracking") {
+                SettingsRow("Auto-tracking", Icons.Outlined.Navigation) {
                     Switch(
                         checked = settings.autoDetect,
                         onCheckedChange = { enabled ->
@@ -406,197 +196,45 @@ fun SettingsScreen(
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = MileageBlue),
                         modifier = Modifier.testTag("auto_detect_switch")
+                            .semantics { contentDescription = "Auto-tracking" }
                     )
                 }
-
                 if (settings.autoDetect) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(SlateBorder)
-                    )
-
-                    // Dwell time stepper
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    SettingsDivider()
+                    SettingsDetailsRow(
+                        title = "End trip after stopping",
+                        icon = Icons.Outlined.Schedule,
+                        value = "${settings.dwellMinutes} min"
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 8.dp)
-                        ) {
-                            Text(
-                                text = "End trip after stopping",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = SlateTextPrimary
-                            )
-                            Text(
-                                text = "Stationary delay before completing trip",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = SlateTextMuted
-                            )
-                        }
-
-                        // Stepper UI [ - ]  5 min  [ + ]
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(SlateSurfaceVariant)
-                                .padding(2.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .clickable { viewModel.changeDwell(-1) }
-                                    .testTag("dwell_decrease_button"),
-                                contentAlignment = Alignment.Center
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { viewModel.changeDwell(-1) },
+                                modifier = Modifier.testTag("dwell_decrease_button")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Remove,
-                                    contentDescription = "Decrease stationary delay",
-                                    tint = MileageBlue,
-                                    modifier = Modifier.size(12.dp)
-                                )
+                                Icon(Icons.Default.Remove, "Decrease stationary delay", tint = DriveGreen)
                             }
-
-                            Text(
-                                text = "${settings.dwellMinutes} min",
-                                modifier = Modifier.padding(horizontal = 6.dp),
-                                fontWeight = FontWeight.Bold,
-                                color = SlateTextPrimary,
-                                fontSize = 13.sp
-                            )
-
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(MaterialTheme.colorScheme.surface)
-                                    .clickable { viewModel.changeDwell(1) }
-                                    .testTag("dwell_increase_button"),
-                                contentAlignment = Alignment.Center
+                            Text("${settings.dwellMinutes} min", color = SlateTextPrimary)
+                            IconButton(
+                                onClick = { viewModel.changeDwell(1) },
+                                modifier = Modifier.testTag("dwell_increase_button")
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = "Increase stationary delay",
-                                    tint = MileageBlue,
-                                    modifier = Modifier.size(12.dp)
-                                )
+                                Icon(Icons.Default.Add, "Increase stationary delay", tint = DriveGreen)
                             }
                         }
                     }
                 }
-            }
-        }
-
-        SettingsSectionHeading("Reporting")
-
-        // Units and Rates Section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = "Units & Rates",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = SlateTextPrimary
+                SettingsDivider()
+                SettingsRow(
+                    title = "Odometer readings",
+                    icon = Icons.Outlined.Speed,
+                    value = odometer,
+                    modifier = Modifier.testTag("settings_odometer"),
+                    onClick = { showOdometerDialog = true }
                 )
+            }
 
-                Text("Tax country", style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    UnitOptionButton("Canada", settings.taxCountry == "CA", { viewModel.setTaxCountry("CA") }, Modifier.weight(1f))
-                    UnitOptionButton("United States", settings.taxCountry == "US", { viewModel.setTaxCountry("US") }, Modifier.weight(1f))
-                }
-                Text("Country sets the default distance unit. Changing units does not change tax country or convert money. US deduction methods are not yet implemented.", style = MaterialTheme.typography.bodySmall)
-
-                // Distance Unit
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Distance Unit",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        UnitOptionButton(
-                            label = "Kilometers (km)",
-                            isSelected = settings.unit == "km",
-                            onClick = {
-                                viewModel.setUnit("km")
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        UnitOptionButton(
-                            label = "Miles (mi)",
-                            isSelected = settings.unit == "mi",
-                            onClick = {
-                                viewModel.setUnit("mi")
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                // Reimbursement Rate
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Optional per-${settings.unit} client billing rate ($)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = rateInput,
-                            onValueChange = { next ->
-                                if (!InputCheck.decimalText(next, 2, 2)) return@OutlinedTextField
-                                rateInput = next
-                                val parsed = next.toDoubleOrNull() ?: return@OutlinedTextField
-                                InputCheck.rate(parsed)?.let { viewModel.setReimbursementRate(it) }
-                            },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f)
-                        )
-
-                    }
-                    Text("Optional rate for client mileage billing estimates. It is not a CRA or IRS tax deduction rate. Check this rate after changing units or country.", style = MaterialTheme.typography.bodySmall, color = SlateTextMuted)
-                }
-
-                // Vehicle Name
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Default Vehicle Name",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-
+            SettingsGroup("Vehicles & reports") {
+                SettingsDetailsRow("Vehicle", Icons.Outlined.DirectionsCar) {
                     OutlinedTextField(
                         value = vehicleInput,
                         onValueChange = { next ->
@@ -604,46 +242,41 @@ fun SettingsScreen(
                             vehicleInput = typed
                             InputCheck.exactLabel(typed, 40)?.let { viewModel.setVehicleName(it) }
                         },
+                        label = { Text("Default vehicle name") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Odometer",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = settings.odometerKm?.let { km ->
-                            val shown = if (settings.unit == "mi") km * 0.621371 else km
-                            val unit = if (settings.unit == "mi") "mi" else "km"
-                            val how = if (settings.odometerSource == "bluetooth") "synced from the car" else "entered manually"
-                            "${String.format(Locale.US, "%,.1f", shown)} $unit, $how"
-                        } ?: "Not set. Type the dash reading, or read it from a paired adapter.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextMuted
-                    )
-                    OutlinedButton(
-                        onClick = { showOdometerDialog = true },
-                        modifier = Modifier.fillMaxWidth().testTag("settings_odometer"),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("Update odometer", fontSize = 13.sp)
+                SettingsDivider()
+                SettingsDetailsRow("Units & rates", Icons.Outlined.Tune) {
+                    SettingsNote("Tax country")
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        UnitOptionButton("Canada", settings.taxCountry == "CA", { viewModel.setTaxCountry("CA") }, Modifier.weight(1f))
+                        UnitOptionButton("United States", settings.taxCountry == "US", { viewModel.setTaxCountry("US") }, Modifier.weight(1f))
                     }
-                }
-
-                // Annual Driving Target
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "Annual Driving Target (${settings.unit})",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SlateTextSecondary,
-                        fontWeight = FontWeight.Medium
+                    SettingsNote("Country sets the default unit. US deduction methods are unavailable.")
+                    SettingsNote("Distance unit")
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        UnitOptionButton("Kilometres (km)", settings.unit == "km", { viewModel.setUnit("km") }, Modifier.weight(1f))
+                        UnitOptionButton("Miles (mi)", settings.unit == "mi", { viewModel.setUnit("mi") }, Modifier.weight(1f))
+                    }
+                    OutlinedTextField(
+                        value = rateInput,
+                        onValueChange = { next ->
+                            if (!InputCheck.decimalText(next, 2, 2)) return@OutlinedTextField
+                            rateInput = next
+                            val parsed = next.toDoubleOrNull() ?: return@OutlinedTextField
+                            InputCheck.rate(parsed)?.let { viewModel.setReimbursementRate(it) }
+                        },
+                        label = { Text("Client billing rate ($/${settings.unit})") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                     )
-
+                    SettingsNote("Optional rate for client billing only. Review it after changing units or country.")
+                }
+                SettingsDivider()
+                SettingsDetailsRow("Annual driving target", Icons.Outlined.Speed) {
                     OutlinedTextField(
                         value = goalInput,
                         onValueChange = { next ->
@@ -652,134 +285,160 @@ fun SettingsScreen(
                             val parsed = next.toDoubleOrNull() ?: return@OutlinedTextField
                             InputCheck.annualGoal(parsed)?.let { viewModel.setAnnualGoal(it) }
                         },
+                        label = { Text("Annual target (${settings.unit})") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
-                        supportingText = {
-                            Text("Progress bar on Home resets automatically at the end of every year (Dec 31)")
-                        },
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    // Quick Goal Presets
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    SettingsNote("Home progress resets each calendar year.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(10000.0, 15000.0, 20000.0, 25000.0).forEach { preset ->
-                            OutlinedButton(
+                            UnitOptionButton(
+                                label = "${(preset / 1000).toInt()}k",
+                                isSelected = settings.annualGoal == preset,
                                 onClick = {
                                     goalInput = String.format(Locale.US, "%.0f", preset)
                                     viewModel.setAnnualGoal(preset)
                                 },
-                                shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    text = "${(preset / 1000).toInt()}k",
-                                    fontSize = 11.sp
-                                )
-                            }
+                            )
                         }
                     }
                 }
             }
-        }
 
-        SettingsSectionHeading("Data & privacy")
-
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                LegalRow(
-                    title = "Terms of Service",
-                    tag = "settings_terms",
-                    onClick = { legalDoc = LegalDoc.TERMS }
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(SlateBorder)
-                )
-                LegalRow(
-                    title = "Privacy Policy",
-                    tag = "settings_privacy",
-                    onClick = { legalDoc = LegalDoc.PRIVACY }
-                )
-                listOf(
-                    LegalDoc.REFUNDS to "settings_refunds",
-                    LegalDoc.SUBSCRIPTIONS to "settings_subscriptions",
-                    LegalDoc.DATA to "settings_data_policy",
-                    LegalDoc.LOCATION to "settings_location_policy",
-                    LegalDoc.ACCEPTABLE to "settings_acceptable_use",
-                    LegalDoc.SECURITY to "settings_security_policy",
-                    LegalDoc.COOKIES to "settings_cookies",
-                    LegalDoc.DISCLAIMER to "settings_disclaimer"
-                ).forEach { (doc, tag) ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(1.dp).background(SlateBorder)
+            SettingsGroup("Account", Modifier.testTag("settings_account_card")) {
+                if (profile == null) {
+                    SettingsRow(
+                        title = "Sign in or create account",
+                        icon = Icons.Outlined.Person,
+                        onClick = { viewModel.showAuthScreen() }
                     )
-                    LegalRow(
-                        title = doc.title,
-                        tag = tag,
-                        onClick = { legalDoc = doc }
-                    )
-                }
-            }
-        }
-
-        // Data Management Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Your data",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = SlateTextPrimary
-                )
-
-                Text(
-                    text = "Remove every trip saved on this device.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = SlateTextSecondary
-                )
-
-                Button(
-                    onClick = { showClearDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = StopRed,
-                        contentColor = Color.White
-                    ),
-                    elevation = null
-                ) {
-                    Text("Clear all trips", fontSize = 13.sp, color = Color.White)
-                }
-
-                if (profile != null && !profile.isGuest) {
-                    OutlinedButton(
-                        onClick = { accountDeleteError = null; showDeleteAccountDialog = true },
-                        modifier = Modifier.fillMaxWidth().testTag("settings_delete_account")
-                    ) {
-                        Text("Close / Delete Account", color = StopRed)
+                } else {
+                    SettingsDetailsRow("Profile", Icons.Outlined.Person) {
+                        Text(profile.name, fontWeight = FontWeight.SemiBold, color = SlateTextPrimary)
+                        SettingsNote(profile.email)
+                        OutlinedButton(onClick = { viewModel.showAuthScreen() }) {
+                            Text("Switch account")
+                        }
                     }
                 }
+                SettingsDivider()
+                SettingsDetailsRow(
+                    title = "Cloud backup",
+                    icon = Icons.Outlined.Cloud,
+                    value = backupStatus,
+                    modifier = Modifier.testTag("settings_cloud_backup_card")
+                ) {
+                    when {
+                        !backupAvailable -> SettingsNote("Cloud backup is unavailable in this version.")
+                        profile == null -> SettingsNote("Sign in to back up trips and receipts.")
+                        syncState.status == SyncStatus.ERROR -> SettingsNote("Some changes may still need backup. Try syncing again.")
+                    }
+                    if (profile != null) {
+                        val photoBackupAvailable = viewModel.receiptPhotoBackup.available
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Receipt photo backup", modifier = Modifier.weight(1f), color = SlateTextPrimary)
+                            Switch(
+                                checked = photoBackupEnabled,
+                                enabled = photoBackupAvailable && syncState.status != SyncStatus.SYNCING,
+                                onCheckedChange = { checked ->
+                                    if (checked) showReceiptBackupConsent = true
+                                    else {
+                                        viewModel.setReceiptPhotoBackup(false)
+                                        photoBackupEnabled = false
+                                    }
+                                },
+                                modifier = Modifier.semantics { contentDescription = "Receipt photo backup" }
+                            )
+                        }
+                        if (!photoBackupAvailable) {
+                            SettingsNote("Photo backup is unavailable. Photos stay on this device.")
+                        } else {
+                            SettingsNote("Turning backup off stops photo uploads and restores. To remove a cloud photo, delete its receipt and sync.")
+                        }
+                    }
+                    if (backupAvailable && profile != null) {
+                        Button(
+                            onClick = { viewModel.syncWithSupabase() },
+                            enabled = syncState.status != SyncStatus.SYNCING
+                        ) {
+                            Text(if (syncState.status == SyncStatus.SYNCING) "Syncing…" else "Sync now")
+                        }
+                    }
+                }
+                SettingsDivider()
+                SettingsDetailsRow("Import trips", Icons.Outlined.FileDownload) {
+                    GoogleMapsTripImport(viewModel)
+                }
+            }
+
+            SettingsGroup("Data & privacy") {
+                SettingsRow(
+                    title = "Terms of service",
+                    icon = Icons.Outlined.Description,
+                    modifier = Modifier.testTag("settings_terms"),
+                    onClick = { legalDoc = LegalDoc.TERMS }
+                )
+                SettingsDivider()
+                SettingsRow(
+                    title = "Privacy policy",
+                    icon = Icons.Outlined.Shield,
+                    modifier = Modifier.testTag("settings_privacy"),
+                    onClick = { legalDoc = LegalDoc.PRIVACY }
+                )
+                SettingsDivider()
+                SettingsDetailsRow("Other policies", Icons.Outlined.Description, inset = false) {
+                    listOf(
+                        LegalDoc.REFUNDS to "settings_refunds",
+                        LegalDoc.SUBSCRIPTIONS to "settings_subscriptions",
+                        LegalDoc.DATA to "settings_data_policy",
+                        LegalDoc.LOCATION to "settings_location_policy",
+                        LegalDoc.ACCEPTABLE to "settings_acceptable_use",
+                        LegalDoc.SECURITY to "settings_security_policy",
+                        LegalDoc.COOKIES to "settings_cookies",
+                        LegalDoc.DISCLAIMER to "settings_disclaimer"
+                    ).forEach { (doc, tag) ->
+                        SettingsDivider()
+                        SettingsRow(
+                            title = doc.title,
+                            icon = Icons.Outlined.Description,
+                            modifier = Modifier.testTag(tag),
+                            onClick = { legalDoc = doc }
+                        )
+                    }
+                }
+            }
+
+            SettingsGroup {
+                if (profile != null) {
+                    SettingsFooterAction("Log out", onClick = { viewModel.signOut() })
+                    HorizontalDivider(color = SlateBorder)
+                }
+                SettingsFooterAction(
+                    "Clear all trips",
+                    color = MaterialTheme.colorScheme.error,
+                    onClick = { showClearDialog = true }
+                )
+                if (profile != null) {
+                    HorizontalDivider(color = SlateBorder)
+                    SettingsFooterAction(
+                        "Delete account",
+                        modifier = Modifier.testTag("settings_delete_account"),
+                        color = MaterialTheme.colorScheme.error,
+                        onClick = {
+                            accountDeleteError = null
+                            showDeleteAccountDialog = true
+                        }
+                    )
+                }
                 accountDeleteError?.let { message ->
-                    Text(message, color = StopRed, style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        message,
+                        modifier = Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
@@ -865,46 +524,127 @@ fun SettingsScreen(
             }
         )
     }
-
 }
 
 @Composable
-private fun SettingsSectionHeading(title: String) {
-    Text(
-        text = title,
-        fontSize = 21.sp,
-        fontWeight = FontWeight.Medium,
-        color = Color(0xFF111111),
-        modifier = Modifier.padding(top = 8.dp, start = 4.dp, bottom = 2.dp)
-    )
-}
-
-@Composable
-private fun LegalRow(
-    title: String,
-    tag: String,
-    onClick: () -> Unit
+private fun SettingsGroup(
+    title: String? = null,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
 ) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (title != null) {
+            Text(
+                text = title,
+                modifier = Modifier.padding(start = 4.dp).semantics { heading() },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = SlateTextPrimary
+            )
+        }
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsRow(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    value: String? = null,
+    arrow: ImageVector = Icons.Outlined.KeyboardArrowRight,
+    onClick: (() -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    val action = if (onClick == null) Modifier else Modifier.clickable(onClick = onClick)
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-            .testTag(tag),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier.fillMaxWidth().heightIn(min = 56.dp).then(action)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Icon(icon, contentDescription = null, tint = SlateTextSecondary, modifier = Modifier.size(22.dp))
         Text(
             text = title,
+            modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold,
             color = SlateTextPrimary
         )
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = SlateTextMuted
-        )
+        if (value != null) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                color = SlateTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (trailingContent != null) {
+            trailingContent()
+        } else if (onClick != null) {
+            Icon(arrow, contentDescription = null, tint = DriveGreen, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsDetailsRow(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    value: String? = null,
+    inset: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    SettingsRow(
+        title = title,
+        icon = icon,
+        modifier = modifier.semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
+        value = value,
+        arrow = if (expanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
+        onClick = { expanded = !expanded }
+    )
+    if (expanded) {
+        Column(
+            modifier = if (inset) Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                else Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(if (inset) 8.dp else 0.dp)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(modifier = Modifier.padding(start = 50.dp), color = SlateBorder)
+}
+
+@Composable
+private fun SettingsNote(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = SlateTextSecondary)
+}
+
+@Composable
+private fun SettingsFooterAction(
+    title: String,
+    modifier: Modifier = Modifier,
+    color: Color = SlateTextPrimary,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(title, style = MaterialTheme.typography.bodyLarge, color = color)
     }
 }
 
