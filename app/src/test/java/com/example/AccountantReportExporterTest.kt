@@ -158,6 +158,16 @@ class AccountantReportExporterTest {
         assertTrue(csv.contains("Distance (Miles)")); assertTrue(csv.contains(",6.21,"))
         assertTrue(csv.contains(",4.35\r\n")); assertTrue(csv.contains(",0.00\r\n"))
     }
+    @Test fun `Canadian export contains trip records and annual logbook without allowance estimates`() {
+        val bundle = AccountantReportExporter.create(snapshot().copy(taxCountry = "CA"), files, cache)
+        ZipFile(bundle.file).use { zip ->
+            val rows = csv(zip, "trips.csv").lineSequence().filter { it.isNotEmpty() }.toList()
+            assertTrue(rows[0].endsWith(",Type,Purpose,Vehicle"))
+            assertTrue(rows[1].endsWith(",10.00,\"Business\",\"Delivery\",\"Car\""))
+            assertNotNull(zip.getEntry("cra_annual_vehicle_logbook.csv"))
+            assertFalse(csv(zip, "README.txt").contains("Rate-based estimates"))
+        }
+    }
     @Test fun `duplicate receipt IDs fail rather than overwrite images`() {
         try { AccountantReportExporter.create(snapshot(receipts = listOf(receipt(), receipt())), files, cache); fail("Should reject duplicate IDs") }
         catch (_: IllegalArgumentException) {}
