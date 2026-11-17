@@ -112,8 +112,9 @@ fun SettingsScreen(
     var vehicleInput by remember(settings.vehicleName) {
         mutableStateOf(settings.vehicleName)
     }
-    var goalInput by remember(settings.annualGoal) {
-        mutableStateOf(String.format(Locale.US, "%.0f", settings.annualGoal))
+    val savedGoalInput = String.format(Locale.US, "%.0f", settings.annualGoal)
+    var goalInput by remember(settings.annualGoal, settings.unit) {
+        mutableStateOf(savedGoalInput)
     }
 
     var hasBackgroundLocation by remember {
@@ -277,15 +278,26 @@ fun SettingsScreen(
                 }
                 SettingsDivider()
                 SettingsDetailsRow("Annual driving target", Icons.Outlined.Speed) {
+                    val newGoal = goalInput.toDoubleOrNull()
+                        ?.let(InputCheck::annualGoal)
+                        ?.takeUnless { it == savedGoalInput.toDoubleOrNull() }
                     OutlinedTextField(
                         value = goalInput,
                         onValueChange = { next ->
-                            if (!InputCheck.intText(next, 6)) return@OutlinedTextField
-                            goalInput = next
-                            val parsed = next.toDoubleOrNull() ?: return@OutlinedTextField
-                            InputCheck.annualGoal(parsed)?.let { viewModel.setAnnualGoal(it) }
+                            if (InputCheck.intText(next, 6)) goalInput = next
                         },
                         label = { Text("Annual target (${settings.unit})") },
+                        trailingIcon = if (newGoal != null) {
+                            {
+                                Button(
+                                    onClick = { viewModel.setAnnualGoal(newGoal) },
+                                    modifier = Modifier.padding(end = 6.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = MileageBlue)
+                                ) {
+                                    Text("Save")
+                                }
+                            }
+                        } else null,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
