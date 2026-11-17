@@ -1,11 +1,9 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -14,7 +12,6 @@ import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.outlined.Bluetooth
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.DirectionsCar
-import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -39,10 +36,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -59,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.ImeAction
@@ -72,6 +70,7 @@ import com.example.service.Odometer
 import com.example.service.OdometerTextParser
 import com.example.ui.MileageViewModel
 import com.example.ui.theme.MileageBlue
+import com.example.ui.theme.SlateBorder
 import com.example.ui.theme.SlateTextSecondary
 import com.example.ui.theme.StopRed
 import java.util.Locale
@@ -218,13 +217,52 @@ fun OdometerDialog(
         shadowElevation = 12.dp
       ) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(modifier = Modifier.size(56.dp).background(MileageBlue, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-              Icon(Icons.Outlined.Speed, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Outlined.Speed, contentDescription = null, tint = MileageBlue, modifier = Modifier.size(28.dp))
+            Text(
+              "Save Odometer Reading",
+              fontWeight = FontWeight.Bold,
+              fontSize = 21.sp,
+              color = Color(0xFF091638),
+              textAlign = TextAlign.Center
+            )
+          }
+          Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Outlined.DirectionsCar, contentDescription = null, tint = SlateTextSecondary, modifier = Modifier.size(22.dp))
+              Text(settings.vehicleName, color = SlateTextSecondary, fontSize = 16.sp)
+            }
+            if (latest == null) {
+              Text("No reading saved yet", modifier = Modifier.padding(top = 8.dp), color = SlateTextSecondary, fontSize = 13.sp)
+            } else {
+              val shown = if (isMiles) latest.readingKm * 0.621371 else latest.readingKm
+              Box(
+                modifier = Modifier
+                  .heightIn(min = 48.dp)
+                  .clickable(
+                    enabled = !busy,
+                    role = Role.Button,
+                    onClickLabel = if (showHistory) "Hide reading history" else "View reading history"
+                  ) { showHistory = !showHistory }
+                  .padding(horizontal = 8.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  "Last saved ${String.format(Locale.US, "%,.1f", shown)} $unitLabel",
+                  color = SlateTextSecondary,
+                  fontSize = 13.sp,
+                  textAlign = TextAlign.Center
+                )
+              }
             }
           }
-          Text("Save Odometer Reading", fontWeight = FontWeight.Bold, fontSize = 23.sp, color = Color(0xFF091638), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-          Text("Enter your odometer reading and choose an option below.", fontSize = 13.sp, color = SlateTextSecondary, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -232,14 +270,6 @@ fun OdometerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = latest?.readingKm?.let { km ->
-                        val shown = if (isMiles) km * 0.621371 else km
-                        "Last saved ${String.format(Locale.US, "%,.1f", shown)} $unitLabel"
-                    } ?: "No reading saved yet",
-                    color = SlateTextSecondary,
-                    fontSize = 13.sp
-                )
                 OutlinedTextField(
                     value = readingText,
                     onValueChange = { next ->
@@ -249,14 +279,14 @@ fun OdometerDialog(
                         message = null
                         photoReviewed = false
                     },
-                    label = { Text("Odometer ($unitLabel)") },
-                    leadingIcon = { Icon(Icons.Outlined.Speed, contentDescription = null, tint = MileageBlue) },
-                    placeholder = { Text("Enter odometer reading") },
-                    trailingIcon = { Text(unitLabel, color = SlateTextSecondary) },
+                    placeholder = { Text("Odometer reading", color = SlateTextSecondary) },
+                    trailingIcon = {
+                        Text(unitLabel, modifier = Modifier.padding(end = 4.dp), color = Color(0xFF091638), fontWeight = FontWeight.Bold)
+                    },
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MileageBlue,
-                        unfocusedBorderColor = MileageBlue,
+                        unfocusedBorderColor = SlateTextSecondary,
                         disabledBorderColor = SlateTextSecondary,
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
@@ -264,18 +294,20 @@ fun OdometerDialog(
                     ),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                    supportingText = { Text("Enter the number displayed on your dashboard. Check the unit before saving.") },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !busy
                 )
-                Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFF2F4F8), border = BorderStroke(1.dp, Color(0xFFBBC5D5))) {
-                  Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Outlined.DirectionsCar, contentDescription = null, tint = MileageBlue)
-                    Text("Vehicle: ${settings.vehicleName}", color = Color(0xFF091638), fontSize = 14.sp)
-                  }
+                Column(modifier = Modifier.padding(top = 6.dp)) {
+                    OdometerActionRow("Take photo", Icons.Outlined.CameraAlt, !busy) { takeOdometerPhoto() }
+                    HorizontalDivider(color = SlateBorder)
+                    OdometerActionRow("Choose photo", Icons.Outlined.Image, !busy) { photoLauncher.launch("image/*") }
+                    HorizontalDivider(color = SlateBorder)
+                    OdometerActionRow(
+                        if (showAdapter) "Hide Bluetooth Options" else "Bluetooth OBD-II",
+                        Icons.Outlined.Bluetooth,
+                        !busy
+                    ) { showAdapter = !showAdapter }
                 }
-                OdometerActionRow("Take Odometer Photo", Icons.Outlined.CameraAlt, !busy) { takeOdometerPhoto() }
-                OdometerActionRow("Choose Existing Photo", Icons.Outlined.Image, !busy) { photoLauncher.launch("image/*") }
                 if (photoPath != null) {
                     coil.compose.AsyncImage(model = photoPath, contentDescription = "Odometer photo for manual review", modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp))
                     Text("Photo stays on this device and is excluded from Android backup. OCR does not verify authenticity.")
@@ -285,7 +317,6 @@ fun OdometerDialog(
                         Text("I checked the entered number and km/mi against the photo")
                     }
                 }
-                OdometerActionRow(if (showHistory) "Hide Reading History" else "View Reading History", Icons.Outlined.History, !busy) { showHistory = !showHistory }
                 if (showHistory) readings.filter { it.vehicle == settings.vehicleName }.take(20).forEach { reading ->
                     val shown = if (isMiles) reading.readingKm * 0.621371 else reading.readingKm
                     Text("${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(reading.recordedAt))}: ${String.format(Locale.US, "%.1f", shown)} $unitLabel · ${reading.source}${if (reading.photoReviewed) " · photo reviewed" else ""}")
@@ -322,7 +353,6 @@ fun OdometerDialog(
                         fontSize = 13.sp, color = SlateTextSecondary
                     )
                 }
-                OdometerActionRow(if (showAdapter) "Hide Bluetooth Options" else "Use Bluetooth OBD-II Adapter", Icons.Outlined.Bluetooth, !busy) { showAdapter = !showAdapter }
                 if (showAdapter && devices == null) {
                     OutlinedButton(
                         onClick = {
@@ -428,17 +458,18 @@ private fun OdometerActionRow(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFF142449)),
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF091638))
+    val actionColor = if (enabled) Color(0xFF091638) else SlateTextSecondary
+    val iconColor = if (enabled) MileageBlue else SlateTextSecondary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 54.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = MileageBlue, modifier = Modifier.size(23.dp))
-        Text(title, modifier = Modifier.weight(1f).padding(start = 14.dp), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = Color(0xFF091638))
+        Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(23.dp))
+        Text(title, modifier = Modifier.weight(1f).padding(start = 14.dp), color = actionColor, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = actionColor)
     }
 }
