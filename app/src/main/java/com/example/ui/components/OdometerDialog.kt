@@ -40,6 +40,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -444,7 +445,7 @@ fun OdometerDialog(
                 },
                 enabled = !busy && enteredKm?.let { InputCheck.odometerKm(it) } != null && (photoPath == null || photoReviewed),
                 colors = ButtonDefaults.buttonColors(containerColor = MileageBlue, contentColor = Color.White)
-            ) { Text("Save", fontWeight = FontWeight.Bold) }
+            ) { Text("Save", fontWeight = FontWeight.Bold, color = LocalContentColor.current) }
           }
         }
       }

@@ -235,7 +235,7 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                     ) {
                         Icon(Icons.Outlined.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Export this calculation as CSV")
+                        Text("Export this calculation as CSV", color = LocalContentColor.current)
                     }
                     if (record != null) TextButton(enabled = !busy, onClick = {
                         busy = true
@@ -270,7 +270,7 @@ fun CanadianExpenseDialog(viewModel: MileageViewModel, onDismiss: () -> Unit) {
                                 message = if (result.isSuccess) "Calculation saved on this device" else result.exceptionOrNull()?.message ?: "Save failed"
                             }
                         }
-                    ) { Text(if (busy) "Working…" else "Save") }
+                    ) { Text(if (busy) "Working…" else "Save", color = LocalContentColor.current) }
                 }
             }
         }

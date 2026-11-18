@@ -45,6 +45,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -302,7 +303,7 @@ fun SettingsScreen(
                                         contentColor = Color.White
                                     )
                                 ) {
-                                    Text("Save")
+                                    Text("Save", color = Color.White)
                                 }
                             }
                         } else null,
@@ -383,7 +384,10 @@ fun SettingsScreen(
                             onClick = { viewModel.syncWithSupabase() },
                             enabled = syncState.status != SyncStatus.SYNCING
                         ) {
-                            Text(if (syncState.status == SyncStatus.SYNCING) "Syncing…" else "Sync now")
+                            Text(
+                                if (syncState.status == SyncStatus.SYNCING) "Syncing…" else "Sync now",
+                                color = LocalContentColor.current
+                            )
                         }
                     }
                 }
@@ -511,7 +515,7 @@ fun SettingsScreen(
                 viewModel.setReceiptPhotoBackup(true)
                 photoBackupEnabled = true
                 showReceiptBackupConsent = false
-            }) { Text("Enable photo backup") } },
+            }) { Text("Enable photo backup", color = Color.White) } },
             dismissButton = { OutlinedButton(onClick = { showReceiptBackupConsent = false }) { Text("Keep off") } }
         )
     }

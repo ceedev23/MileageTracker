@@ -460,7 +460,7 @@ fun ReportScreen(
         StyledAlertDialog(
             onDismissRequest = { viewModel.dismissReportExport() },
             title = { Text("Export unavailable") }, text = { Text(message) },
-            confirmButton = { Button(onClick = { viewModel.dismissReportExport() }) { Text("Close") } }
+            confirmButton = { Button(onClick = { viewModel.dismissReportExport() }) { Text("Close", color = Color.White) } }
         )
     }
     exportState.bundle?.let { bundle ->
@@ -478,7 +478,7 @@ fun ReportScreen(
             },
             confirmButton = {
                 Button(onClick = { downloadZip.launch("VoomLogs_Accountant_Export.zip") }) {
-                    Text("Download ZIP")
+                    Text("Download ZIP", color = Color.White)
                 }
             },
             dismissButton = {
@@ -495,7 +495,7 @@ fun ReportScreen(
             onDismissRequest = { downloadError = null },
             title = { Text("Download unsuccessful") },
             text = { Text(message) },
-            confirmButton = { Button(onClick = { downloadError = null }) { Text("Close") } }
+            confirmButton = { Button(onClick = { downloadError = null }) { Text("Close", color = Color.White) } }
         )
     }
 }
