@@ -35,6 +35,7 @@ class SupabaseSyncManagerTest {
     private val requests = CopyOnWriteArrayList<Pair<String, String>>()
     @Volatile private var failMethod: String? = null
     @Volatile private var failCollection: String? = null
+    @Volatile private var beforeTripDownload: suspend () -> Unit = {}
     @Volatile private var tripDownload = "[]"
     @Volatile private var receiptDownload = "[]"
     private val trip = TripEntity(
@@ -61,6 +62,9 @@ class SupabaseSyncManagerTest {
             val request = chain.request()
             val collection = request.url.encodedPath.substringAfterLast('/')
             requests.add(request.method to collection)
+            if (request.method == "GET" && collection == "trips") {
+                runBlocking { beforeTripDownload() }
+            }
             val fails = request.method == failMethod && collection == failCollection
             val body = when {
                 fails -> "{}"
@@ -130,6 +134,41 @@ class SupabaseSyncManagerTest {
         fail("GET", "gas_receipts")
         assertEquals(SyncStatus.ERROR, manager.syncAll().status)
         assertEquals(trip, database.tripDao().getTripById(trip.id))
+    }
+
+    @Test
+    fun `classifications saved during sync survive a pending download`() = runBlocking {
+        val business = trip.copy(type = null)
+        val personal = trip.copy(id = 2, type = null)
+        val dao = database.tripDao()
+        dao.insertTrips(listOf(business, personal))
+        tripDownload = JSONArray()
+            .put(SupabaseTripDto.fromTripEntity(business).toJsonObject())
+            .put(SupabaseTripDto.fromTripEntity(personal).toJsonObject())
+            .toString()
+        beforeTripDownload = {
+            dao.classifyTrips(listOf(business.id), "Business")
+            dao.classifyTrips(listOf(personal.id), "Personal")
+        }
+
+        assertEquals(SyncStatus.SUCCESS, manager.syncAll().status)
+        assertEquals(business.copy(type = "Business"), dao.getTripById(business.id))
+        assertEquals(personal.copy(type = "Personal"), dao.getTripById(personal.id))
+
+        beforeTripDownload = {}
+        assertEquals(SyncStatus.SUCCESS, manager.syncAll().status)
+        assertEquals(business.copy(type = "Business"), dao.getTripById(business.id))
+        assertEquals(personal.copy(type = "Personal"), dao.getTripById(personal.id))
+    }
+
+    @Test
+    fun `undo saved during sync survives a classified download`() = runBlocking {
+        val dao = database.tripDao()
+        tripDownload = JSONArray().put(SupabaseTripDto.fromTripEntity(trip).toJsonObject()).toString()
+        beforeTripDownload = { dao.updateTrip(trip.copy(type = null)) }
+
+        assertEquals(SyncStatus.SUCCESS, manager.syncAll().status)
+        assertEquals(trip.copy(type = null), dao.getTripById(trip.id))
     }
 
     @Test

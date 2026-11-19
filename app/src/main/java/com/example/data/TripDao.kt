@@ -26,6 +26,21 @@ interface TripDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTrips(trips: List<TripEntity>)
 
+    @Transaction
+    suspend fun mergeDownloadedTrips(downloaded: List<TripEntity>, uploaded: List<TripEntity>) {
+        val uploadedById = uploaded.associateBy { it.id }
+        val tripsToSave = downloaded.mapNotNull { remote ->
+            val local = getTripById(remote.id)
+            when {
+                // A trip may have been edited, inserted, or deleted during the network calls.
+                local != uploadedById[remote.id] -> null
+                local?.type != null && remote.type == null -> remote.copy(type = local.type)
+                else -> remote
+            }
+        }
+        insertTrips(tripsToSave)
+    }
+
     @Update
     suspend fun updateTrip(trip: TripEntity)
 

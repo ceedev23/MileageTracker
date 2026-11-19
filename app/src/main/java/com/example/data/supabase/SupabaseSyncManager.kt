@@ -90,7 +90,7 @@ class SupabaseSyncManager(
                     "Cloud receipt could not be validated"
                 }
             }
-            if (remoteTrips.isNotEmpty()) tripRepository.insertTrips(remoteTrips)
+            if (remoteTrips.isNotEmpty()) tripRepository.mergeDownloadedTrips(remoteTrips, localTrips)
             if (remoteReceipts.isNotEmpty()) receiptRepository.insertReceipts(remoteReceipts)
 
             return SupabaseSyncState(
