@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.R
+import com.example.service.TrackingManager
 import com.example.service.TripNotifier
 import com.example.service.tripUpdates
 import com.example.ui.AppTab
@@ -130,19 +131,14 @@ fun HomeScreen(
     }
 
     var hasLocationPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+        mutableStateOf(TrackingManager.hasLocationPermission(context))
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        hasLocationPermission = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    ) {
+        hasLocationPermission = TrackingManager.hasLocationPermission(context)
+        TrackingManager.resumeAutoDetect(context)
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -166,12 +162,8 @@ fun HomeScreen(
         }
     }
 
-    // Auto-start movement monitoring when enabled and permitted
     LaunchedEffect(settings.autoDetect, hasLocationPermission) {
-        if (!settings.autoDetect) return@LaunchedEffect
-        if (hasLocationPermission) {
-            viewModel.startMovementMonitoring(context)
-        } else if (!locationPermissionRequested) {
+        if (settings.autoDetect && !hasLocationPermission && !locationPermissionRequested) {
             locationPermissionRequested = true
             permissionLauncher.launch(
                 arrayOf(

@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.data.AppDatabase
 import com.example.data.InputCheck
@@ -310,20 +311,33 @@ object TrackingManager {
         }
     }
 
-    fun hasLocationPermission(context: Context): Boolean {
-        val fine = ContextCompat.checkSelfPermission(
+    fun hasLocationPermission(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        return fine || coarse
-    }
 
-    /** Keep auto-detect armed after process start. No-op until location permission exists. */
+    fun hasBackgroundLocationPermission(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
     fun resumeAutoDetect(context: Context) {
-        if (!autoDetectEnabled(context) || !hasLocationPermission(context)) return
-        startMovementMonitoring(context)
+        if (!autoDetectEnabled(context) || !hasLocationPermission(context) ||
+            _trackingState.value.isMonitoringMovement
+        ) return
+
+        init(context)
+        try {
+            val intent = Intent(context, TrackingService::class.java).apply {
+                action = TrackingService.ACTION_START_MONITORING
+            }
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: IllegalStateException) {
+            Log.w("TrackingManager", "Android blocked auto-tracking startup", e)
+        } catch (e: SecurityException) {
+            Log.w("TrackingManager", "Auto-tracking location permission unavailable", e)
+        }
     }
 
     fun noteMonitoring() {
@@ -338,36 +352,16 @@ object TrackingManager {
         )
     }
 
-    fun startMovementMonitoring(context: Context) {
-        init(context)
-        _trackingState.value = _trackingState.value.copy(
-            isMonitoringMovement = true,
-            statusMessage = if (_trackingState.value.isTracking) {
-                _trackingState.value.statusMessage
-            } else {
-                "Auto-detection active: Monitoring movement"
-            }
-        )
-
-        try {
-            val intent = Intent(context, TrackingService::class.java).apply {
-                action = TrackingService.ACTION_START_MONITORING
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    fun stopMovementMonitoring(context: Context) {
+    fun noteMonitoringStopped() {
+        if (!_trackingState.value.isMonitoringMovement) return
         _trackingState.value = _trackingState.value.copy(
             isMonitoringMovement = false,
             statusMessage = "Auto-detection paused"
         )
+    }
+
+    fun stopMovementMonitoring(context: Context) {
+        noteMonitoringStopped()
 
         if (!_trackingState.value.isTracking) {
             try {

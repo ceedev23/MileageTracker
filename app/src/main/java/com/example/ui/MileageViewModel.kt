@@ -624,10 +624,6 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun startMovementMonitoring(context: Context) {
-        TrackingManager.startMovementMonitoring(context)
-    }
-
     fun setAutoDetect(enabled: Boolean) {
         setAutoDetect(getApplication(), enabled)
     }
@@ -635,7 +631,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun setAutoDetect(context: Context, enabled: Boolean) {
         settingsManager.setAutoDetect(enabled)
         if (enabled) {
-            TrackingManager.startMovementMonitoring(context)
+            TrackingManager.resumeAutoDetect(context)
         } else {
             TrackingManager.stopMovementMonitoring(context)
         }

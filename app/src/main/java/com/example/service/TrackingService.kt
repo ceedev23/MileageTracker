@@ -8,14 +8,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.data.LatLngPoint
@@ -90,14 +88,25 @@ class TrackingService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                TrackingManager.noteMonitoring()
-                wasTracking = false
+                val tracking = TrackingManager.trackingState.value.isTracking
+                wasTracking = tracking
                 val notification = buildNotification(
-                    title = "VoomLogs • Motion Detection Active",
-                    text = "Monitoring driving movement & GPS to auto-record trips",
-                    alert = true
+                    title = if (tracking) "Current trip" else "VoomLogs • Motion Detection Active",
+                    text = if (tracking) "Recording your drive" else "Monitoring driving movement & GPS to auto-record trips",
+                    alert = !tracking
                 )
-                startForeground(NOTIFICATION_ID, notification)
+                try {
+                    startForeground(NOTIFICATION_ID, notification)
+                } catch (e: SecurityException) {
+                    Log.w("TrackingService", "Android denied location foreground service startup", e)
+                    stopSelf()
+                    return START_NOT_STICKY
+                } catch (e: IllegalStateException) {
+                    Log.w("TrackingService", "Android blocked location foreground service startup", e)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                TrackingManager.noteMonitoring()
                 powerPolicy.reset()
                 startLocationUpdates(LocationCadence.ACTIVE)
             }
@@ -107,7 +116,7 @@ class TrackingService : Service() {
 
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates(cadence: LocationCadence) {
-        if (!hasLocationPermission()) return
+        if (!TrackingManager.hasLocationPermission(this)) return
         if (isLocationTrackingActive && requestedCadence == cadence) return
         val client = fusedLocationClient ?: return
         val locationRequest = trackingLocationRequest(cadence)
@@ -166,13 +175,6 @@ class TrackingService : Service() {
         if (callback != null) fusedLocationClient?.removeLocationUpdates(callback)
         powerPolicy.reset()
         notificationGate.reset()
-    }
-
-    private fun hasLocationPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            this,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun createNotificationChannel() {
@@ -253,6 +255,7 @@ class TrackingService : Service() {
 
     override fun onDestroy() {
         stopLocationUpdates()
+        TrackingManager.noteMonitoringStopped()
         super.onDestroy()
     }
 

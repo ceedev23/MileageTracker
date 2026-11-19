@@ -1,9 +1,8 @@
 package com.example.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,9 +76,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.example.data.InputCheck
 import com.example.data.supabase.SyncStatus
+import com.example.service.TrackingManager
 import com.example.ui.MileageViewModel
 import com.example.ui.components.OdometerDialog
 import com.example.ui.components.StyledAlertDialog
@@ -120,22 +121,10 @@ fun SettingsScreen(
     }
 
     var hasBackgroundLocation by remember {
-        mutableStateOf(
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
-        )
+        mutableStateOf(TrackingManager.hasBackgroundLocationPermission(context))
     }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasBackgroundLocation = granted
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        hasBackgroundLocation = TrackingManager.hasBackgroundLocationPermission(context)
     }
 
     val scrollState = rememberScrollState()
@@ -191,12 +180,7 @@ fun SettingsScreen(
                 SettingsRow("Auto-tracking", Icons.Outlined.Navigation) {
                     Switch(
                         checked = settings.autoDetect,
-                        onCheckedChange = { enabled ->
-                            viewModel.setAutoDetect(enabled)
-                            if (enabled && !hasBackgroundLocation && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                                permissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                            }
-                        },
+                        onCheckedChange = { viewModel.setAutoDetect(context, it) },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = MileageBlue),
                         modifier = Modifier.testTag("auto_detect_switch")
                             .semantics { contentDescription = "Auto-tracking" }
@@ -204,6 +188,20 @@ fun SettingsScreen(
                 }
                 if (settings.autoDetect) {
                     SettingsDivider()
+                    if (!hasBackgroundLocation) {
+                        SettingsRow(
+                            title = "Set Location to Allow all the time so auto-tracking can resume after a restart.",
+                            icon = Icons.Default.Warning,
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.fromParts("package", context.packageName, null)
+                                    }
+                                )
+                            }
+                        )
+                        SettingsDivider()
+                    }
                     SettingsDetailsRow(
                         title = "End trip after stopping",
                         icon = Icons.Outlined.Schedule,

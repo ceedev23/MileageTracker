@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import com.example.service.TrackingManager
 import com.example.ui.AppTab
 import com.example.ui.MileageViewModel
 import com.example.ui.components.OdometerDialog
@@ -86,6 +87,11 @@ import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
   private val viewModel: MileageViewModel by viewModels()
+
+  override fun onResume() {
+    super.onResume()
+    TrackingManager.resumeAutoDetect(this)
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     setTheme(R.style.Theme_MyApplication)
