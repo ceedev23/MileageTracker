@@ -29,9 +29,16 @@ jobs:
           sudo chown "$USER" /dev/kvm
           image='system-images;android-36;google_apis;x86_64'
           sdkmanager 'emulator' "$image"
-          avdmanager create avd --force --name voomlogs-test --package "$image" <<< no
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | avdmanager create avd --force --name voomlogs-test --package "$image" --path "$ANDROID_AVD_HOME/voomlogs-test.avd"
+          ls -la "$ANDROID_AVD_HOME"
+          test -s "$ANDROID_AVD_HOME/voomlogs-test.ini"
+          "$ANDROID_HOME/emulator/emulator" -list-avds
           nohup "$ANDROID_HOME/emulator/emulator" @voomlogs-test -no-window -noaudio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 </dev/null &
-          timeout 240 bash -c 'adb wait-for-device && until [[ $(adb shell getprop sys.boot_completed | tr -d "\r") == 1 ]]; do sleep 2; done'
+          emulator_pid=$!
+          export emulator_pid
+          timeout 180 bash -c 'until [[ $(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r") == 1 ]]; do kill -0 "$emulator_pid" || exit 1; sleep 2; done'
           adb shell input keyevent 82
       - name: Reboot, simulate a drive, and check the saved trip
         run: |
@@ -44,6 +51,8 @@ jobs:
           test -f "$apk"
           adb install -g "$apk"
           adb shell pm grant "$pkg" android.permission.ACCESS_BACKGROUND_LOCATION
+          adb shell run-as "$pkg" mkdir -p shared_prefs
+          printf '%s\n' '<map><int name="dwell_minutes" value="1" /></map>' | adb shell -T "run-as $pkg tee shared_prefs/mileage_tracker_prefs.xml" >/dev/null
           adb shell am start -W -n "$pkg/com.example.MainActivity"
           adb shell input keyevent KEYCODE_HOME
           for i in $(seq 1 30); do
@@ -81,7 +90,7 @@ jobs:
               fix(longitude, 28)
               time.sleep(2)
 
-          for _ in range(175):
+          for _ in range(52):
               fix(longitude, 0)
               time.sleep(2)
           PY
