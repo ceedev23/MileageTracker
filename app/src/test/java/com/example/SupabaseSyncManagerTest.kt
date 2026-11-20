@@ -23,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -223,6 +225,23 @@ class SupabaseSyncManagerTest {
         assertEquals("Offline edit", d.trips.getAllTripsList().single().purpose)
     }
 
+    @Test fun `an automatic sync posts a previously offline deletion`() = runBlocking {
+        val first = device()
+        val second = device()
+        val id = first.trips.insertTrip(trip())
+        first.synchronize()
+        second.synchronize()
+        first.trips.deleteTripById(id)
+        cloud.failure = "POST" to "trips"
+        first.sync.triggerSync()
+        withTimeout(5_000) { first.sync.syncState.first { it.status == SyncStatus.ERROR } }
+        cloud.failure = null
+        first.sync.triggerSync()
+        withTimeout(5_000) { first.sync.syncState.first { it.status == SyncStatus.SUCCESS } }
+        second.synchronize()
+        assertTrue(second.trips.getAllTripsList().isEmpty())
+    }
+
     @Test fun `invalid downloaded record prevents success`() = runBlocking {
         val d = device()
         val invalid = trip().copy(distanceKm = 0.0)
@@ -251,7 +270,7 @@ class SupabaseSyncManagerTest {
                 val count = synchronized(this) { downloads.merge(table, 1, Int::plus)!! }
                 runBlocking { beforeGet(table, count) }
             }
-            val failed = request.method to table == failure
+            val failed = (request.method to table) == failure
             val body = if (failed) "{}" else synchronized(this) {
                 when (request.method) {
                     "GET" -> JSONArray(rows.filter { (key, value) -> key.first == table && value.getString("user_id") == owner }

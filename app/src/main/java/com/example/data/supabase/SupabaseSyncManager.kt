@@ -141,7 +141,9 @@ class SupabaseSyncManager(
                 } else {
                     val restored = photos?.restore(dto, local) ?: remote.copy(imagePath = local?.imagePath.orEmpty())
                     requireNotNull(InputCheck.storedReceipt(restored, strict = false)).copy(
-                        tripSyncId = dto.tripSyncId ?: legacyTripIds[dto.tripId]
+                        tripSyncId = dto.tripSyncId ?: legacyTripIds[dto.tripId].takeIf {
+                            remote.sync.syncUpdatedAt == 0L
+                        }
                     )
                 }
             }

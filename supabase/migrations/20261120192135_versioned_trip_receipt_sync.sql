@@ -41,7 +41,9 @@ begin
         if new.sync_id is distinct from old.sync_id or new.user_id is distinct from old.user_id then
             raise exception 'Record identity is immutable';
         end if;
-        if old.sync_deleted then
+        if old.sync_deleted and (not new.sync_deleted or
+            (new.sync_updated_at, new.sync_change_id collate "C") <=
+            (old.sync_updated_at, old.sync_change_id collate "C")) then
             return null;
         end if;
         -- Legacy records can still be edited by old builds until a versioned edit is saved.
