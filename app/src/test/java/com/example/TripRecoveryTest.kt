@@ -1,7 +1,6 @@
 package com.example
 
 import android.app.Application
-import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
@@ -155,28 +154,11 @@ class TripRecoveryTest {
         val context = ApplicationProvider.getApplicationContext<Application>()
         val name = "migration-${UUID.randomUUID()}.db"
         try {
-            val before = Room.databaseBuilder(context, AppDatabase::class.java, name).build()
-            val id = before.tripDao().insertTrip(checkpoint().trip)
-            before.close()
-            // Recreate v2 before the recovery, reporting and sync schema changes.
-            SQLiteDatabase.openDatabase(context.getDatabasePath(name).path, null, 0).use {
-                for (table in listOf("trips", "gas_receipts")) {
-                    it.execSQL("DROP INDEX index_${table}_syncId")
-                    for (column in listOf("syncId", "syncOwner", "syncUpdatedAt", "syncChangeId", "syncDeleted")) {
-                        it.execSQL("ALTER TABLE $table DROP COLUMN $column")
-                    }
-                }
-                it.execSQL("ALTER TABLE gas_receipts DROP COLUMN tripSyncId")
-                it.execSQL("DROP TABLE trip_recoveries")
-                it.execSQL("DROP TABLE odometer_readings")
-                it.execSQL("DROP TABLE vehicle_expenses")
-                it.execSQL("DROP TABLE room_master_table")
-                it.version = 2
-            }
+            createLegacyMileageDatabase(context, name, version = 2)
             val after = Room.databaseBuilder(context, AppDatabase::class.java, name)
                 .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5).build()
             try {
-                assertEquals(2.35, after.tripDao().getTripById(id)!!.distanceKm, 0.00001)
+                assertEquals(7.0, after.tripDao().getTripById(5)!!.distanceKm, 0.00001)
                 assertNull(after.tripRecoveryDao().find("not-imported"))
                 assertNull(after.odometerReadingDao().latest("My Car"))
             } finally {

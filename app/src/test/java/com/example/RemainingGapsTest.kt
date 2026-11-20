@@ -126,30 +126,7 @@ class RemainingGapsTest {
     @Test fun syncMigrationPreservesTripsAndReceiptLinks() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val name = "migration-v4-${java.util.UUID.randomUUID()}.db"
-        val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(
-            androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context).name(name)
-                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(4) {
-                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                        db.execSQL("""CREATE TABLE trips (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, startDate INTEGER NOT NULL,
-                            endDate INTEGER NOT NULL, distanceKm REAL NOT NULL, type TEXT, startAddress TEXT,
-                            endAddress TEXT, purpose TEXT, vehicle TEXT, pathJson TEXT NOT NULL
-                        )""")
-                        db.execSQL("""CREATE TABLE gas_receipts (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, timestamp INTEGER NOT NULL,
-                            imagePath TEXT NOT NULL, merchant TEXT, totalAmount REAL NOT NULL, currency TEXT NOT NULL,
-                            fuelType TEXT, gallonsOrLiters REAL, unit TEXT NOT NULL, pricePerUnit REAL, receiptDate TEXT,
-                            paymentMethod TEXT, rawExtraction TEXT, tripId INTEGER
-                        )""")
-                        AppDatabase.MIGRATION_2_3.migrate(db)
-                        AppDatabase.MIGRATION_3_4.migrate(db)
-                        db.execSQL("INSERT INTO trips(id,startDate,endDate,distanceKm,type,pathJson) VALUES(5,1,2,7,'Business','[]')")
-                        db.execSQL("INSERT INTO gas_receipts(id,timestamp,imagePath,merchant,totalAmount,currency,unit,tripId) VALUES(6,3,'','Shell',8,'CAD','L',5)")
-                    }
-                    override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                }).build())
-        helper.writableDatabase
-        helper.close()
+        createLegacyMileageDatabase(context, name, version = 4)
         val db = Room.databaseBuilder(context, AppDatabase::class.java, name)
             .addMigrations(AppDatabase.MIGRATION_4_5).build()
         try {
@@ -171,4 +148,31 @@ class RemainingGapsTest {
     }
 
     private fun assertFails(block: () -> Unit) { try { block(); fail("Invalid input accepted") } catch (_: IllegalArgumentException) {} }
+}
+
+internal fun createLegacyMileageDatabase(context: android.content.Context, name: String, version: Int) {
+    val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(
+        androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context).name(name)
+            .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(version) {
+                override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL("""CREATE TABLE trips (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, startDate INTEGER NOT NULL,
+                        endDate INTEGER NOT NULL, distanceKm REAL NOT NULL, type TEXT, startAddress TEXT,
+                        endAddress TEXT, purpose TEXT, vehicle TEXT, pathJson TEXT NOT NULL
+                    )""")
+                    db.execSQL("""CREATE TABLE gas_receipts (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, timestamp INTEGER NOT NULL,
+                        imagePath TEXT NOT NULL, merchant TEXT, totalAmount REAL NOT NULL, currency TEXT NOT NULL,
+                        fuelType TEXT, gallonsOrLiters REAL, unit TEXT NOT NULL, pricePerUnit REAL, receiptDate TEXT,
+                        paymentMethod TEXT, rawExtraction TEXT, tripId INTEGER
+                    )""")
+                    if (version >= 3) AppDatabase.MIGRATION_2_3.migrate(db)
+                    if (version >= 4) AppDatabase.MIGRATION_3_4.migrate(db)
+                    db.execSQL("INSERT INTO trips(id,startDate,endDate,distanceKm,type,pathJson) VALUES(5,1,2,7,'Business','[]')")
+                    db.execSQL("INSERT INTO gas_receipts(id,timestamp,imagePath,merchant,totalAmount,currency,unit,tripId) VALUES(6,3,'','Shell',8,'CAD','L',5)")
+                }
+                override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+            }).build())
+    helper.writableDatabase
+    helper.close()
 }
