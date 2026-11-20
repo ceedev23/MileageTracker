@@ -2,6 +2,7 @@ package com.example.service
 
 import android.util.AtomicFile
 import com.example.data.TripEntity
+import com.example.data.SyncRevision
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
@@ -31,6 +32,10 @@ class TripCheckpointStore(private val directory: File) {
             put("purpose", trip.purpose ?: JSONObject.NULL)
             put("vehicle", trip.vehicle ?: JSONObject.NULL)
             put("path", trip.pathJson)
+            put("sync_id", trip.sync.syncId ?: JSONObject.NULL)
+            put("sync_owner", trip.sync.syncOwner ?: JSONObject.NULL)
+            put("sync_updated_at", trip.sync.syncUpdatedAt)
+            put("sync_change_id", trip.sync.syncChangeId)
         }
         val file = atomicFile(checkpoint.key)
         val stream = file.startWrite()
@@ -67,7 +72,13 @@ class TripCheckpointStore(private val directory: File) {
                     endAddress = json.optionalString("destination"),
                     purpose = json.optionalString("purpose"),
                     vehicle = json.optionalString("vehicle"),
-                    pathJson = json.getString("path")
+                    pathJson = json.getString("path"),
+                    sync = SyncRevision(
+                        syncId = json.optionalString("sync_id") ?: key,
+                        syncOwner = json.optionalString("sync_owner"),
+                        syncUpdatedAt = json.optLong("sync_updated_at", json.getLong("end")),
+                        syncChangeId = json.optString("sync_change_id", key)
+                    )
                 )
                 require(trip.distanceKm.isFinite() && trip.distanceKm >= 0 && trip.endDate >= trip.startDate)
                 TripCheckpoint(key, trip, json.getBoolean("completed"))

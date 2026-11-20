@@ -13,6 +13,8 @@ import com.example.data.AppDatabase
 import com.example.data.InputCheck
 import com.example.data.LatLngPoint
 import com.example.data.TripEntity
+import com.example.data.SyncRevision
+import com.example.data.supabase.SupabaseConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,6 +73,7 @@ object TrackingManager {
     private var startGeocodeStarted = false
     private var checkpointStore: TripCheckpointStore? = null
     private var activeCheckpointKey: String? = null
+    private var activeSyncOwner: String? = null
     private var latestSaveKey: String? = null
     private var lastCheckpointAt = 0L
     private val checkpointRouteCache = CheckpointRouteCache()
@@ -100,6 +103,7 @@ object TrackingManager {
             onTripStarted = { trip ->
                 latestSaveKey = null
                 activeCheckpointKey = UUID.randomUUID().toString()
+                activeSyncOwner = SupabaseConfig(context.applicationContext).getSession()?.user?.id
                 lastCheckpointAt = 0L
                 startTimeMs = trip.startTime
                 val existingStart = _trackingState.value.startAddress
@@ -170,7 +174,8 @@ object TrackingManager {
                                 purpose = InputCheck.finishLabel(draft.note, 160)
                                     ?: "Drive (${String.format(Locale.US, "%.1f", trip.distanceKm)} km)",
                                 vehicle = InputCheck.finishLabel(draft.vehicle, 40) ?: "Primary Vehicle",
-                                pathJson = pathJson
+                                pathJson = pathJson,
+                                sync = checkpoint.trip.sync.changed()
                             ),
                             strict = false
                         ) ?: error("Trip could not be validated for saving")
@@ -270,7 +275,9 @@ object TrackingManager {
             },
             purpose = draft.note.ifBlank { "Drive" },
             vehicle = draft.vehicle.ifBlank { "Primary Vehicle" },
-            pathJson = checkpointRouteCache.serialized(trip, ::serializePoints)
+            pathJson = checkpointRouteCache.serialized(trip, ::serializePoints),
+            sync = SyncRevision(syncId = activeCheckpointKey, syncOwner = activeSyncOwner,
+                syncUpdatedAt = trip.startTime, syncChangeId = activeCheckpointKey.orEmpty())
         )
 
     @Synchronized

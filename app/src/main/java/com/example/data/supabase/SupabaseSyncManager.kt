@@ -10,6 +10,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class SupabaseSyncManager(
     private val tripRepository: TripRepository,
@@ -25,19 +27,24 @@ class SupabaseSyncManager(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val photos: ReceiptPhotoBackup? = null
 ) {
-    // Full syncs and individual changes must not race to publish their status.
+    private val trips = tripRepository.tripDao
+    private val receipts = receiptRepository.dao
+    private val changes = Channel<Unit>(Channel.CONFLATED)
     private val syncMutex = Mutex()
     private val _syncState = MutableStateFlow(
-        if (supabaseClient.config.isConfigured()) {
-            SupabaseSyncState(status = SyncStatus.IDLE)
-        } else {
-            SupabaseSyncState(status = SyncStatus.NOT_CONFIGURED, message = "Cloud backup isn't available.")
-        }
+        if (supabaseClient.config.isConfigured()) SupabaseSyncState(SyncStatus.IDLE)
+        else SupabaseSyncState(SyncStatus.NOT_CONFIGURED, message = "Cloud backup isn't available.")
     )
     val syncState: StateFlow<SupabaseSyncState> = _syncState.asStateFlow()
 
+    init {
+        scope.launch {
+            for (change in changes) syncAll()
+        }
+    }
+
     fun triggerSync() {
-        scope.launch { syncAll() }
+        if (supabaseClient.config.getSession() != null) changes.trySend(Unit)
     }
 
     suspend fun syncAll(): SupabaseSyncState = withContext(Dispatchers.IO) {
@@ -46,149 +53,133 @@ class SupabaseSyncManager(
 
     private suspend fun syncAllLocked(): SupabaseSyncState {
         if (!supabaseClient.config.isConfigured()) {
-            return SupabaseSyncState(
-                status = SyncStatus.NOT_CONFIGURED,
-                message = "Cloud backup isn't available."
-            ).also { _syncState.value = it }
+            return publish(SupabaseSyncState(SyncStatus.NOT_CONFIGURED, message = "Cloud backup isn't available."))
         }
+        val previous = _syncState.value.lastSyncTime
+        val owner = supabaseClient.config.getSession()?.user?.id
+            ?: return publish(SupabaseSyncState(SyncStatus.IDLE, lastSyncTime = previous, message = "Sign in to sync."))
+        publish(SupabaseSyncState(SyncStatus.SYNCING, lastSyncTime = previous))
 
-        val lastSuccessfulSync = _syncState.value.lastSyncTime
-        var uploadedTrips = 0
-        var uploadedReceipts = 0
-        _syncState.value = SupabaseSyncState(
-            status = SyncStatus.SYNCING,
-            lastSyncTime = lastSuccessfulSync,
-            message = "Synchronizing with Supabase..."
-        )
         try {
-            val userId = supabaseClient.config.getSession()?.user?.id
-            photos?.drainDeletions()
-            val localTrips = tripRepository.getAllTripsList()
-            val localReceipts = receiptRepository.getAllReceiptsList()
+            val cloudTrips = fetchTrips(owner)
+            val cloudReceipts = fetchReceipts(owner)
+            val tripVersions = cloudTrips.associateBy { it.sync?.syncId }
+            val receiptVersions = cloudReceipts.associateBy { it.sync?.syncId }
+            val legacyTrips = cloudTrips.filter { it.clientId > 0 }.associateBy { it.clientId }
+            val legacyReceipts = cloudReceipts.filter { it.clientId > 0 }.associateBy { it.clientId }
 
-            // Upload ALL local records first. Result.failure is a value, not a thrown
-            // exception: explicitly unwrap it before proceeding or counting an upload.
+            // The old app kept receipt deletions in preferences. Convert those to durable cloud tombstones.
+            for (id in photos?.pendingLegacyDeletions(owner).orEmpty()) {
+                val remote = legacyReceipts[id]
+                if (remote != null && !requireNotNull(remote.sync).syncDeleted) {
+                    supabaseClient.upsertReceipt(remote.copy(id = null, sync = remote.sync.changed(deleted = true))).getOrThrow()
+                }
+                photos?.deleteLegacyPhoto(id, owner)
+                photos?.acknowledgeLegacyDeletion(id, owner)
+            }
+
+            // Bind existing and guest records once to the account that backs them up.
+            checkAccount(owner)
+            trips.claimUnowned(owner)
+            receipts.claimUnowned(owner)
+            for (local in trips.syncRecords(owner)) {
+                if (local.sync.syncId != null) continue
+                val match = legacyTrips[local.id]?.takeIf {
+                    it.startDate == local.startDate && it.endDate == local.endDate
+                }
+                val legacy = match?.sync
+                trips.attachSyncId(
+                    local.id, legacy?.syncId ?: UUID.randomUUID().toString(), owner,
+                    preserveClassification = legacy != null && legacy.syncUpdatedAt == 0L && !legacy.syncDeleted && match.type == null
+                )
+            }
+            for (local in receipts.syncRecords(owner)) {
+                if (local.sync.syncId != null) continue
+                val match = legacyReceipts[local.id]?.takeIf { it.timestamp == local.timestamp }
+                receipts.attachSyncId(local.id, match?.sync?.syncId ?: UUID.randomUUID().toString(), owner)
+            }
+
+            val localTrips = trips.syncRecords(owner)
+            val localReceipts = receipts.syncRecords(owner)
+            val localTripsById = localTrips.associateBy { it.id }
             for (trip in localTrips) {
-                supabaseClient.upsertTrip(SupabaseTripDto.fromTripEntity(trip, userId)).getOrThrow()
-                uploadedTrips++
+                val remote = tripVersions[trip.sync.syncId]?.sync
+                if (remote == null || trip.sync > remote) {
+                    supabaseClient.upsertTrip(SupabaseTripDto.fromTripEntity(trip, owner)).getOrThrow()
+                }
             }
             for (receipt in localReceipts) {
-                uploadReceipt(receipt, userId)
-                uploadedReceipts++
-            }
-
-            // Do not pull older cloud data over an upload that failed. Fetch and
-            // validate both collections before changing either local collection.
-            val remoteTrips = supabaseClient.fetchTrips().getOrThrow().map {
-                requireNotNull(InputCheck.storedTrip(it.toTripEntity(), strict = false)) {
-                    "Cloud trip could not be validated"
+                val remote = receiptVersions[receipt.sync.syncId]
+                val version = remote?.sync
+                if (version != null && receipt.sync < version) continue
+                val cloudPhoto = if (!receipt.sync.syncDeleted && remote?.imagePath.orEmpty().isBlank()) photos?.upload(receipt) else null
+                if (version == null || receipt.sync > version || cloudPhoto != null) {
+                    val tripSyncId = localTripsById[receipt.tripId]?.sync?.syncId ?: receipt.tripSyncId
+                    val dto = SupabaseReceiptDto.fromGasReceiptEntity(receipt, owner)
+                        .copy(imagePath = cloudPhoto.orEmpty(), tripSyncId = tripSyncId)
+                    supabaseClient.upsertReceipt(dto).getOrThrow()
                 }
             }
-            val remoteReceipts = supabaseClient.fetchReceipts().getOrThrow().map {
-                requireNotNull(InputCheck.storedReceipt(
-                    photos?.restore(it, receiptRepository.getReceiptById(it.clientId)) ?: it.toGasReceiptEntity(), strict = false)) {
-                    "Cloud receipt could not be validated"
+
+            val downloadedTrips = fetchTrips(owner)
+            val downloadedReceipts = fetchReceipts(owner)
+            val validTrips = downloadedTrips.map { dto ->
+                val trip = dto.toTripEntity()
+                if (trip.sync.syncDeleted) trip else requireNotNull(InputCheck.storedTrip(trip, strict = false))
+            }
+            val legacyTripIds = downloadedTrips.filter { it.clientId > 0 }.associate { it.clientId to it.sync?.syncId }
+            val validReceipts = downloadedReceipts.mapNotNull { dto ->
+                val remote = dto.toGasReceiptEntity()
+                val local = receipts.findSynced(requireNotNull(remote.sync.syncId))
+                if (remote.sync.syncDeleted) {
+                    photos?.deleteBackedUpPhoto(dto)
+                    remote.copy(imagePath = "")
+                } else if (local != null && local.sync > remote.sync) {
+                    null
+                } else {
+                    val restored = photos?.restore(dto, local) ?: remote.copy(imagePath = local?.imagePath.orEmpty())
+                    requireNotNull(InputCheck.storedReceipt(restored, strict = false)).copy(
+                        tripSyncId = dto.tripSyncId ?: legacyTripIds[dto.tripId]
+                    )
                 }
             }
-            if (remoteTrips.isNotEmpty()) tripRepository.mergeDownloadedTrips(remoteTrips, localTrips)
-            if (remoteReceipts.isNotEmpty()) receiptRepository.insertReceipts(remoteReceipts)
 
-            return SupabaseSyncState(
+            // Validate both downloads before replacing local records. DAO transactions recheck revisions
+            // so a local edit or deletion during the network calls cannot be overwritten.
+            checkAccount(owner)
+            trips.mergeDownloaded(validTrips)
+            val liveTripIds = trips.syncRecords(owner)
+                .filterNot { it.sync.syncDeleted }.associate { it.sync.syncId to it.id }
+            receipts.mergeDownloaded(validReceipts.map { receipt ->
+                receipt.copy(tripId = liveTripIds[receipt.tripSyncId])
+            })
+            return publish(SupabaseSyncState(
                 status = SyncStatus.SUCCESS,
                 lastSyncTime = System.currentTimeMillis(),
-                message = "Successfully synchronized with Supabase database.",
-                syncedTripsCount = (localTrips.map { it.id } + remoteTrips.map { it.id }).toSet().size,
-                syncedReceiptsCount = (localReceipts.map { it.id } + remoteReceipts.map { it.id }).toSet().size
-            ).also { _syncState.value = it }
+                message = "Cloud backup is up to date.",
+                syncedTripsCount = validTrips.count { !it.sync.syncDeleted },
+                syncedReceiptsCount = validReceipts.count { !it.sync.syncDeleted }
+            ))
         } catch (error: CancellationException) {
-            _syncState.value = SupabaseSyncState(
-                status = SyncStatus.IDLE,
-                lastSyncTime = lastSuccessfulSync,
-                message = "Cloud sync was interrupted."
-            )
+            publish(SupabaseSyncState(SyncStatus.IDLE, lastSyncTime = previous))
             throw error
         } catch (error: Exception) {
-            return syncFailed(error, lastSuccessfulSync, uploadedTrips, uploadedReceipts)
+            Log.e("SupabaseSync", "sync failed", error)
+            return publish(SupabaseSyncState(
+                SyncStatus.ERROR, lastSyncTime = previous, message = "Cloud sync did not finish. Try syncing again."
+            ))
         }
     }
 
-    private fun syncFailed(
-        error: Exception,
-        lastSuccessfulSync: Long?,
-        uploadedTrips: Int = 0,
-        uploadedReceipts: Int = 0
-    ): SupabaseSyncState {
-        Log.e("SupabaseSync", "sync failed", error)
-        return SupabaseSyncState(
-            status = SyncStatus.ERROR,
-            message = "Cloud sync did not finish. Try syncing again.",
-            lastSyncTime = lastSuccessfulSync,
-            syncedTripsCount = uploadedTrips,
-            syncedReceiptsCount = uploadedReceipts
-        ).also { _syncState.value = it }
+    private suspend fun fetchTrips(owner: String): List<SupabaseTripDto> =
+        supabaseClient.fetchTrips(owner).getOrThrow().onEach { require(it.sync?.syncOwner == owner) }
+
+    private suspend fun fetchReceipts(owner: String): List<SupabaseReceiptDto> =
+        supabaseClient.fetchReceipts(owner).getOrThrow().onEach { require(it.sync?.syncOwner == owner) }
+
+    private fun checkAccount(owner: String) {
+        check(supabaseClient.config.getSession()?.user?.id == owner) { "Cloud account changed during sync" }
     }
 
-    private fun enqueueChange(operation: suspend () -> Unit) {
-        if (!supabaseClient.config.isConfigured()) return
-        // A previous full sync does not certify a newly edited or deleted record.
-        if (_syncState.value.status != SyncStatus.SYNCING) {
-            _syncState.value = _syncState.value.copy(status = SyncStatus.IDLE, message = "Changes pending sync.")
-        }
-        scope.launch {
-            syncMutex.withLock {
-                val lastSuccessfulSync = _syncState.value.lastSyncTime
-                try {
-                    _syncState.value = _syncState.value.copy(status = SyncStatus.SYNCING, message = "Syncing changes...")
-                    operation()
-                    // One change succeeding is not proof that a full backup completed.
-                    _syncState.value = SupabaseSyncState(
-                        status = SyncStatus.IDLE,
-                        lastSyncTime = lastSuccessfulSync,
-                        message = "Change synced. Run a full sync to verify your backup."
-                    )
-                } catch (error: CancellationException) {
-                    _syncState.value = SupabaseSyncState(status = SyncStatus.IDLE, lastSyncTime = lastSuccessfulSync)
-                    throw error
-                } catch (error: Exception) {
-                    syncFailed(error, lastSuccessfulSync)
-                }
-            }
-        }
-    }
-
-    fun onTripSaved(trip: TripEntity) = enqueueChange {
-        // Read current local data when this queued operation runs, not an older edit.
-        tripRepository.getTripById(trip.id)?.let { current ->
-            val userId = supabaseClient.config.getSession()?.user?.id
-            supabaseClient.upsertTrip(SupabaseTripDto.fromTripEntity(current, userId)).getOrThrow()
-        }
-    }
-
-    fun onTripDeleted(trip: TripEntity) = enqueueChange {
-        check(supabaseClient.deleteTrip(trip.id).getOrThrow()) { "Cloud trip deletion was not confirmed" }
-    }
-
-    fun onReceiptSaved(receipt: GasReceiptEntity) = enqueueChange {
-        receiptRepository.getReceiptById(receipt.id)?.let { current ->
-            val userId = supabaseClient.config.getSession()?.user?.id
-            photos?.drainDeletions()
-            uploadReceipt(current, userId)
-        }
-    }
-
-    suspend fun deleteReceiptLocally(receipt: GasReceiptEntity) = syncMutex.withLock {
-        photos?.queueDeletion(receipt.id)
-        receiptRepository.deleteReceipt(receipt)
-    }
-
-    private suspend fun uploadReceipt(receipt: GasReceiptEntity, userId: String?) {
-        val cloudPath = photos?.upload(receipt)
-        val dto = SupabaseReceiptDto.fromGasReceiptEntity(receipt, userId).copy(imagePath = cloudPath.orEmpty())
-        supabaseClient.upsertReceipt(dto).getOrThrow()
-    }
-
-    fun onReceiptDeleted(receipt: GasReceiptEntity) = enqueueChange {
-        if (photos != null) photos.drainDeletions()
-        else check(supabaseClient.deleteReceipt(receipt.id).getOrThrow()) { "Cloud receipt deletion was not confirmed" }
-    }
+    private fun publish(state: SupabaseSyncState): SupabaseSyncState = state.also { _syncState.value = it }
 }

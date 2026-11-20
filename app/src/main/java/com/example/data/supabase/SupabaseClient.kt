@@ -1,6 +1,7 @@
 package com.example.data.supabase
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -377,174 +378,80 @@ class SupabaseClient(
         Result.success(true)
     }
 
-    suspend fun fetchTrips(): Result<List<SupabaseTripDto>> = withContext(Dispatchers.IO) {
-        if (!config.isConfigured()) {
-            return@withContext Result.failure(hidden("Couldn't sync. Try again.", "not configured"))
-        }
+    suspend fun fetchTrips(owner: String? = null): Result<List<SupabaseTripDto>> =
+        fetchVersioned("trips", owner, SupabaseTripDto::fromJsonObject)
 
+    suspend fun fetchReceipts(owner: String? = null): Result<List<SupabaseReceiptDto>> =
+        fetchVersioned("gas_receipts", owner, SupabaseReceiptDto::fromJsonObject)
+
+    private suspend fun <T> fetchVersioned(
+        table: String, owner: String?, decode: (JSONObject) -> T
+    ): Result<List<T>> = withContext(Dispatchers.IO) {
         try {
-            val url = "${baseUrl()}/rest/v1/trips?select=*&order=start_date.desc"
-            val requestBuilder = Request.Builder().url(url).get()
-            authorizedHeaders().forEach { (k, v) -> requestBuilder.header(k, v) }
-
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(fromBody("Couldn't sync. Try again.", "fetch trips", response.code, body))
+            check(config.isConfigured()) { "Cloud backup is unavailable" }
+            val rows = mutableListOf<T>()
+            var after = 0L
+            val pageSize = 500
+            do {
+                val url = "${baseUrl()}/rest/v1/$table?select=*&order=id.asc&id=gt.$after&limit=$pageSize"
+                val builder = Request.Builder().url(url).get().header("X-VoomLogs-Sync", "2")
+                syncHeaders(owner).forEach { (key, value) -> builder.header(key, value) }
+                val page = httpClient.newCall(builder.build()).execute().use { response ->
+                    val body = response.body?.string().orEmpty()
+                    if (!response.isSuccessful) {
+                        throw fromBody("Couldn't sync. Try again.", "fetch $table", response.code, body)
+                    }
+                    JSONArray(body)
                 }
-
-                val list = mutableListOf<SupabaseTripDto>()
-                val array = JSONArray(body)
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    list.add(SupabaseTripDto.fromJsonObject(obj))
+                for (index in 0 until page.length()) rows.add(decode(page.getJSONObject(index)))
+                if (page.length() == pageSize) {
+                    val lastId = page.getJSONObject(page.length() - 1).getLong("id")
+                    check(lastId > after) { "Cloud pagination did not advance" }
+                    after = lastId
                 }
-                Result.success(list)
-            }
+            } while (page.length() == pageSize)
+            Result.success(rows)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Result.failure(hidden("Couldn't sync. Try again.", "fetch trips failed", e))
+            Result.failure(hidden("Couldn't sync. Try again.", "fetch $table failed", e))
         }
     }
 
-    suspend fun upsertTrip(tripDto: SupabaseTripDto): Result<SupabaseTripDto> = withContext(Dispatchers.IO) {
-        if (!config.isConfigured()) {
-            return@withContext Result.failure(hidden("Couldn't sync. Try again.", "not configured"))
-        }
+    suspend fun upsertTrip(trip: SupabaseTripDto): Result<Unit> =
+        writeVersioned("trips", trip.userId, trip.toJsonObject(includeLegacyId = false))
 
-        try {
-            val url = "${baseUrl()}/rest/v1/trips?on_conflict=client_id"
-            val bodyJson = tripDto.toJsonObject().toString()
+    suspend fun upsertReceipt(receipt: SupabaseReceiptDto): Result<Unit> =
+        writeVersioned("gas_receipts", receipt.userId, receipt.toJsonObject(includeLegacyId = false))
 
-            val requestBuilder = Request.Builder()
-                .url(url)
-                .post(bodyJson.toRequestBody(jsonMediaType))
-                .header("Prefer", "resolution=merge-duplicates,return=representation")
-
-            authorizedHeaders().forEach { (k, v) -> requestBuilder.header(k, v) }
-
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(fromBody("Couldn't sync. Try again.", "upsert trip", response.code, body))
+    private suspend fun writeVersioned(table: String, owner: String?, json: JSONObject): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            try {
+                check(config.isConfigured() && owner != null && json.has("sync_id"))
+                val url = "${baseUrl()}/rest/v1/$table?on_conflict=user_id,sync_id"
+                val builder = Request.Builder().url(url)
+                    .post(json.toString().toRequestBody(jsonMediaType))
+                    .header("Prefer", "resolution=merge-duplicates,return=minimal")
+                    .header("X-VoomLogs-Sync", "2")
+                syncHeaders(owner).forEach { (key, value) -> builder.header(key, value) }
+                httpClient.newCall(builder.build()).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw fromBody("Couldn't sync. Try again.", "upsert $table", response.code, response.body?.string().orEmpty())
+                    }
                 }
-
-                val array = JSONArray(body)
-                if (array.length() > 0) {
-                    Result.success(SupabaseTripDto.fromJsonObject(array.getJSONObject(0)))
-                } else {
-                    Result.success(tripDto)
-                }
+                Result.success(Unit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(hidden("Couldn't sync. Try again.", "upsert $table failed", e))
             }
-        } catch (e: Exception) {
-            Result.failure(hidden("Couldn't sync. Try again.", "upsert trip failed", e))
-        }
-    }
-
-    suspend fun deleteTrip(clientId: Long): Result<Boolean> = withContext(Dispatchers.IO) {
-        if (!config.isConfigured()) {
-            return@withContext Result.failure(hidden("Couldn't sync. Try again.", "not configured"))
         }
 
-        try {
-            val url = "${baseUrl()}/rest/v1/trips?client_id=eq.$clientId"
-            val requestBuilder = Request.Builder().url(url).delete()
-            authorizedHeaders().forEach { (k, v) -> requestBuilder.header(k, v) }
-
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (response.isSuccessful) {
-                    Result.success(true)
-                } else {
-                    Result.failure(hidden("Couldn't sync. Try again.", "delete trip HTTP ${response.code}"))
-                }
-            }
-        } catch (e: Exception) {
-            Result.failure(hidden("Couldn't sync. Try again.", "delete trip failed", e))
-        }
-    }
-
-    suspend fun fetchReceipts(): Result<List<SupabaseReceiptDto>> = withContext(Dispatchers.IO) {
-        if (!config.isConfigured()) {
-            return@withContext Result.failure(hidden("Couldn't sync. Try again.", "not configured"))
-        }
-
-        try {
-            val url = "${baseUrl()}/rest/v1/gas_receipts?select=*&order=timestamp.desc"
-            val requestBuilder = Request.Builder().url(url).get()
-            authorizedHeaders().forEach { (k, v) -> requestBuilder.header(k, v) }
-
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(fromBody("Couldn't sync. Try again.", "fetch receipts", response.code, body))
-                }
-
-                val list = mutableListOf<SupabaseReceiptDto>()
-                val array = JSONArray(body)
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    list.add(SupabaseReceiptDto.fromJsonObject(obj))
-                }
-                Result.success(list)
-            }
-        } catch (e: Exception) {
-            Result.failure(hidden("Couldn't sync. Try again.", "fetch receipts failed", e))
-        }
-    }
-
-    suspend fun upsertReceipt(receiptDto: SupabaseReceiptDto): Result<SupabaseReceiptDto> = withContext(Dispatchers.IO) {
-        if (!config.isConfigured()) {
-            return@withContext Result.failure(hidden("Couldn't sync. Try again.", "not configured"))
-        }
-
-        try {
-            val url = "${baseUrl()}/rest/v1/gas_receipts?on_conflict=client_id"
-            val bodyJson = receiptDto.toJsonObject().toString()
-
-            val requestBuilder = Request.Builder()
-                .url(url)
-                .post(bodyJson.toRequestBody(jsonMediaType))
-                .header("Prefer", "resolution=merge-duplicates,return=representation")
-
-            authorizedHeaders().forEach { (k, v) -> requestBuilder.header(k, v) }
-
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(fromBody("Couldn't sync. Try again.", "upsert receipt", response.code, body))
-                }
-
-                val array = JSONArray(body)
-                if (array.length() > 0) {
-                    Result.success(SupabaseReceiptDto.fromJsonObject(array.getJSONObject(0)))
-                } else {
-                    Result.success(receiptDto)
-                }
-            }
-        } catch (e: Exception) {
-            Result.failure(hidden("Couldn't sync. Try again.", "upsert receipt failed", e))
-        }
-    }
-
-    suspend fun deleteReceipt(clientId: Long): Result<Boolean> = withContext(Dispatchers.IO) {
-        if (!config.isConfigured()) {
-            return@withContext Result.failure(hidden("Couldn't sync. Try again.", "not configured"))
-        }
-
-        try {
-            val url = "${baseUrl()}/rest/v1/gas_receipts?client_id=eq.$clientId"
-            val requestBuilder = Request.Builder().url(url).delete()
-            authorizedHeaders().forEach { (k, v) -> requestBuilder.header(k, v) }
-
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (response.isSuccessful) {
-                    Result.success(true)
-                } else {
-                    Result.failure(hidden("Couldn't sync. Try again.", "delete receipt HTTP ${response.code}"))
-                }
-            }
-        } catch (e: Exception) {
-            Result.failure(hidden("Couldn't sync. Try again.", "delete receipt failed", e))
-        }
+    private suspend fun syncHeaders(owner: String?): Map<String, String> {
+        if (owner == null) return authorizedHeaders()
+        val session = ensureFreshSession()
+        check(session?.user?.id == owner) { "Cloud account changed during sync" }
+        return headers(requireNotNull(session).accessToken)
     }
 
     /** Receipt storage always requires a real session; never fall back to the anon key. */

@@ -2,6 +2,7 @@ package com.example.data.supabase
 
 import com.example.data.GasReceiptEntity
 import com.example.data.TripEntity
+import com.example.data.SyncRevision
 import org.json.JSONObject
 
 data class SupabaseUser(
@@ -50,7 +51,8 @@ data class SupabaseTripDto(
     val vehicle: String? = null,
     val pathJson: String = "[]",
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val sync: SyncRevision? = null
 ) {
     fun toTripEntity(): TripEntity {
         return TripEntity(
@@ -63,14 +65,16 @@ data class SupabaseTripDto(
             endAddress = endAddress,
             purpose = purpose,
             vehicle = vehicle,
-            pathJson = pathJson
+            pathJson = pathJson,
+            sync = sync ?: SyncRevision(syncId = null)
         )
     }
 
-    fun toJsonObject(): JSONObject {
+    fun toJsonObject(includeLegacyId: Boolean = true): JSONObject {
         val json = JSONObject()
         if (id != null && id > 0) json.put("id", id)
-        json.put("client_id", clientId)
+        if (includeLegacyId) json.put("client_id", clientId)
+        json.putRevision(sync)
         if (userId != null) json.put("user_id", userId)
         json.put("start_date", startDate)
         json.put("end_date", endDate)
@@ -97,14 +101,15 @@ data class SupabaseTripDto(
                 endAddress = entity.endAddress,
                 purpose = entity.purpose,
                 vehicle = entity.vehicle,
-                pathJson = entity.pathJson
+                pathJson = entity.pathJson,
+                sync = entity.sync
             )
         }
 
         fun fromJsonObject(json: JSONObject): SupabaseTripDto {
             val rawClientId = json.optLong("client_id", 0L)
             val id = if (json.has("id")) json.optLong("id") else null
-            val effectiveClientId = if (rawClientId > 0) rawClientId else (id ?: 0L)
+            val effectiveClientId = if (rawClientId > 0) rawClientId else if (!json.has("sync_id")) id ?: 0L else 0L
 
             return SupabaseTripDto(
                 id = id,
@@ -120,7 +125,8 @@ data class SupabaseTripDto(
                 vehicle = json.optString("vehicle").takeIf { it.isNotBlank() && it != "null" },
                 pathJson = json.optString("path_json", "[]"),
                 createdAt = json.optString("created_at").takeIf { it.isNotBlank() },
-                updatedAt = json.optString("updated_at").takeIf { it.isNotBlank() }
+                updatedAt = json.optString("updated_at").takeIf { it.isNotBlank() },
+                sync = json.readRevision()
             )
         }
     }
@@ -144,7 +150,9 @@ data class SupabaseReceiptDto(
     val rawExtraction: String? = null,
     val tripId: Long? = null,
     val createdAt: String? = null,
-    val updatedAt: String? = null
+    val updatedAt: String? = null,
+    val tripSyncId: String? = null,
+    val sync: SyncRevision? = null
 ) {
     fun toGasReceiptEntity(): GasReceiptEntity {
         return GasReceiptEntity(
@@ -161,14 +169,17 @@ data class SupabaseReceiptDto(
             receiptDate = receiptDate,
             paymentMethod = paymentMethod,
             rawExtraction = rawExtraction,
-            tripId = tripId
+            tripId = tripId,
+            tripSyncId = tripSyncId,
+            sync = sync ?: SyncRevision(syncId = null)
         )
     }
 
-    fun toJsonObject(): JSONObject {
+    fun toJsonObject(includeLegacyId: Boolean = true): JSONObject {
         val json = JSONObject()
         if (id != null && id > 0) json.put("id", id)
-        json.put("client_id", clientId)
+        if (includeLegacyId) json.put("client_id", clientId)
+        json.putRevision(sync)
         if (userId != null) json.put("user_id", userId)
         json.put("timestamp", timestamp)
         // Never send a phone's private filesystem path. Omitting this field also
@@ -184,7 +195,8 @@ data class SupabaseReceiptDto(
         if (receiptDate != null) json.put("receipt_date", receiptDate) else json.put("receipt_date", JSONObject.NULL)
         if (paymentMethod != null) json.put("payment_method", paymentMethod) else json.put("payment_method", JSONObject.NULL)
         if (rawExtraction != null) json.put("raw_extraction", rawExtraction) else json.put("raw_extraction", JSONObject.NULL)
-        if (tripId != null) json.put("trip_id", tripId) else json.put("trip_id", JSONObject.NULL)
+        if (includeLegacyId) json.put("trip_id", tripId ?: JSONObject.NULL)
+        json.put("trip_sync_id", tripSyncId ?: JSONObject.NULL)
         return json
     }
 
@@ -205,21 +217,23 @@ data class SupabaseReceiptDto(
                 receiptDate = entity.receiptDate,
                 paymentMethod = entity.paymentMethod,
                 rawExtraction = entity.rawExtraction,
-                tripId = entity.tripId
+                tripId = entity.tripId,
+                tripSyncId = entity.tripSyncId,
+                sync = entity.sync
             )
         }
 
         fun fromJsonObject(json: JSONObject): SupabaseReceiptDto {
             val rawClientId = json.optLong("client_id", 0L)
             val id = if (json.has("id")) json.optLong("id") else null
-            val effectiveClientId = if (rawClientId > 0) rawClientId else (id ?: 0L)
+            val effectiveClientId = if (rawClientId > 0) rawClientId else if (!json.has("sync_id")) id ?: 0L else 0L
 
             return SupabaseReceiptDto(
                 id = id,
                 clientId = effectiveClientId,
                 userId = json.optString("user_id").takeIf { it.isNotBlank() },
                 timestamp = json.optLong("timestamp", 0L),
-                imagePath = json.optString("image_path", ""),
+                imagePath = if (json.isNull("image_path")) "" else json.optString("image_path"),
                 merchant = json.optString("merchant").takeIf { it.isNotBlank() && it != "null" },
                 totalAmount = json.optDouble("total_amount", 0.0),
                 currency = json.optString("currency", "$"),
@@ -231,9 +245,30 @@ data class SupabaseReceiptDto(
                 paymentMethod = json.optString("payment_method").takeIf { it.isNotBlank() && it != "null" },
                 rawExtraction = json.optString("raw_extraction").takeIf { it.isNotBlank() && it != "null" },
                 tripId = if (json.has("trip_id") && !json.isNull("trip_id")) json.getLong("trip_id") else null,
+                tripSyncId = json.optString("trip_sync_id").takeUnless { it.isBlank() || it == "null" },
                 createdAt = json.optString("created_at").takeIf { it.isNotBlank() },
-                updatedAt = json.optString("updated_at").takeIf { it.isNotBlank() }
+                updatedAt = json.optString("updated_at").takeIf { it.isNotBlank() },
+                sync = json.readRevision()
             )
         }
     }
+}
+
+private fun JSONObject.putRevision(sync: SyncRevision?) {
+    if (sync?.syncId == null) return
+    put("sync_id", sync.syncId)
+    put("sync_updated_at", sync.syncUpdatedAt)
+    put("sync_change_id", sync.syncChangeId)
+    put("sync_deleted", sync.syncDeleted)
+}
+
+private fun JSONObject.readRevision(): SyncRevision? {
+    val id = optString("sync_id").takeUnless { it.isBlank() || it == "null" } ?: return null
+    return SyncRevision(
+        syncId = id,
+        syncOwner = optString("user_id").takeUnless { it.isBlank() || it == "null" },
+        syncUpdatedAt = getLong("sync_updated_at"),
+        syncChangeId = getString("sync_change_id"),
+        syncDeleted = getBoolean("sync_deleted")
+    )
 }

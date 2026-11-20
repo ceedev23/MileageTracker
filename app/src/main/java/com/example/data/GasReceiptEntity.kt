@@ -1,9 +1,11 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Embedded
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "gas_receipts")
+@Entity(tableName = "gas_receipts", indices = [Index(value = ["syncId"], unique = true)])
 data class GasReceiptEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -19,7 +21,9 @@ data class GasReceiptEntity(
     val receiptDate: String? = null,
     val paymentMethod: String? = null,
     val rawExtraction: String? = null,
-    val tripId: Long? = null
+    val tripId: Long? = null,
+    val tripSyncId: String? = null,
+    @Embedded val sync: SyncRevision = SyncRevision()
 )
 
 fun isGallonUnit(unit: String?): Boolean = unit.equals("gal", ignoreCase = true)

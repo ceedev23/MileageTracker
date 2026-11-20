@@ -48,6 +48,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -447,20 +451,22 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             photos = receiptPhotoBackup
         )
         supabaseSyncState = supabaseSyncManager.syncState
+        TrackingManager.onTripSavedCallback = { supabaseSyncManager.triggerSync() }
 
-        trips = repository.allTrips.stateIn(
+        val owners = supabaseConfig.sessionFlow.map { it?.user?.id }.distinctUntilChanged()
+        trips = owners.flatMapLatest { database.tripDao().visibleTrips(it) }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-        receipts = gasReceiptRepository.allReceipts.stateIn(
+        receipts = owners.flatMapLatest { database.gasReceiptDao().visibleReceipts(it) }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
-        totalGasExpenses = gasReceiptRepository.totalGasExpenses.stateIn(
+        totalGasExpenses = receipts.map { list -> list.sumOf { it.totalAmount } }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = 0.0
@@ -480,7 +486,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
-            val initial = repository.getAllTripsList()
+            val initial = database.tripDao().visibleTrips(supabaseConfig.getSession()?.user?.id).first()
             var seen: Set<Long>? = initial.map { it.id }.toSet()
             var skipEmptyReplay = seen.orEmpty().isNotEmpty()
             TripNotifier.post(getApplication(), tripUpdates(null, initial))
@@ -535,13 +541,12 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun classifyTrip(trip: TripEntity, newType: String) {
         if (newType != "Business" && newType != "Personal") return
         val previousType = trip.type
-        val updated = trip.copy(type = newType)
         if (_justCompletedTrip.value?.id == trip.id) {
             _justCompletedTrip.value = null
         }
         viewModelScope.launch {
-            repository.updateTrip(updated)
-            supabaseSyncManager.onTripSaved(updated)
+            repository.classifyTrips(listOf(trip.id), newType)
+            supabaseSyncManager.triggerSync()
             _undoAction.value = UndoAction(trip = trip, previousType = previousType, assignedType = newType)
             undoDismissJob?.cancel()
             undoDismissJob = launch {
@@ -558,7 +563,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             saved.onSuccess { updated ->
                 _undoAction.value = null
                 onResult(Result.success(updated.size))
-                updated.forEach { supabaseSyncManager.onTripSaved(it) }
+                supabaseSyncManager.triggerSync()
             }.onFailure { onResult(Result.failure(it)) }
         }
     }
@@ -566,9 +571,10 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun undoClassification() {
         val action = _undoAction.value ?: return
         viewModelScope.launch {
-            val reverted = action.trip.copy(type = action.previousType)
-            repository.updateTrip(reverted)
-            supabaseSyncManager.onTripSaved(reverted)
+            repository.getTripById(action.trip.id)?.let { current ->
+                repository.updateTrip(current.copy(type = action.previousType))
+                supabaseSyncManager.triggerSync()
+            }
             _undoAction.value = null
         }
     }
@@ -580,21 +586,19 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun deleteTrip(trip: TripEntity) {
         viewModelScope.launch {
             repository.deleteTrip(trip)
-            supabaseSyncManager.onTripDeleted(trip)
+            supabaseSyncManager.triggerSync()
         }
     }
 
     fun saveTrip(trip: TripEntity) {
         val clean = InputCheck.storedTrip(trip, strict = false) ?: return
         viewModelScope.launch {
-            val savedId = if (clean.id == 0L) {
-                repository.insertTrip(clean)
+            if (clean.id == 0L) {
+                repository.insertTrip(clean.copy(sync = clean.sync.copy(syncOwner = supabaseConfig.getSession()?.user?.id)))
             } else {
                 repository.updateTrip(clean)
-                clean.id
             }
-            val tripToSync = if (clean.id == 0L) clean.copy(id = savedId) else clean
-            supabaseSyncManager.onTripSaved(tripToSync)
+            supabaseSyncManager.triggerSync()
         }
     }
 
@@ -731,7 +735,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
     fun saveVehicleExpenses(expense: com.example.data.VehicleExpenseEntity, onResult: (Result<Unit>) -> Unit) {
         viewModelScope.launch {
             onResult(runCatching {
-                com.example.service.CanadianVehicleExpenses.calculate(expense, repository.getAllTripsList())
+                com.example.service.CanadianVehicleExpenses.calculate(expense, trips.value)
                 database.vehicleExpenseDao().save(expense)
             })
         }
@@ -743,7 +747,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     fun clearAllTrips() {
         viewModelScope.launch {
-            repository.clearAll()
+            repository.clearAll(supabaseConfig.getSession()?.user?.id)
+            supabaseSyncManager.triggerSync()
         }
     }
 
@@ -805,7 +810,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                     vehicle = "Primary Vehicle"
                 )
             )
-            repository.insertTrips(sampleList)
+            val owner = supabaseConfig.getSession()?.user?.id
+            repository.insertTrips(sampleList.map { it.copy(sync = it.sync.copy(syncOwner = owner)) })
+            supabaseSyncManager.triggerSync()
         }
     }
 
@@ -1015,9 +1022,9 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         }
 
         viewModelScope.launch {
-            val insertedId = gasReceiptRepository.insertReceipt(entity)
-            val entityToSync = entity.copy(id = insertedId)
-            supabaseSyncManager.onReceiptSaved(entityToSync)
+            val owner = supabaseConfig.getSession()?.user?.id
+            gasReceiptRepository.insertReceipt(entity.copy(sync = entity.sync.copy(syncOwner = owner)))
+            supabaseSyncManager.triggerSync()
             _receiptScanState.value = ReceiptScanUiState(
                 isDialogVisible = false,
                 isSavedSuccess = true
@@ -1027,14 +1034,14 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteReceipt(receipt: GasReceiptEntity) {
         viewModelScope.launch {
-            supabaseSyncManager.deleteReceiptLocally(receipt)
+            gasReceiptRepository.deleteReceipt(receipt)
             val image = InputCheck.receiptFile(getApplication<Application>().filesDir, receipt.imagePath)
             if (image != null) {
                 try {
                     image.delete()
                 } catch (_: Exception) {}
             }
-            supabaseSyncManager.onReceiptDeleted(receipt)
+            supabaseSyncManager.triggerSync()
         }
     }
 
@@ -1095,7 +1102,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
                 )
             )
             for (r in list) {
-                gasReceiptRepository.insertReceipt(r)
+                val owner = supabaseConfig.getSession()?.user?.id
+                gasReceiptRepository.insertReceipt(r.copy(sync = r.sync.copy(syncOwner = owner)))
             }
         }
     }

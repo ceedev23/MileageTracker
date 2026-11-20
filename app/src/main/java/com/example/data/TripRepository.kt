@@ -2,7 +2,7 @@ package com.example.data
 
 import kotlinx.coroutines.flow.Flow
 
-class TripRepository(private val tripDao: TripDao) {
+class TripRepository(internal val tripDao: TripDao) {
     val allTrips: Flow<List<TripEntity>> = tripDao.getAllTrips()
 
     suspend fun getAllTripsList(): List<TripEntity> = tripDao.getAllTripsList()
@@ -13,9 +13,6 @@ class TripRepository(private val tripDao: TripDao) {
 
     suspend fun insertTrips(trips: List<TripEntity>) = tripDao.insertTrips(trips)
 
-    suspend fun mergeDownloadedTrips(downloaded: List<TripEntity>, uploaded: List<TripEntity>) =
-        tripDao.mergeDownloadedTrips(downloaded, uploaded)
-
     suspend fun updateTrip(trip: TripEntity) = tripDao.updateTrip(trip)
 
     suspend fun classifyTrips(ids: List<Long>, type: String) = tripDao.classifyTrips(ids, type)
@@ -24,5 +21,5 @@ class TripRepository(private val tripDao: TripDao) {
 
     suspend fun deleteTripById(id: Long) = tripDao.deleteTripById(id)
 
-    suspend fun clearAll() = tripDao.clearAllTrips()
+    suspend fun clearAll(owner: String? = null) = tripDao.clearAllTrips(owner)
 }

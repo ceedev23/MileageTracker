@@ -18,20 +18,21 @@ class ReceiptPhotoBackup(
     private val filesDir = context.filesDir
     private val prefs = context.getSharedPreferences("receipt_photo_backup", Context.MODE_PRIVATE)
     private fun account(): String? = client.config.getSession()?.user?.id
-    private fun namespace(): String = digest(client.config.getUrl() + "/" + account())
+    private fun namespace(owner: String? = account()): String = digest(client.config.getUrl() + "/" + owner)
     fun enabled(): Boolean = available && account() != null && prefs.getBoolean("enabled_${namespace()}", false)
     fun setEnabled(enabled: Boolean) {
         check(!enabled || (available && account() != null)) { "Receipt backup is not available" }
         check(prefs.edit().putBoolean("enabled_${namespace()}", enabled).commit())
     }
 
-    private fun key(id: Long): String {
+    private fun key(id: String): String {
         val user = account() ?: throw IOException("Sign in to back up receipt photos.")
         return "$user/$id.jpg".also { require(validKey(it, user)) }
     }
 
     suspend fun upload(receipt: GasReceiptEntity): String? {
         if (!enabled()) return null
+        require(receipt.sync.syncOwner == null || receipt.sync.syncOwner == account())
         val file = InputCheck.receiptFile(filesDir, receipt.imagePath)
         // A missing image must never be mistaken for a completed photo backup.
         if (receipt.imagePath.isBlank()) return null
@@ -39,7 +40,7 @@ class ReceiptPhotoBackup(
             "Receipt photo is missing or too large. It has not been backed up."
         }
         val bytes = file.readBytes().also { validateImage(it) }
-        val key = key(receipt.id)
+        val key = key(receipt.sync.syncId ?: receipt.id.toString())
         client.receiptObject("POST", key, bytes).getOrThrow()
         return PREFIX + key
     }
@@ -52,8 +53,8 @@ class ReceiptPhotoBackup(
             return remote.copy(imagePath = localFile?.absolutePath.orEmpty())
         }
         val objectKey = dto.imagePath.removePrefix(PREFIX)
-        require(validKey(objectKey, account().orEmpty()) && objectKey == key(dto.clientId)) { "Invalid cloud receipt photo" }
-        if (!enabled()) return remote.copy(imagePath = localFile?.absolutePath.orEmpty())
+        require(objectKey in cloudKeys(dto)) { "Invalid cloud receipt photo" }
+        if (!enabled() || localFile != null) return remote.copy(imagePath = localFile?.absolutePath.orEmpty())
         val bytes = client.receiptObject("GET", objectKey).getOrThrow()
         // Numeric, account/project-scoped filename remains compatible with the existing viewer.
         val dir = File(filesDir, "receipts").apply { check(exists() || mkdirs()) }
@@ -67,37 +68,37 @@ class ReceiptPhotoBackup(
         return remote.copy(imagePath = target.absolutePath)
     }
 
-    /** Persist BEFORE deleting the local row, even if offline or photo backup is off. */
+    fun pendingLegacyDeletions(owner: String): Set<Long> =
+        prefs.getStringSet("deletions_${namespace(owner)}", emptySet()).orEmpty().mapNotNull { it.toLongOrNull() }.toSet()
+
     @Synchronized
-    fun queueDeletion(id: Long) {
-        if (account() == null) return
-        val prefKey = "deletions_${namespace()}"
-        val pending = prefs.getStringSet(prefKey, emptySet()).orEmpty().toMutableSet()
-        pending.add(id.toString())
-        check(prefs.edit().putStringSet(prefKey, pending).commit()) { "Could not queue cloud deletion" }
+    fun acknowledgeLegacyDeletion(id: Long, owner: String) {
+        val prefKey = "deletions_${namespace(owner)}"
+        val remaining = prefs.getStringSet(prefKey, emptySet()).orEmpty().toMutableSet()
+        remaining.remove(id.toString())
+        check(prefs.edit().putStringSet(prefKey, remaining).commit()) { "Could not save cloud deletion" }
     }
 
-    suspend fun drainDeletions() {
-        if (account() == null) return
-        val prefKey = "deletions_${namespace()}"
-        for (id in prefs.getStringSet(prefKey, emptySet()).orEmpty().toSet()) {
-            // Storage deletion is idempotent; retain this tombstone until BOTH operations succeed.
-            client.receiptObject("DELETE", key(id.toLong())).getOrThrow()
-            check(client.deleteReceipt(id.toLong()).getOrThrow())
-            synchronized(this) {
-                val remaining = prefs.getStringSet(prefKey, emptySet()).orEmpty().toMutableSet()
-                remaining.remove(id)
-                check(prefs.edit().putStringSet(prefKey, remaining).commit())
-            }
-        }
+    suspend fun deleteBackedUpPhoto(dto: SupabaseReceiptDto) {
+        if (!dto.imagePath.startsWith(PREFIX)) return
+        val objectKey = dto.imagePath.removePrefix(PREFIX)
+        require(objectKey in cloudKeys(dto)) { "Invalid cloud receipt photo" }
+        client.receiptObject("DELETE", objectKey).getOrThrow()
     }
+
+    suspend fun deleteLegacyPhoto(id: Long, owner: String) {
+        client.receiptObject("DELETE", "$owner/$id.jpg").getOrThrow()
+    }
+
+    private fun cloudKeys(dto: SupabaseReceiptDto): Set<String> =
+        listOfNotNull(dto.sync?.syncId, dto.clientId.takeIf { it > 0 }?.toString()).map(::key).toSet()
 
     companion object {
         const val PREFIX = "receipt-photo:"
         const val MAX_BYTES = 10 * 1024 * 1024
         fun validKey(key: String, user: String): Boolean =
             user.matches(Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) &&
-                key.matches(Regex("${Regex.escape(user)}/[1-9][0-9]*\\.jpg"))
+                key.matches(Regex("${Regex.escape(user)}/(?:[1-9][0-9]*|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\\.jpg"))
         fun validateImage(bytes: ByteArray) {
             require(bytes.size in 4..MAX_BYTES && bytes[0] == 0xff.toByte() && bytes[1] == 0xd8.toByte() && bytes[2] == 0xff.toByte()) {
                 "Receipt photo must be a JPEG under 10 MB"

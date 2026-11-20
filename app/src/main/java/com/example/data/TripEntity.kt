@@ -1,9 +1,11 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Embedded
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "trips")
+@Entity(tableName = "trips", indices = [Index(value = ["syncId"], unique = true)])
 data class TripEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -15,5 +17,6 @@ data class TripEntity(
     val endAddress: String? = null,
     val purpose: String? = null,
     val vehicle: String? = null,
-    val pathJson: String = "[]"
+    val pathJson: String = "[]",
+    @Embedded val sync: SyncRevision = SyncRevision()
 )

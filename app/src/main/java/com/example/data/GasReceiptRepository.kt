@@ -2,7 +2,7 @@ package com.example.data
 
 import kotlinx.coroutines.flow.Flow
 
-class GasReceiptRepository(private val dao: GasReceiptDao) {
+class GasReceiptRepository(internal val dao: GasReceiptDao) {
     val allReceipts: Flow<List<GasReceiptEntity>> = dao.getAllReceipts()
     val totalGasExpenses: Flow<Double?> = dao.getTotalGasExpenses()
 

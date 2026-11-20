@@ -26,6 +26,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 class ReceiptPhotoBackupTest {
     private val user = "11111111-1111-4111-8111-111111111111"
     private val other = "22222222-2222-4222-8222-222222222222"
+    private val receiptId = "33333333-3333-4333-8333-333333333333"
     private val jpeg = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xe0.toByte(), 1, 2)
     private lateinit var app: Application
     private lateinit var config: SupabaseConfig
@@ -63,8 +64,8 @@ class ReceiptPhotoBackupTest {
         image.writeBytes(jpeg)
     }
     private fun signIn(id: String) = config.saveSession(SupabaseSession("test-token", "test-refresh", SupabaseUser(id, "test@example.invalid")))
-    private fun receipt() = GasReceiptEntity(id = 123, imagePath = image.absolutePath, totalAmount = 50.0)
-    private fun dto() = SupabaseReceiptDto.fromGasReceiptEntity(receipt(), user).copy(imagePath = ReceiptPhotoBackup.PREFIX + "$user/123.jpg")
+    private fun receipt() = GasReceiptEntity(id = 123, imagePath = image.absolutePath, totalAmount = 50.0, sync = SyncRevision(syncId = receiptId))
+    private fun dto() = SupabaseReceiptDto.fromGasReceiptEntity(receipt(), user).copy(imagePath = ReceiptPhotoBackup.PREFIX + "$user/$receiptId.jpg")
     @After fun cleanup() { db?.close(); app.filesDir.resolve("receipts").deleteRecursively() }
 
     @Test fun `photos stay local until explicit opt in`() = runBlocking {
@@ -90,9 +91,9 @@ class ReceiptPhotoBackupTest {
     }
     @Test fun `upload sends bytes and own private object key`() = runBlocking {
         photos.setEnabled(true)
-        assertEquals(ReceiptPhotoBackup.PREFIX + "$user/123.jpg", photos.upload(receipt()))
+        assertEquals(ReceiptPhotoBackup.PREFIX + "$user/$receiptId.jpg", photos.upload(receipt()))
         val request = requests.single()
-        assertEquals("/storage/v1/object/receipt-photos/$user/123.jpg", request.url.encodedPath)
+        assertEquals("/storage/v1/object/receipt-photos/$user/$receiptId.jpg", request.url.encodedPath)
         assertEquals("Bearer test-token", request.header("Authorization"))
         val buffer = okio.Buffer(); request.body!!.writeTo(buffer)
         assertArrayEquals(jpeg, buffer.readByteArray())
@@ -136,21 +137,30 @@ class ReceiptPhotoBackupTest {
         try { photos.upload(receipt()); fail("Should reject") } catch (_: IllegalStateException) {}
         assertTrue(requests.isEmpty())
     }
-    @Test fun `deletion survives recreation and retries even when backup is off`() = runBlocking {
-        photos.queueDeletion(123); failDelete = true
-        try { photos.drainDeletions(); fail("Should reject") } catch (_: Exception) {}
+    @Test fun `tombstoned receipt photo deletion retries even when backup is off`() = runBlocking {
+        val deleted = dto().let { it.copy(sync = it.sync!!.changed(deleted = true)) }
+        failDelete = true
+        try { photos.deleteBackedUpPhoto(deleted); fail("Should reject") } catch (_: Exception) {}
         assertEquals(1, requests.size)
-        failDelete = false; requests.clear()
-        ReceiptPhotoBackup(app, client, available = false).drainDeletions()
-        assertEquals(2, requests.size)
-        requests.clear(); photos.drainDeletions()
-        assertTrue(requests.isEmpty())
+        failDelete = false
+        requests.clear()
+        ReceiptPhotoBackup(app, client, available = false).deleteBackedUpPhoto(deleted)
+        assertEquals("DELETE", requests.single().method)
+        assertTrue(requests.single().url.encodedPath.endsWith("$user/$receiptId.jpg"))
     }
-    @Test fun `photo upload failure prevents metadata writes and downloads`() = runBlocking {
+
+    @Test fun `legacy receipt photo key is still restorable after UUID migration`() = runBlocking {
+        photos.setEnabled(true)
+        image.delete()
+        val legacy = dto().copy(imagePath = ReceiptPhotoBackup.PREFIX + "$user/123.jpg")
+        val restored = photos.restore(legacy, null)
+        assertArrayEquals(jpeg, File(restored.imagePath).readBytes())
+    }
+    @Test fun `photo upload failure prevents metadata writes`() = runBlocking {
         photos.setEnabled(true); failUpload = true
         val manager = manager(true)
         assertEquals(SyncStatus.ERROR, manager.syncAll().status)
-        assertFalse(requests.any { it.url.encodedPath.startsWith("/rest/") })
+        assertFalse(requests.any { it.method == "POST" && it.url.encodedPath.startsWith("/rest/") })
     }
     @Test fun `restore failure never reports a successful full backup`() = runBlocking {
         photos.setEnabled(true); failDownload = true; remoteReceipt = dto()
@@ -159,7 +169,7 @@ class ReceiptPhotoBackupTest {
     @Test fun `successful sync restores photo into local database`() = runBlocking {
         photos.setEnabled(true); remoteReceipt = dto(); image.delete()
         assertEquals(SyncStatus.SUCCESS, manager(false).syncAll().status)
-        val saved = db!!.gasReceiptDao().getReceiptById(123)!!
+        val saved = db!!.gasReceiptDao().getAllReceiptsList().single()
         assertArrayEquals(jpeg, File(saved.imagePath).readBytes())
     }
     private suspend fun manager(localReceipt: Boolean): SupabaseSyncManager {
