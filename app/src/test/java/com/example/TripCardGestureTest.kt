@@ -88,6 +88,7 @@ class TripCardGestureTest {
                 trip = classifiedTrip,
                 isMiles = false,
                 reimbursementRate = 0.70,
+                mileageBenchmark = 16.42,
                 onClassify = { _, _ -> },
                 onEdit = { trip -> editedTrip = trip },
                 onDelete = {}
@@ -108,7 +109,8 @@ class TripCardGestureTest {
         composeTestRule.onNodeWithText("100 Industrial Way").assertIsDisplayed()
         composeTestRule.onNodeWithText("DISTANCE").assertIsDisplayed()
         composeTestRule.onNodeWithText("DURATION").assertIsDisplayed()
-        composeTestRule.onNodeWithText("EST. VALUE").assertIsDisplayed()
+        composeTestRule.onNodeWithText("MILEAGE EST.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("$16.42").assertIsDisplayed()
         composeTestRule.onNodeWithText("Honda Civic").assertIsDisplayed()
         composeTestRule.onNodeWithText("Annual Audit Review").assertIsDisplayed()
         composeTestRule.onNodeWithText("Full Date").assertIsDisplayed()
