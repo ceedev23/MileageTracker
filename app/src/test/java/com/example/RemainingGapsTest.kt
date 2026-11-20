@@ -123,5 +123,52 @@ class RemainingGapsTest {
             db.query("SELECT * FROM vehicle_expenses").use { assertEquals(0, it.count) }
         } finally { helper.close() }
     }
+    @Test fun syncMigrationPreservesTripsAndReceiptLinks() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val name = "migration-v4-${java.util.UUID.randomUUID()}.db"
+        val helper = androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory().create(
+            androidx.sqlite.db.SupportSQLiteOpenHelper.Configuration.builder(context).name(name)
+                .callback(object : androidx.sqlite.db.SupportSQLiteOpenHelper.Callback(4) {
+                    override fun onCreate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("""CREATE TABLE trips (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, startDate INTEGER NOT NULL,
+                            endDate INTEGER NOT NULL, distanceKm REAL NOT NULL, type TEXT, startAddress TEXT,
+                            endAddress TEXT, purpose TEXT, vehicle TEXT, pathJson TEXT NOT NULL
+                        )""")
+                        db.execSQL("""CREATE TABLE gas_receipts (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, timestamp INTEGER NOT NULL,
+                            imagePath TEXT NOT NULL, merchant TEXT, totalAmount REAL NOT NULL, currency TEXT NOT NULL,
+                            fuelType TEXT, gallonsOrLiters REAL, unit TEXT NOT NULL, pricePerUnit REAL, receiptDate TEXT,
+                            paymentMethod TEXT, rawExtraction TEXT, tripId INTEGER
+                        )""")
+                        AppDatabase.MIGRATION_2_3.migrate(db)
+                        AppDatabase.MIGRATION_3_4.migrate(db)
+                        db.execSQL("INSERT INTO trips(id,startDate,endDate,distanceKm,type,pathJson) VALUES(5,1,2,7,'Business','[]')")
+                        db.execSQL("INSERT INTO gas_receipts(id,timestamp,imagePath,merchant,totalAmount,currency,unit,tripId) VALUES(6,3,'','Shell',8,'CAD','L',5)")
+                    }
+                    override fun onUpgrade(db: androidx.sqlite.db.SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+                }).build())
+        helper.writableDatabase
+        helper.close()
+        val db = Room.databaseBuilder(context, AppDatabase::class.java, name)
+            .addMigrations(AppDatabase.MIGRATION_4_5).build()
+        try {
+            val trip = db.tripDao().getTripById(5)!!
+            val receipt = db.gasReceiptDao().getReceiptById(6)!!
+            assertEquals("Business", trip.type)
+            assertEquals(7.0, trip.distanceKm, 0.0)
+            assertEquals(5L, receipt.tripId)
+            assertEquals("Shell", receipt.merchant)
+            assertNull(trip.sync.syncId)
+            assertNull(receipt.sync.syncId)
+            assertFalse(trip.sync.syncDeleted)
+            assertFalse(receipt.sync.syncDeleted)
+        } finally {
+            db.close()
+            context.deleteDatabase(name)
+        }
+        Unit
+    }
+
     private fun assertFails(block: () -> Unit) { try { block(); fail("Invalid input accepted") } catch (_: IllegalArgumentException) {} }
 }

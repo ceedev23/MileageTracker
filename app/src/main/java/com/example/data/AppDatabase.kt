@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.data.supabase.SupabaseConfig
 
 @Database(entities = [TripEntity::class, GasReceiptEntity::class, TripRecoveryEntity::class, OdometerReadingEntity::class, VehicleExpenseEntity::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +28,9 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS vehicle_expenses (vehicle TEXT NOT NULL, year INTEGER NOT NULL, openingKm REAL NOT NULL, closingKm REAL NOT NULL, fuel REAL NOT NULL, maintenance REAL NOT NULL, insurance REAL NOT NULL, registration REAL NOT NULL, allowableInterest REAL NOT NULL, allowableLease REAL NOT NULL, businessParking REAL NOT NULL, supplementaryInsurance REAL NOT NULL, PRIMARY KEY(vehicle, year))")
             }
         }
-        val MIGRATION_4_5 = object : Migration(4, 5) {
+        val MIGRATION_4_5 = syncIdentityMigration(null)
+
+        private fun syncIdentityMigration(owner: String?): Migration = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 for (table in listOf("trips", "gas_receipts")) {
                     db.execSQL("ALTER TABLE $table ADD COLUMN syncId TEXT")
@@ -36,6 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
                     db.execSQL("ALTER TABLE $table ADD COLUMN syncChangeId TEXT NOT NULL DEFAULT ''")
                     db.execSQL("ALTER TABLE $table ADD COLUMN syncDeleted INTEGER NOT NULL DEFAULT 0")
                     db.execSQL("CREATE UNIQUE INDEX index_${table}_syncId ON $table(syncId)")
+                    if (owner != null) db.execSQL("UPDATE $table SET syncOwner = ?", arrayOf(owner))
                 }
                 db.execSQL("ALTER TABLE gas_receipts ADD COLUMN tripSyncId TEXT")
             }
@@ -49,7 +53,11 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "mileage_tracker_db"
-                ).addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).fallbackToDestructiveMigration(false).build()
+                ).addMigrations(
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    syncIdentityMigration(SupabaseConfig(context).getSession()?.user?.id)
+                ).fallbackToDestructiveMigration(false).build()
                 INSTANCE = instance
                 instance
             }

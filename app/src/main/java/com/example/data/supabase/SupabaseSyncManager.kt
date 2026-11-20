@@ -61,6 +61,10 @@ class SupabaseSyncManager(
         publish(SupabaseSyncState(SyncStatus.SYNCING, lastSyncTime = previous))
 
         try {
+            // Bind existing and guest records once to the account that backs them up.
+            checkAccount(owner)
+            trips.claimUnowned(owner)
+            receipts.claimUnowned(owner)
             val cloudTrips = fetchTrips(owner)
             val cloudReceipts = fetchReceipts(owner)
             val tripVersions = cloudTrips.associateBy { it.sync?.syncId }
@@ -78,10 +82,6 @@ class SupabaseSyncManager(
                 photos?.acknowledgeLegacyDeletion(id, owner)
             }
 
-            // Bind existing and guest records once to the account that backs them up.
-            checkAccount(owner)
-            trips.claimUnowned(owner)
-            receipts.claimUnowned(owner)
             for (local in trips.syncRecords(owner)) {
                 if (local.sync.syncId != null) continue
                 val match = legacyTrips[local.id]?.takeIf {
@@ -112,7 +112,9 @@ class SupabaseSyncManager(
                 val remote = receiptVersions[receipt.sync.syncId]
                 val version = remote?.sync
                 if (version != null && receipt.sync < version) continue
-                val cloudPhoto = if (!receipt.sync.syncDeleted && remote?.imagePath.orEmpty().isBlank()) photos?.upload(receipt) else null
+                val cloudPhoto = if (!receipt.sync.syncDeleted &&
+                    !remote?.imagePath.orEmpty().startsWith(ReceiptPhotoBackup.PREFIX)
+                ) photos?.upload(receipt) else null
                 if (version == null || receipt.sync > version || cloudPhoto != null) {
                     val tripSyncId = localTripsById[receipt.tripId]?.sync?.syncId ?: receipt.tripSyncId
                     val dto = SupabaseReceiptDto.fromGasReceiptEntity(receipt, owner)

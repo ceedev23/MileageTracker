@@ -53,9 +53,9 @@ begin
             (new.sync_updated_at, new.sync_change_id collate "C") <=
             (old.sync_updated_at, old.sync_change_id collate "C") then
             -- Photo opt-in can add the photo to an otherwise identical receipt revision.
-            if tg_table_name = 'gas_receipts' and new.sync_change_id <> '' and
+            if tg_table_name = 'gas_receipts' and
                 new.sync_updated_at = old.sync_updated_at and new.sync_change_id = old.sync_change_id then
-                if old.image_path is null or old.image_path = '' then
+                if new.image_path like 'receipt-photo:%' and coalesce(old.image_path, '') not like 'receipt-photo:%' then
                     old.image_path := new.image_path;
                     return old;
                 end if;
