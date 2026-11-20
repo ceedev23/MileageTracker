@@ -13,7 +13,7 @@ data class MileageSettings(
     val taxCountry: String = "CA",
     val taxCountrySelected: Boolean = false,
     val unit: String = "km", // "km" or "mi"
-    val reimbursementRate: Double = 0.73, // 2026 CRA rate for the first 5,000 km
+    val reimbursementRate: Double = 0.73, // Default client billing rate
     val vehicleName: String = "Primary Vehicle",
     val annualGoal: Double = 15000.0, // target annual distance in user's unit
     val odometerKm: Double? = null,

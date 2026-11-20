@@ -111,7 +111,8 @@ fun SwipeableTripCard(
     onClassify: (TripEntity, String) -> Unit,
     onEdit: (TripEntity) -> Unit,
     onDelete: (TripEntity) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    mileageBenchmark: Double? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -128,7 +129,7 @@ fun SwipeableTripCard(
     val distanceValue = if (isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
     val unitLabel = if (isMiles) "mi" else "km"
     val distanceDisplay = String.format(Locale.getDefault(), "%.1f %s", distanceValue, unitLabel)
-    val amountValue = distanceValue * reimbursementRate
+    val amountValue = mileageBenchmark ?: if (trip.type == "Personal") 0.0 else distanceValue * reimbursementRate
     val amountDisplay = String.format(Locale.getDefault(), "$%.2f", amountValue)
 
     val timeFormat = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
@@ -384,7 +385,7 @@ fun SwipeableTripCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Primary Metrics Row (Distance + Deduction Preview)
+                // Primary Metrics Row (Distance + Estimated Value)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -399,7 +400,7 @@ fun SwipeableTripCard(
 
                     if (trip.type == "Business" || isExpanded) {
                         Text(
-                            text = "$amountDisplay deduction",
+                            text = "$amountDisplay est.",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = BusinessBlue,
@@ -614,7 +615,7 @@ fun SwipeableTripCard(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             TripMetricCard(
-                                title = "EST. VALUE",
+                                title = if (mileageBenchmark != null) "MILEAGE EST." else "BILLING EST.",
                                 value = amountDisplay,
                                 icon = Icons.Default.AttachMoney,
                                 modifier = Modifier.weight(1f)

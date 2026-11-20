@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.data.InputCheck
+import com.example.service.CanadianMileageEstimate
 import com.example.service.LiveTrackingState
 import com.example.ui.components.GoogleMapView
 import java.text.SimpleDateFormat
@@ -102,7 +103,8 @@ fun LiveDriveScreen(
     onVehicleChange: (String) -> Unit,
     onStop: () -> Unit,
     onDraftChange: (category: String?, vehicle: String, note: String, startPlaceName: String?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    canadianMileageEstimate: CanadianMileageEstimate? = null
 ) {
     val unitLabel = if (isMiles) "mi" else "km"
     val displayDistance = if (isMiles) trackingState.distanceKm * 0.621371 else trackingState.distanceKm
@@ -126,7 +128,8 @@ fun LiveDriveScreen(
         SimpleDateFormat("h:mm a", Locale.US).format(Date(startedAt))
     }
 
-    val amount = if (category == "Personal") 0.0 else displayDistance * reimbursementRate
+    val benchmark = canadianMileageEstimate?.forLiveTrip(startedAt, trackingState.distanceKm, category)
+    val amount = benchmark ?: if (category == "Personal") 0.0 else displayDistance * reimbursementRate
     val amountText = if (amount < 0.005) "$0" else String.format(Locale.US, "$%.2f", amount)
     val addressLine = trackingState.startAddress?.takeIf { it.isNotBlank() } ?: "Locating start address…"
     val placeTitle = startPlaceName?.takeIf { it.isNotBlank() } ?: "Select a location"
@@ -272,7 +275,7 @@ fun LiveDriveScreen(
                                     .background(Color(0xFFD5D9E7))
                             )
                             TrackingMetric(
-                                label = "Amount",
+                                label = if (benchmark != null) "Mileage estimate" else "Billing estimate",
                                 value = amountText,
                                 icon = Icons.Outlined.AccountBalanceWallet,
                                 compact = narrow,

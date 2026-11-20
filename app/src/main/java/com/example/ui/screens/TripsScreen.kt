@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.TripEntity
+import com.example.service.CanadianMileageEstimate
 import com.example.ui.MileageViewModel
 import com.example.ui.TripFilter
 import com.example.ui.components.SwipeableTripCard
@@ -95,6 +96,9 @@ fun TripsScreen(
 ) {
     val trips by viewModel.trips.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    val canadianMileageEstimate = remember(trips, settings.taxCountry) {
+        if (settings.taxCountry == "CA") CanadianMileageEstimate(trips) else null
+    }
     val odometerReadings by viewModel.odometerReadings.collectAsState()
     var showMissingTripReview by remember { mutableStateOf(false) }
     val activeFilter by viewModel.activeFilter.collectAsState()
@@ -429,6 +433,7 @@ fun TripsScreen(
                                 trip = trip,
                                 isMiles = isMiles,
                                 reimbursementRate = settings.reimbursementRate,
+                                mileageBenchmark = canadianMileageEstimate?.forTrip(trip, previewBusiness = true),
                                 onClassify = { t, type -> viewModel.classifyTrip(t, type) },
                                 onEdit = { t ->
                                     tripToEdit = t

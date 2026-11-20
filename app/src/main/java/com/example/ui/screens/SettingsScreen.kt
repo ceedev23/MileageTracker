@@ -274,7 +274,7 @@ fun SettingsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    SettingsNote("Optional rate for client billing only. Review it after changing units or country.")
+                    SettingsNote("Optional client billing rate. Canadian 2026 mileage estimates use the published provincial rates.")
                 }
                 SettingsDivider()
                 SettingsDetailsRow("Annual driving target", Icons.Outlined.Speed) {

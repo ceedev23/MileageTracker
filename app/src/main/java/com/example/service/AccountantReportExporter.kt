@@ -29,8 +29,18 @@ data class ReportSnapshot(
     val createdAt: Long,
     val timeZoneId: String,
     val taxCountry: String = "US",
-    val odometerReadings: List<OdometerReadingEntity> = emptyList()
+    val odometerReadings: List<OdometerReadingEntity> = emptyList(),
+    private val mileageHistory: List<TripEntity> = trips
 ) {
+    val canadianMileageValues: Map<Long, Double> by lazy {
+        if (taxCountry == "CA") {
+            val estimates = CanadianMileageEstimate(mileageHistory, TimeZone.getTimeZone(timeZoneId))
+            trips.mapNotNull { trip -> estimates.forTrip(trip)?.let { trip.id to it } }.toMap()
+        } else {
+            emptyMap()
+        }
+    }
+
     companion object {
         fun create(
             trips: List<TripEntity>, receipts: List<GasReceiptEntity>, period: ReportPeriod,
@@ -54,7 +64,8 @@ data class ReportSnapshot(
                 trips.filter { included(it.startDate) }.sortedWith(compareBy<TripEntity> { it.startDate }.thenBy { it.id }),
                 receipts.filter { included(receiptTime(it, zone)) }.sortedWith(compareBy<GasReceiptEntity> { receiptTime(it, zone) }.thenBy { it.id }),
                 period, isMiles, rate, now, zone.id, taxCountry,
-                odometerReadings.filter { included(it.recordedAt) }.sortedWith(compareBy<OdometerReadingEntity> { it.recordedAt }.thenBy { it.id })
+                odometerReadings.filter { included(it.recordedAt) }.sortedWith(compareBy<OdometerReadingEntity> { it.recordedAt }.thenBy { it.id }),
+                mileageHistory = if (taxCountry == "CA") trips.toList() else emptyList()
             )
         }
     }
@@ -96,7 +107,11 @@ object AccountantReportExporter {
     fun tripCsv(snapshot: ReportSnapshot): String = buildString {
         val includeRateEstimate = snapshot.taxCountry != "CA"
         append("Trip ID,Date,Start Address,End Address,Distance (${if (snapshot.isMiles) "Miles" else "Kilometers"}),Type,Purpose,Vehicle")
-        if (includeRateEstimate) append(",Rate/Unit,Rate-based Estimate")
+        if (includeRateEstimate) {
+            append(",Rate/Unit,Rate-based Estimate")
+        } else {
+            append(",2026 Provincial Mileage Benchmark (CAD)")
+        }
         append("\r\n")
         for (trip in snapshot.trips) {
             val distance = if (snapshot.isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
@@ -106,6 +121,8 @@ object AccountantReportExporter {
             if (includeRateEstimate) {
                 append(",").append(number(snapshot.rate, 4))
                 append(",").append(number(if (trip.type == "Business") distance * snapshot.rate else 0.0))
+            } else {
+                append(",").append(snapshot.canadianMileageValues[trip.id]?.let { number(it) }.orEmpty())
             }
             append("\r\n")
         }
@@ -264,6 +281,12 @@ object AccountantReportExporter {
                     Odometer readings are vehicle totals, not trip distances.
                     For Canadian exports, cra_annual_vehicle_logbook.csv summarizes the
                     annual vehicle logbook evidence and flags incomplete boundary readings.
+                    ${if (snapshot.taxCountry == "CA") """The 2026 provincial mileage benchmark in trips.csv values recorded business
+                    kilometres at CAD 0.73 for the first 5,000 km and CAD 0.67 for additional km.
+                    Trips are assigned to the tax year of their start date. Earlier 2026 business
+                    trips count toward the threshold even when outside the selected export period.
+                    The benchmark is informational. Self-employed deductions use eligible vehicle
+                    expenses and the business-use share. Other years have a blank benchmark column.""" else ""}
                     odometer_reconciliation.csv identifies unexplained differences for review;
                     these differences are NOT business trips or tax deductions.
                     Only intervals with both readings inside the selected period are assessed.

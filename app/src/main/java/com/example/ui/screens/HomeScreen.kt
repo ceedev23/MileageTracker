@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.R
+import com.example.service.CanadianMileageEstimate
 import com.example.service.TrackingManager
 import com.example.service.TripNotifier
 import com.example.service.tripUpdates
@@ -112,6 +113,9 @@ fun HomeScreen(
     val trackingState by viewModel.trackingState.collectAsState()
     val settings by viewModel.settings.collectAsState()
     val trips by viewModel.trips.collectAsState()
+    val canadianMileageEstimate = remember(trips, settings.taxCountry) {
+        if (settings.taxCountry == "CA") CanadianMileageEstimate(trips) else null
+    }
     val odometerReadings by viewModel.odometerReadings.collectAsState()
     val latestOdometer = odometerReadings.firstOrNull { it.vehicle == settings.vehicleName }
     val scanState by viewModel.receiptScanState.collectAsState()
@@ -293,7 +297,8 @@ fun HomeScreen(
                     onStop = { viewModel.stopManualTracking(context) },
                     onDraftChange = { category, vehicle, note, startPlaceName ->
                         viewModel.updateActiveTripDraft(category, vehicle, note, startPlaceName)
-                    }
+                    },
+                    canadianMileageEstimate = canadianMileageEstimate
                 )
             } else {
                 // Reserve a dedicated footer for the camera button so it never
@@ -783,6 +788,7 @@ fun HomeScreen(
                                             trip = trip,
                                             isMiles = isMiles,
                                             mileageRate = settings.reimbursementRate,
+                                            mileageBenchmark = canadianMileageEstimate?.forTrip(trip, previewBusiness = true),
                                             onClassify = { targetTrip, classification ->
                                                 viewModel.classifyTrip(targetTrip, classification)
                                             },

@@ -99,7 +99,8 @@ fun ReferenceTripCard(
     onDelete: (TripEntity) -> Unit,
     onUpdateTrip: ((TripEntity) -> Unit)? = null,
     onOpenDetail: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    mileageBenchmark: Double? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -135,7 +136,7 @@ fun ReferenceTripCard(
     }
 
     val distanceValue = if (isMiles) trip.distanceKm * 0.621371 else trip.distanceKm
-    val amountValue = distanceValue * mileageRate
+    val amountValue = mileageBenchmark ?: if (trip.type == "Personal") 0.0 else distanceValue * mileageRate
     val amountDisplay = String.format(Locale.US, "$%.2f", amountValue)
 
     // Date & Time formatters
@@ -340,7 +341,7 @@ fun ReferenceTripCard(
                             lineHeight = 24.sp
                         )
                         Text(
-                            text = amountDisplay,
+                            text = "$amountDisplay est.",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF64748B),

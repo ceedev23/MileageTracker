@@ -11,6 +11,8 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
 import com.example.data.LatLngPoint
+import com.example.data.TripEntity
+import com.example.service.CanadianMileageEstimate
 import com.example.service.LiveTrackingState
 import com.example.service.TrackingManager
 import com.example.ui.MileageViewModel
@@ -24,6 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.time.Instant
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -98,7 +101,16 @@ class HomeScreenMovingModeTest {
 
     @Test
     fun testLiveAmountUpdatesBeforeClassification() {
-        val trackingState = mutableStateOf(LiveTrackingState(isTracking = true))
+        val startedAt = Instant.parse("2026-06-01T12:00:00Z").toEpochMilli()
+        val prior = TripEntity(
+            id = 1,
+            startDate = startedAt - 120_000,
+            endDate = startedAt - 60_000,
+            distanceKm = 4_990.0,
+            type = "Business"
+        )
+        val estimate = CanadianMileageEstimate(listOf(prior))
+        val trackingState = mutableStateOf(LiveTrackingState(isTracking = true, tripStartedAtMs = startedAt))
         composeTestRule.setContent {
             LiveDriveScreen(
                 trackingState = trackingState.value,
@@ -107,7 +119,8 @@ class HomeScreenMovingModeTest {
                 vehicleName = "Toyota RAV4",
                 onVehicleChange = {},
                 onStop = {},
-                onDraftChange = { _, _, _, _ -> }
+                onDraftChange = { _, _, _, _ -> },
+                canadianMileageEstimate = estimate
             )
         }
 
@@ -115,12 +128,12 @@ class HomeScreenMovingModeTest {
         composeTestRule.runOnIdle {
             trackingState.value = trackingState.value.copy(distanceKm = 26.71)
         }
-        composeTestRule.onNodeWithText("$19.50").assertExists()
+        composeTestRule.onNodeWithText("$18.50").assertExists()
 
         composeTestRule.onNodeWithTag("home_tracking_personal").performSemanticsAction(SemanticsActions.OnClick)
         composeTestRule.onNodeWithText("$0").assertExists()
         composeTestRule.onNodeWithTag("home_tracking_business").performSemanticsAction(SemanticsActions.OnClick)
-        composeTestRule.onNodeWithText("$19.50").assertExists()
+        composeTestRule.onNodeWithText("$18.50").assertExists()
     }
 
     @Test

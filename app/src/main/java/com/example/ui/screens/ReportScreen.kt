@@ -176,10 +176,20 @@ fun ReportScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Only trips classified as business are counted. This is mileage, not a tax deduction.",
+                    text = "Only trips classified as business are counted.",
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.9f)
                 )
+
+                if (filteredTrips.any { it.type == "Business" && it.id in reportSnapshot.canadianMileageValues }) {
+                    val benchmark = reportSnapshot.canadianMileageValues.values.sum()
+                    Text(
+                        text = "2026 provincial mileage benchmark · CA$" +
+                            String.format(Locale.getDefault(), "%,.2f", benchmark),
+                        fontSize = 13.sp,
+                        color = Color.White
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(14.dp))
         Card(
