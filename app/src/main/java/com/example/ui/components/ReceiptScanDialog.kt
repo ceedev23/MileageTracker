@@ -56,6 +56,7 @@ import com.example.data.InputCheck
 import com.example.data.fuelPriceFieldLabel
 import com.example.data.fuelVolumeLabel
 import com.example.ui.ReceiptCaptureTarget
+import com.example.ui.ReceiptScanUiState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,8 +86,17 @@ fun ReceiptScanDialog(
     viewModel: MileageViewModel,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
     val scanState by viewModel.receiptScanState.collectAsState()
+    ReceiptScanDialog(viewModel, scanState, onDismiss)
+}
+
+@Composable
+internal fun ReceiptScanDialog(
+    viewModel: MileageViewModel,
+    scanState: ReceiptScanUiState,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
     val pendingCapture = remember { mutableStateOf<ReceiptCaptureTarget?>(null) }
 
     // Full-resolution capture. The preview contract only returns a tiny thumbnail,

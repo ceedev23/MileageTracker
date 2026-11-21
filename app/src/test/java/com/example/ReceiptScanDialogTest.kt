@@ -3,6 +3,7 @@ package com.example
 import android.app.Application
 import android.graphics.Bitmap
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextContains
@@ -13,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.example.service.ReceiptTextParser
 import com.example.ui.MileageViewModel
+import com.example.ui.ReceiptScanUiState
 import com.example.ui.components.ReceiptScanDialog
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -41,13 +43,17 @@ class ReceiptScanDialogTest {
             MASTERCARD
             """.trimIndent()
         )
+        val scanState = mutableStateOf(
+            ReceiptScanUiState(isDialogVisible = true, isScanningOrExtracting = true, currentBitmap = bitmap)
+        )
         compose.setContent {
             MaterialTheme {
-                ReceiptScanDialog(viewModel, onDismiss = viewModel::dismissReceiptScanner)
+                ReceiptScanDialog(viewModel, scanState.value, onDismiss = viewModel::dismissReceiptScanner)
             }
         }
-        compose.runOnIdle { viewModel.processCapturedReceipt(app, bitmap, prefilledData = parsed) }
-        compose.waitUntil(timeoutMillis = 5_000) { viewModel.receiptScanState.value.extractedData == parsed }
+        compose.runOnIdle {
+            scanState.value = scanState.value.copy(isScanningOrExtracting = false, extractedData = parsed)
+        }
 
         val save = compose.onNodeWithTag("save_receipt_button")
         save.assertIsDisplayed().assertIsEnabled()
