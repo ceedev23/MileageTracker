@@ -664,7 +664,7 @@ internal fun ReceiptScanDialog(
                     }
 
                     if (scanState.currentBitmap != null) {
-                        Box(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 56.4.dp)) {
+                        Box(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 82.4.dp)) {
                             Button(
                                 onClick = {
                                     val problem = InputCheck.receiptError(
