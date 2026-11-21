@@ -896,6 +896,7 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
             _receiptScanState.value = _receiptScanState.value.copy(
                 isScanningOrExtracting = true,
                 currentBitmap = bitmap,
+                extractedData = null,
                 errorMessage = null,
                 isDialogVisible = true
             )
@@ -1117,7 +1118,8 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
 
         var sample = 1
-        while (max(bounds.outWidth, bounds.outHeight) / sample > 2000) sample *= 2
+        // Keep enough detail for small thermal print. Sampling is in powers of two.
+        while (max(bounds.outWidth, bounds.outHeight) / sample > 4200) sample *= 2
         val options = BitmapFactory.Options().apply {
             inSampleSize = sample
             inPreferredConfig = Bitmap.Config.ARGB_8888
@@ -1129,12 +1131,16 @@ class MileageViewModel(application: Application) : AndroidViewModel(application)
         } catch (_: Exception) {
             0
         }
-        if (rotation == 0) return decoded
+        val scale = (3000f / max(decoded.width, decoded.height)).coerceAtMost(1f)
+        if (rotation == 0 && scale == 1f) return decoded
 
-        val matrix = Matrix().apply { postRotate(rotation.toFloat()) }
-        val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
-        if (rotated != decoded) decoded.recycle()
-        return rotated
+        val matrix = Matrix().apply {
+            setScale(scale, scale)
+            postRotate(rotation.toFloat())
+        }
+        val prepared = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+        if (prepared !== decoded) decoded.recycle()
+        return prepared
     }
 
     private fun readCapped(stream: InputStream): ByteArray? {

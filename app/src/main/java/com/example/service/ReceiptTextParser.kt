@@ -29,6 +29,9 @@ object ReceiptTextParser {
     private val unitThenVolume = Regex(
         """(?i)(\b(?:gallons?|litres?|liters?|volume)\b|\(\s*l\s*\))\s*(?:pumped)?\s*[:\-]?\s*(\d{1,3}[.,]\d{2,3})"""
     )
+    private val prepaidVolume = Regex(
+        """(?i)\bPUMP\s*#?\s*\d{1,2}\s+PREPAID\s*[:\-]?\s*(?<![\d.,])(\d{1,3}[.,]\d{3})(?![\d.,])"""
+    )
     private val volumeBeforeAt = Regex("""(?i)(\d{1,3}[.,]\d{3})\s*(?:gal(?:lons?)?|litres?|liters?|l)?\s*@""")
 
     private val pricePatterns = listOf(
@@ -182,14 +185,18 @@ object ReceiptTextParser {
         val onLine = moneyAmounts(lines[index])
         if (onLine.isNotEmpty()) return onLine.last()
         val next = lines.getOrNull(index + 1) ?: return null
-        if (!isAmountOnly(next)) return null
-        return moneyAmounts(next).lastOrNull()
+        if (isAmountOnly(next)) return moneyAmounts(next).lastOrNull()
+        if (!currencyMarker.matches(next)) return null
+        val following = lines.getOrNull(index + 2) ?: return null
+        return following.takeIf(::isAmountOnly)?.let { moneyAmounts(it).lastOrNull() }
     }
+
+    private val currencyMarker = Regex("""(?i)(?:CAD|USD)\s*\$?|\$""")
 
     private fun isAmountOnly(line: String): Boolean {
         if (moneyAmounts(line).isEmpty()) return false
         val stripped = moneyRegex.replace(line, "")
-            .replace(Regex("""(?i)(?:CAD|USD)|[\s$:.\-]"""), "")
+            .replace(Regex("""(?i)\b(?:CAD|USD)\b|[\s$:.-]"""), "")
         return stripped.isEmpty()
     }
 
@@ -220,6 +227,10 @@ object ReceiptTextParser {
                     val value = parseNumber(token) ?: continue
                     hits += VolumeHit(value, unitOf(match.groupValues[1]), decimalPlaces(token))
                 }
+            }
+            for (match in prepaidVolume.findAll(text)) {
+                val value = parseNumber(match.groupValues[1]) ?: continue
+                hits += VolumeHit(value, "L", 3)
             }
             for (match in volumeBeforeAt.findAll(text)) {
                 val token = match.groupValues[1]

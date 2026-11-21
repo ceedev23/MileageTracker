@@ -7,15 +7,18 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.graphics.Rect
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 
 enum class ReceiptField { TOTAL, VOLUME, UNIT_PRICE, DATE }
@@ -61,30 +64,32 @@ object ReceiptExtractionService {
         try {
             val prepared = prepareForOcr(bitmap)
             try {
-                val first = ReceiptTextParser.parse(recognize(prepared))
-                var best = if (first.totalAmount > 0.0 || first.gallonsOrLiters != null) {
-                    first
-                } else {
+                var best = recognize(prepared)
+                if (needsRetry(best)) {
                     val enhanced = enhanceContrast(prepared)
                     try {
-                        val second = ReceiptTextParser.parse(recognize(enhanced))
-                        if (detailScore(second) > detailScore(first)) second else first
+                        best = moreComplete(best, recognize(enhanced))
+                        if (needsAmounts(best)) {
+                            for (rotation in listOf(90, 270, 180)) {
+                                best = moreComplete(best, recognize(prepared, rotation))
+                                if (needsRetry(best)) {
+                                    best = moreComplete(best, recognize(enhanced, rotation))
+                                }
+                                if (!needsAmounts(best)) break
+                            }
+                        }
                     } finally {
-                        if (enhanced !== prepared) enhanced.recycle()
-                    }
-                }
-                if (prepared.width > prepared.height &&
-                    (best.totalAmount <= 0.0 || best.gallonsOrLiters == null)
-                ) {
-                    for (rotation in listOf(90, 270)) {
-                        val rotated = ReceiptTextParser.parse(recognize(prepared, rotation))
-                        if (detailScore(rotated) > detailScore(best)) best = rotated
-                        if (best.totalAmount > 0.0 && best.gallonsOrLiters != null) break
+                        enhanced.recycle()
                     }
                 }
                 if (!hasUsefulDetails(best)) {
                     ExtractionResult.Failure(
                         "Couldn't read the receipt details. Retake the photo flat and in good light, or type them in.",
+                        best
+                    )
+                } else if (best.totalAmount <= 0.0) {
+                    ExtractionResult.Failure(
+                        "Could not read the total. Enter it from the receipt or retake the photo.",
                         best
                     )
                 } else {
@@ -93,6 +98,8 @@ object ReceiptExtractionService {
             } finally {
                 if (prepared !== bitmap) prepared.recycle()
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             ExtractionResult.Failure(
                 "Couldn't scan this photo. Enter the receipt details manually.",
@@ -101,10 +108,47 @@ object ReceiptExtractionService {
         }
     }
 
-    private fun recognize(bitmap: Bitmap, rotation: Int = 0): String {
+    private data class TextFragment(val text: String, val bounds: Rect)
+
+    private fun recognize(bitmap: Bitmap, rotation: Int = 0): ExtractedReceiptData {
         val image = InputImage.fromBitmap(bitmap, rotation)
-        return Tasks.await(textRecognizer.process(image)).text.orEmpty()
+        val result = Tasks.await(textRecognizer.process(image))
+        val original = ReceiptTextParser.parse(result.text)
+        val fragments = result.textBlocks.flatMap { it.lines }.mapNotNull { line ->
+            line.boundingBox?.let { TextFragment(line.text, it) }
+        }
+
+        // Receipts often print labels and values in separate columns. ML Kit can return
+        // each column as its own block, so reconstruct the printed rows by position.
+        val rows = mutableListOf<MutableList<TextFragment>>()
+        for (fragment in fragments.sortedBy { it.bounds.centerY() }) {
+            val row = rows.lastOrNull()
+            val anchor = row?.first()?.bounds
+            if (row != null && anchor != null &&
+                abs(fragment.bounds.centerY() - anchor.centerY()) * 2 <=
+                minOf(fragment.bounds.height(), anchor.height())
+            ) {
+                row.add(fragment)
+            } else {
+                rows.add(mutableListOf(fragment))
+            }
+        }
+        val rowText = rows.joinToString("\n") { row ->
+            row.sortedBy { it.bounds.left }.joinToString(" ") { it.text }
+        }
+        return if (rowText.isBlank()) original
+        else moreComplete(original, ReceiptTextParser.parse(rowText))
     }
+
+    private fun needsAmounts(data: ExtractedReceiptData): Boolean =
+        data.totalAmount <= 0.0 || data.gallonsOrLiters == null ||
+            ReceiptField.TOTAL in data.calculatedFields || ReceiptField.VOLUME in data.calculatedFields
+
+    private fun needsRetry(data: ExtractedReceiptData): Boolean =
+        needsAmounts(data) || data.fuelType == null || data.paymentMethod == null
+
+    private fun moreComplete(first: ExtractedReceiptData, second: ExtractedReceiptData): ExtractedReceiptData =
+        if (detailScore(second) > detailScore(first)) second else first
 
     private fun prepareForOcr(bitmap: Bitmap): Bitmap {
         val longest = max(bitmap.width, bitmap.height)
@@ -154,6 +198,8 @@ object ReceiptExtractionService {
         if (!data.fuelType.isNullOrBlank()) score += 1
         if (!data.date.isNullOrBlank()) score += 1
         if (!data.paymentMethod.isNullOrBlank()) score += 1
+        score -= data.calculatedFields.size
+        score -= data.reviewFields.count { it != ReceiptField.DATE }
         return score
     }
 

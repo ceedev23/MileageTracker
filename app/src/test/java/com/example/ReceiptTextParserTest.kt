@@ -32,6 +32,52 @@ class ReceiptTextParserTest {
   }
 
   @Test
+  fun `reads a prepaid pump row when OCR drops the litre heading`() {
+    val text = """
+      ESSO CIRCLE K
+      DATE: 2026-10-04
+      FUEL (L)
+      PUMP 8 PREPAID
+      30.321
+      TOTAL
+      CAD ${'$'}
+      45.45
+      HST INCLUDED IN FUEL ${'$'}5.23
+      PURCHASE
+      MASTER CARD
+    """.trimIndent()
+
+    val parsed = ReceiptTextParser.parse(text)
+
+    assertEquals("Esso Circle K", parsed.merchant)
+    assertEquals(45.45, parsed.totalAmount, 0.001)
+    assertEquals(30.321, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(1.499, parsed.pricePerUnit ?: 0.0, 0.001)
+    assertEquals("2026-10-04", parsed.date)
+    assertEquals("Mastercard", parsed.paymentMethod)
+    assertNull(parsed.fuelType)
+  }
+
+  @Test
+  fun `uses the currency and volume read on the same printed row`() {
+    val parsed = ReceiptTextParser.parse(
+      "ESSO CIRCLE K\nPUMP 8 PREPAID 30.321\nTOTAL CAD ${'$'}45.45\nMASTERCARD"
+    )
+
+    assertEquals(45.45, parsed.totalAmount, 0.001)
+    assertEquals(30.321, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals("Mastercard", parsed.paymentMethod)
+  }
+
+  @Test
+  fun `does not use fuel tax as the total when the total is unreadable`() {
+    val parsed = ReceiptTextParser.parse("ESSO\nPUMP 8 PREPAID\nTOTAL CAD ${'$'}\nHST INCLUDED IN FUEL ${'$'}5.23")
+
+    assertEquals(0.0, parsed.totalAmount, 0.001)
+    assertNull(parsed.gallonsOrLiters)
+  }
+
+  @Test
   fun `parses a standard pump receipt`() {
     val text = """
       *** FUEL RECEIPT ***
