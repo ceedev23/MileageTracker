@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -161,8 +163,10 @@ fun ReceiptScanDialog(
     ) {
         Surface(
             modifier = Modifier
+                .fillMaxSize()
                 .safeDrawingPadding()
                 .padding(vertical = 12.dp)
+                .wrapContentSize(Alignment.Center)
                 .fillMaxWidth(0.95f)
                 .clip(RoundedCornerShape(30.dp))
                 .testTag("receipt_scan_dialog"),

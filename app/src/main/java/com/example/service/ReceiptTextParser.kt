@@ -20,14 +20,14 @@ object ReceiptTextParser {
         "ESSO", "ULTRAMAR", "HUSKY", "IRVING", "WAWA", "ARCO", "BP", "QT"
     ).sortedByDescending { it.length }
 
-    private val moneyRegex = Regex("""(?<![A-Z0-9])\$?\s*(\d{1,4}[.,]\d{2})(?!\d)""")
+    private val moneyRegex = Regex("""(?<![A-Z0-9.,])\$?\s*(\d{1,4}[.,]\d{2})(?!\d)""")
 
     private val volumeThenUnit = Regex(
         """(?i)(\d{1,3}[.,]\d{2,3})\s*(gallons?|gal|litres?|liters?|l)\b"""
     )
     private val volumeThenLitersAbbrev = Regex("""(?i)(\d{1,3}[.,]\d{3})\s*L\b""")
     private val unitThenVolume = Regex(
-        """(?i)\b(gallons?|litres?|liters?|volume)\b\s*(?:pumped)?\s*[:\-]?\s*(\d{1,3}[.,]\d{2,3})"""
+        """(?i)(\b(?:gallons?|litres?|liters?|volume)\b|\(\s*l\s*\))\s*(?:pumped)?\s*[:\-]?\s*(\d{1,3}[.,]\d{2,3})"""
     )
     private val volumeBeforeAt = Regex("""(?i)(\d{1,3}[.,]\d{3})\s*(?:gal(?:lons?)?|litres?|liters?|l)?\s*@""")
 
@@ -189,7 +189,7 @@ object ReceiptTextParser {
     private fun isAmountOnly(line: String): Boolean {
         if (moneyAmounts(line).isEmpty()) return false
         val stripped = moneyRegex.replace(line, "")
-            .replace(Regex("""[\s$:.\-]"""), "")
+            .replace(Regex("""(?i)(?:CAD|USD)|[\s$:.\-]"""), "")
         return stripped.isEmpty()
     }
 

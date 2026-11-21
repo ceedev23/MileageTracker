@@ -62,7 +62,7 @@ object ReceiptExtractionService {
             val prepared = prepareForOcr(bitmap)
             try {
                 val first = ReceiptTextParser.parse(recognize(prepared))
-                val best = if (first.totalAmount > 0.0 || first.gallonsOrLiters != null) {
+                var best = if (first.totalAmount > 0.0 || first.gallonsOrLiters != null) {
                     first
                 } else {
                     val enhanced = enhanceContrast(prepared)
@@ -71,6 +71,15 @@ object ReceiptExtractionService {
                         if (detailScore(second) > detailScore(first)) second else first
                     } finally {
                         if (enhanced !== prepared) enhanced.recycle()
+                    }
+                }
+                if (prepared.width > prepared.height &&
+                    (best.totalAmount <= 0.0 || best.gallonsOrLiters == null)
+                ) {
+                    for (rotation in listOf(90, 270)) {
+                        val rotated = ReceiptTextParser.parse(recognize(prepared, rotation))
+                        if (detailScore(rotated) > detailScore(best)) best = rotated
+                        if (best.totalAmount > 0.0 && best.gallonsOrLiters != null) break
                     }
                 }
                 if (!hasUsefulDetails(best)) {
@@ -92,8 +101,8 @@ object ReceiptExtractionService {
         }
     }
 
-    private fun recognize(bitmap: Bitmap): String {
-        val image = InputImage.fromBitmap(bitmap, 0)
+    private fun recognize(bitmap: Bitmap, rotation: Int = 0): String {
+        val image = InputImage.fromBitmap(bitmap, rotation)
         return Tasks.await(textRecognizer.process(image)).text.orEmpty()
     }
 
@@ -144,6 +153,7 @@ object ReceiptExtractionService {
         if (!data.merchant.isNullOrBlank()) score += 1
         if (!data.fuelType.isNullOrBlank()) score += 1
         if (!data.date.isNullOrBlank()) score += 1
+        if (!data.paymentMethod.isNullOrBlank()) score += 1
         return score
     }
 

@@ -9,6 +9,29 @@ import org.junit.Test
 class ReceiptTextParserTest {
 
   @Test
+  fun `parses split Canadian total and parenthesized volume label`() {
+    val text = """
+      ESSO CIRCLE K
+      DATE: 2026-10-04
+      PUMP 8 PREPAID (L)
+      30.321
+      TOTAL
+      CAD ${'$'}45.45
+      MASTERCARD
+    """.trimIndent()
+
+    val parsed = ReceiptTextParser.parse(text)
+
+    assertEquals("Esso Circle K", parsed.merchant)
+    assertEquals(45.45, parsed.totalAmount, 0.001)
+    assertEquals(30.321, parsed.gallonsOrLiters ?: 0.0, 0.001)
+    assertEquals(1.499, parsed.pricePerUnit ?: 0.0, 0.001)
+    assertEquals("2026-10-04", parsed.date)
+    assertEquals("Mastercard", parsed.paymentMethod)
+    assertEquals(setOf(ReceiptField.UNIT_PRICE), parsed.calculatedFields)
+  }
+
+  @Test
   fun `parses a standard pump receipt`() {
     val text = """
       *** FUEL RECEIPT ***
